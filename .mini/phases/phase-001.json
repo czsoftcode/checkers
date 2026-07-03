@@ -2,7 +2,7 @@
   "id": 1,
   "title": "Kostra monorepa + CI",
   "goal": "Postavit pnpm workspaces se čtyřmi balíčky (rules, engine, server, web) s TypeScript strict, Vitest a lintem; GitHub Actions spouští lint + test na push. Brána: prázdný (smoke) test zelený v CI.",
-  "status": "doing",
+  "status": "done",
   "steps": [
     {
       "title": "Kořen monorepa: pnpm workspace",
@@ -31,9 +31,14 @@
     },
     {
       "title": "GitHub Actions CI",
-      "status": "todo",
+      "status": "done",
       "detail": "Workflow .github/workflows/ci.yml: na push checkout, pnpm + Node 24 s cache, install, lint, typecheck, test. Ověření: push na GitHub a zelený běh přes gh run watch = brána fáze splněna."
     }
   ],
-  "startedAt": "2026-07-03T00:24:32.115Z"
+  "startedAt": "2026-07-03T00:24:32.115Z",
+  "completedAt": "2026-07-03T00:34:28.271Z",
+  "autoCommit": {
+    "preSha": "875e9d459a77ee35ee6e2af211bfc57b2c327bf4",
+    "subject": "Phase 1: Kostra monorepa + CI"
+  }
 }
