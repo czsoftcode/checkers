@@ -7,6 +7,27 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-03
+
+### Added
+
+- Engine jako samostatný proces (`@checkers/engine`, začátek milníku M3):
+  JSON Lines protokol na stdin/stdout - požadavky `hello` (handshake vrací
+  `protocol` a `engine` id) a `bestmove` (zatím náhodný legální tah,
+  seedovatelný přes `--seed`; search přijde v další fázi). Pozice a tah
+  putují přímo jako JSON tvar typů z `@checkers/rules`, server je bude
+  importovat místo opisování. Spuštění:
+  `pnpm --filter @checkers/engine start -- [--seed <n>]`.
+- Odolnost protokolu: řádkový buffer správně skládá zprávy rozseknuté mezi
+  chunky (i CRLF); nevalidní JSON, špatný tvar zprávy, neznámý typ, vadná
+  pozice i pozice bez tahů vracejí odpověď `error` s kódem a proces žije
+  dál. Nečekaná chyba enginu vrací `internal_error` se zachovaným `id`
+  (volající si odpověď spáruje) a stackem na stderr. Exit kódy: 0 konec
+  spojení (EOF/zavřená roura), 1 chybné argumenty.
+- Brána fáze kryta integračními testy přes skutečný podproces: handshake,
+  legální bestmove ověřený rules knihovnou, rozsekané zprávy, garbage
+  vstup, čistý konec na EOF.
+
 ## [0.10.0] - 2026-07-03
 
 ### Added

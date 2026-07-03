@@ -1,0 +1,39 @@
+{
+  "id": 13,
+  "title": "Engine protokol (M3)",
+  "goal": "Engine běží jako samostatný proces komunikující přes JSON Lines na stdin/stdout (zprávy hello, bestmove, error, pole id + protocol) se správným řádkovým bufferem místo naslepo zpracovávaných data eventů; nevalidní JSON nebo neznámý typ zprávy vrací error a proces nepadá - brána: hello a bestmove (zatím náhodný legální tah) fungují přes skutečný podproces.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Definice protokolu a typů zpráv",
+      "status": "done",
+      "detail": "protocol.ts v packages/engine: konstanta PROTOCOL_VERSION, TS typy zpráv hello, bestmove, error (všechny s polem id), pozice jako JSON tvar Position z rules (board 32 + turn), tah jako objekt {from, path, captures}. Exportováno z indexu balíčku, aby server v M4 importoval stejné typy (cross-module kontrakt)."
+    },
+    {
+      "title": "Řádkový buffer",
+      "status": "done",
+      "detail": "LineBuffer - přijímá chunky, emituje jen kompletní řádky. Ošetřeno: řádek rozseknutý doprostřed, víc řádků v jednom chunku, CRLF i LF, prázdné řádky se přeskočí, nedokončený zbytek při EOF. Čistá třída bez I/O, unit testy na všechny případy."
+    },
+    {
+      "title": "Zpracování zpráv jako čistá funkce",
+      "status": "done",
+      "detail": "handleLine(raw) -> odpověď: hello -> hello s protocol + engine id; bestmove -> náhodný legální tah z poslané pozice (seedovatelný PRNG). Chybové větve vracejí error a nepustí výjimku ven: nevalidní JSON (id null), neznámý typ, chybějící/špatná pole, nevalidní pozice, pozice bez legálních tahů. Unit testy na každou chybovou větev."
+    },
+    {
+      "title": "Spustitelný proces enginu",
+      "status": "done",
+      "detail": "main.ts napojí stdin -> LineBuffer -> handleLine -> stdout (jedna zpráva = jeden řádek). Proces přežije jakýkoli chybný vstup, na EOF stdin končí exit 0; spuštění tsx src/main.ts jako u CLI balíčku."
+    },
+    {
+      "title": "Integrační test přes skutečný podproces",
+      "status": "done",
+      "detail": "Vitest spawne reálný proces: hello handshake vrátí protocol + engine; bestmove na výchozí pozici vrátí tah obsažený v legalMoves (ověřeno reálnou rules); zápis rozsekaný uprostřed řádku funguje; garbage vstup -> error a proces dál odpovídá; EOF -> čistý konec. Test má tvrdý timeout a proces po sobě zabije i při selhání. Brána fáze."
+    }
+  ],
+  "startedAt": "2026-07-03T07:16:39.736Z",
+  "completedAt": "2026-07-03T07:49:40.237Z",
+  "autoCommit": {
+    "preSha": "53f254ffe53b4bc4ee035c2fd1f5aae00c0b6d80",
+    "subject": "Phase 13: Engine protokol (M3)"
+  }
+}
