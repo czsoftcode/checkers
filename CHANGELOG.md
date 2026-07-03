@@ -7,6 +7,26 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+
+- Tvrdý strop hloubky perftu (`MAX_PERFT_DEPTH = 12`): hlubší volání odmítá
+  `RangeError` místo prakticky nekonečného výpočtu - pojistka pro budoucí
+  vystavení přes CLI/server (nález SEC-2).
+
+### Changed
+
+- Projekt oficiálně běží na Node 24 LTS: projektový dokument srovnán
+  s realitou repa a `@types/node` zvednuty na ^24, takže typy popisují
+  skutečný runtime (nález 10-1, viz ADR fáze 11).
+- GitHub Actions v CI přišpendlené na plné commit SHA místo pohyblivých
+  tagů (nález SEC-1); aktualizace akcí jsou nově ruční.
+
+### Fixed
+
+- `ALL_DIRS` má jediný zdroj pravdy v `board.ts` (nově i ve veřejném API);
+  duplicitní kopie v generátoru tahů a testech odstraněny, obsah konstanty
+  přibíjí test (nález 10-2).
+
 ## [0.9.0] - 2026-07-03
 
 ### Added

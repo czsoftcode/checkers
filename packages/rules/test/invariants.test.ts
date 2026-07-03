@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Direction } from '../src/index.js';
-import { DIR, JUMPS, NEIGHBORS } from '../src/index.js';
+import { ALL_DIRS, DIR, JUMPS, NEIGHBORS } from '../src/index.js';
 
-const ALL_DIRS: readonly Direction[] = [DIR.NW, DIR.NE, DIR.SW, DIR.SE];
+describe('ALL_DIRS', () => {
+  it('obsahuje přesně čtyři směry v pořadí NW, NE, SW, SE', () => {
+    // Přibíjí obsah sdílené konstanty: testy níž přes ni iterují, takže
+    // omylem vypuštěný směr by jinak invarianty tiše zúžil místo shození.
+    expect(ALL_DIRS).toEqual([DIR.NW, DIR.NE, DIR.SW, DIR.SE]);
+  });
+});
 
 /** Protilehlý směr: NW↔SE (0↔3), NE↔SW (1↔2). */
 function opposite(dir: Direction): Direction {

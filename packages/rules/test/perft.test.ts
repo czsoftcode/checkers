@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Cell, Position } from '../src/index.js';
-import { initialPosition, perft } from '../src/index.js';
+import { MAX_PERFT_DEPTH, initialPosition, perft } from '../src/index.js';
 
 describe('perft – základ', () => {
   it('hloubka 0 je 1 list', () => {
@@ -16,6 +16,26 @@ describe('perft – základ', () => {
     expect(() => perft(initialPosition(), -1)).toThrow(RangeError);
     expect(() => perft(initialPosition(), 1.5)).toThrow(RangeError);
     expect(() => perft(initialPosition(), Number.NaN)).toThrow(RangeError);
+  });
+
+  it('hloubku nad tvrdý strop odmítá RangeError', () => {
+    // Pozice bez tahů, ne initialPosition: kdyby strop někdo odstranil,
+    // exponenciální perft z výchozí pozice by test zavěsil (synchronní
+    // rekurzi timeout vitestu nepřeruší) – takhle vrátí 0 a toThrow spadne.
+    const board: Cell[] = new Array<Cell>(32).fill(null);
+    board[18 - 1] = { color: 'white', kind: 'man' };
+    const noMoves: Position = { board, turn: 'black' };
+    expect(() => perft(noMoves, MAX_PERFT_DEPTH + 1)).toThrow(RangeError);
+    expect(() => perft(noMoves, Number.MAX_SAFE_INTEGER)).toThrow(RangeError);
+  });
+
+  it('hraniční hloubka MAX_PERFT_DEPTH projde validací', () => {
+    // Pozice bez tahů: validace hloubky proběhne, rekurze skončí hned –
+    // test nepočítá miliardy uzlů, jen dokazuje, že strop není < MAX.
+    const board: Cell[] = new Array<Cell>(32).fill(null);
+    board[18 - 1] = { color: 'white', kind: 'man' };
+    const noMoves: Position = { board, turn: 'black' };
+    expect(perft(noMoves, MAX_PERFT_DEPTH)).toBe(0);
   });
 
   it('pozice bez tahů má perft 0 v každé hloubce >= 1', () => {

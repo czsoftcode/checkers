@@ -1,0 +1,46 @@
+{
+  "id": 11,
+  "title": "Úklid nálezů po M1",
+  "goal": "Uzavřít čtyři otevřené nálezy z review M1: repo oficiálně sjednocené na Node 24 (projektový dokument, @types/node ^24, zapsané jako vědomé rozhodnutí), ALL_DIRS má jediný zdroj pravdy v board.ts (moves.ts i testy ho importují), GitHub Actions v CI přišpendlené na plný commit SHA a perft odmítá hloubku nad tvrdý strop RangeErrorem.",
+  "status": "done",
+  "fromFinding": "10-2",
+  "steps": [
+    {
+      "title": "ALL_DIRS má jediný zdroj pravdy",
+      "status": "done",
+      "detail": "moves.ts a test/invariants.test.ts importují ALL_DIRS z board.ts místo vlastních kopií. Ověření: grep najde jedinou definici (board.ts), testy rules zelené."
+    },
+    {
+      "title": "Tvrdý strop hloubky perft",
+      "status": "done",
+      "detail": "Konstanta MAX_PERFT_DEPTH=12, hloubka nad strop hodí RangeError. Test: hloubka 13 odmítnuta, hraniční hodnota projde validací, stávající perft testy 1-6 beze změny."
+    },
+    {
+      "title": "@types/node ^24 v catalogu",
+      "status": "done",
+      "detail": "Bump v pnpm-workspace.yaml z ^22.10.0 na ^24, pnpm install (aktualizace lockfile), typecheck + testy zelené."
+    },
+    {
+      "title": "GitHub Actions přišpendlené na commit SHA",
+      "status": "done",
+      "detail": "actions/checkout@v7, pnpm/action-setup@v6, actions/setup-node@v6 nahradit plným commit SHA s komentářem verze (@<sha> # v7). SHA dohledat přes gh api. Ověření: CI po pushi zelené, lokálně aspoň syntakticky."
+    },
+    {
+      "title": "Projektový dokument a ADR: Node 24",
+      "status": "done",
+      "detail": "V .mini/project.md (Main constraints) změnit Node 22 LTS na Node 24 LTS a zapsat vědomé rozhodnutí (ADR přes mini decision), ať drift není tichý."
+    }
+  ],
+  "startedAt": "2026-07-03T05:23:25.952Z",
+  "resolvedVerify": [
+    "CI po pushi zelené s akcemi přišpendlenými na SHA"
+  ],
+  "completedAt": "2026-07-03T06:15:35.352Z",
+  "autoCommit": {
+    "preSha": "a09a9b7d09c69493bb309057b96d803a197f84c9",
+    "subject": "Phase 11: Úklid nálezů po M1"
+  },
+  "resolvedFindings": [
+    "10-1"
+  ]
+}

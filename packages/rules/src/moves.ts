@@ -10,7 +10,7 @@
  */
 
 import type { Direction } from './board.js';
-import { BOARD_SQUARES, DIR, jumpOf, neighborOf } from './board.js';
+import { ALL_DIRS, BOARD_SQUARES, DIR, jumpOf, neighborOf } from './board.js';
 import type { Cell, Color, Move, Piece, PieceKind, Position, Square } from './types.js';
 
 /**
@@ -21,8 +21,6 @@ const MAN_DIRS: Record<Color, readonly Direction[]> = {
   black: [DIR.SW, DIR.SE],
   white: [DIR.NW, DIR.NE],
 };
-
-const ALL_DIRS: readonly Direction[] = [DIR.NW, DIR.NE, DIR.SW, DIR.SE];
 
 function moveDirs(color: Color, kind: PieceKind): readonly Direction[] {
   return kind === 'king' ? ALL_DIRS : MAN_DIRS[color];

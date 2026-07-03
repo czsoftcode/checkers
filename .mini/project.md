@@ -31,4 +31,4 @@ Silný hráč americké dámy (autorův tchán), hrající na vysoké úrovni.
 - TS a (případný) Rust engine jsou prohoditelné konfigurací serveru, přibité stejným perftem a fixtures.
 
 ## Main constraints
-Stack varianta A: TypeScript všude (pnpm workspaces, Node 22 LTS, Fastify + zod, Vite + vanilla TS klient, Vitest). Engine se píše nejdřív v TS; Rust engine je pozdější PODMÍNĚNÝ krok (jen když TS engine nedosáhne na cíl síly), jako nativní podproces za stejným protokolem - žádný WASM.
+Stack varianta A: TypeScript všude (pnpm workspaces, Node 24 LTS, Fastify + zod, Vite + vanilla TS klient, Vitest). Node 24 je vědomé rozhodnutí (fáze 11, nález 10-1): repo na něm běželo od začátku (.nvmrc, engines >=24, CI) a Node 24 je aktivní LTS; dokument se srovnal s realitou místo downgrade. Engine se píše nejdřív v TS; Rust engine je pozdější PODMÍNĚNÝ krok (jen když TS engine nedosáhne na cíl síly), jako nativní podproces za stejným protokolem - žádný WASM.

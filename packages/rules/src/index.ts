@@ -11,6 +11,7 @@ export {
   squareToCoords,
   coordsToSquare,
   DIR,
+  ALL_DIRS,
   NEIGHBORS,
   JUMPS,
   neighborOf,
@@ -33,4 +34,4 @@ export type { GameState } from './state.js';
 export { gameResult, gameResultFromState } from './result.js';
 export type { GameResult } from './result.js';
 export { formatMove, parseMove } from './notation.js';
-export { perft } from './perft.js';
+export { perft, MAX_PERFT_DEPTH } from './perft.js';
