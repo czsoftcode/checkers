@@ -1,0 +1,39 @@
+{
+  "id": 5,
+  "title": "Vícenásobný skok",
+  "goal": "Generátor skoků rekurzivně pokračuje z pole dopadu, dokud existuje další braní: větvení z jednoho dopadu vrací každou větev jako samostatný tah, stejný kámen nelze v sekvenci přeskočit dvakrát, volba kratší větve z rozcestí je legální (maximum braní se nevyžaduje), ale uprostřed větve skončit nejde. Brána: testy multi-skoků a větvení (GDD 2.7) + dočasný test z fáze 4 nahrazen očekáváním 9x18x27.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Rekurzivní generátor skokových sekvencí",
+      "status": "done",
+      "detail": "Přepis jumpMovesFrom: DFS z pole dopadu nad pracovní kopií desky (skákající kámen se posouvá, přeskočený se hned odebírá). Sekvence končí jen tam, kde další braní neexistuje; každý list rekurze = Move s úplným path a captures v pořadí braní."
+    },
+    {
+      "title": "Nahrazení dočasného testu očekáváním 9x18x27",
+      "status": "done",
+      "detail": "Nejdřív ověřit, že dočasný test z fáze 4 začal selhávat, pak nahradit očekáváním {from 9, path [18,27], captures [14,23]}. K tomu trojskok muže."
+    },
+    {
+      "title": "Testy větvení a volby kratší větve",
+      "status": "done",
+      "detail": "Z jednoho dopadu dva směry -> dva samostatné tahy; kratší větev z rozcestí je v množině vedle delší; prefix, ze kterého jde brát dál, v množině NENÍ."
+    },
+    {
+      "title": "Kruhový skok dámy a zákaz dvojího přeskočení",
+      "status": "done",
+      "detail": "Černá dáma na 18, bílí na 6, 7, 14, 15: přesně 2 tahy (kruh oběma směry), každý se 4 braními bez duplicit, path končí na from. Pokrývá zákaz dvojího přeskočení i legální návrat na navštívené pole."
+    },
+    {
+      "title": "Kotvy a zelený workspace",
+      "status": "done",
+      "detail": "Perft(1)=7 a testy povinnosti braní beze změny zelené; typecheck, testy a lint celého workspace."
+    }
+  ],
+  "startedAt": "2026-07-03T01:59:12.064Z",
+  "completedAt": "2026-07-03T02:14:36.111Z",
+  "autoCommit": {
+    "preSha": "5d0b72d04ae7178ddd67e5090e22e943a971eff6",
+    "subject": "Phase 5: Vícenásobný skok"
+  }
+}

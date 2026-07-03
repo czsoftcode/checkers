@@ -7,6 +7,22 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-03
+
+### Added
+
+- Vícenásobný skok: braní pokračuje z pole dopadu, dokud existuje další
+  skok - uprostřed sekvence skončit nejde. Větvení vrací každou maximální
+  větev jako samostatný tah; volba kratší větve z rozcestí je legální
+  (maximum braní se nevyžaduje). Stejný kámen nelze v sekvenci přeskočit
+  dvakrát; kruhový skok dámy s návratem na výchozí pole funguje.
+- Testy pastí z GDD 2.7 pro multi-skoky: trojskok, větvení, zákaz zastavení
+  uprostřed větve, muž nebere vzad ani v pokračování sekvence.
+
+### Changed
+
+- Odstraněno dočasné omezení z verze 0.3.0: skok už nekončí po jednom braní.
+
 ## [0.3.0] - 2026-07-03
 
 ### Added

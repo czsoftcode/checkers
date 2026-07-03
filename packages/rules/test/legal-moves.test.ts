@@ -135,14 +135,19 @@ describe('legalMoves – okraje kontraktu', () => {
     const badTurn = { board: new Array<Cell>(32).fill(null), turn: 'Black' } as unknown as Position;
     expect(() => legalMoves(badTurn)).toThrow(RangeError);
   });
+
+  it('díra (undefined) v desce délky 32 vyhazuje přes legalMoves RangeError', () => {
+    const board = new Array<Cell>(32).fill(null);
+    (board as (Cell | undefined)[])[9] = undefined;
+    const sparse = { board, turn: 'black' } as Position;
+    expect(() => legalMoves(sparse)).toThrow(RangeError);
+  });
 });
 
-describe('legalMoves – DOČASNÉ chování (přepíše todo 5: vícenásobný skok)', () => {
-  it('DOČASNÉ: skok končí po jednom braní, i když by mohl pokračovat', () => {
-    // Černý muž na 9 bere přes 14 s dopadem na 18; z 18 by mohl hned brát
-    // dál přes 23 na 27. Vícenásobné skoky zatím nejsou (todo 5) – až budou,
-    // tenhle test MUSÍ začít selhávat a nahradí ho očekávání 9x18x27
-    // (path [18, 27], captures [14, 23]).
+describe('legalMoves – vícenásobný skok', () => {
+  it('9x18x27: skok pokračuje z dopadu, uprostřed sekvence skončit nejde', () => {
+    // Nahrazuje DOČASNÝ test z fáze 4: černý muž na 9 bere přes 14 na 18
+    // a odtud POVINNĚ dál přes 23 na 27. Samotné 9x18 legální není.
     const position = positionWith(
       [
         [9, BLACK_MAN],
@@ -151,6 +156,21 @@ describe('legalMoves – DOČASNÉ chování (přepíše todo 5: vícenásobný 
       ],
       'black',
     );
-    expect(legalMoves(position)).toEqual([{ from: 9, path: [18], captures: [14] }]);
+    expect(legalMoves(position)).toEqual([{ from: 9, path: [18, 27], captures: [14, 23] }]);
+  });
+
+  it('trojskok muže: 1x10x19x28', () => {
+    const position = positionWith(
+      [
+        [1, BLACK_MAN],
+        [6, WHITE_MAN],
+        [15, WHITE_MAN],
+        [24, WHITE_MAN],
+      ],
+      'black',
+    );
+    expect(legalMoves(position)).toEqual([
+      { from: 1, path: [10, 19, 28], captures: [6, 15, 24] },
+    ]);
   });
 });
