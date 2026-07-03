@@ -1,0 +1,39 @@
+{
+  "id": 3,
+  "title": "Rozestavění a prosté tahy",
+  "goal": "Knihovna rules umí vytvořit výchozí pozici (černý 1-12, bílý 21-32, černý na tahu) a vygenerovat všechny prosté tahy bez braní: muž jen vpřed o 1 pole, dáma všesměr o 1 pole (NENÍ dálková); brána: testy včetně explicitního ověření dámy o 1 pole a 7 tahů černého z výchozí pozice (kotva perft(1)).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Výchozí pozice initialPosition()",
+      "status": "done",
+      "detail": "Funkce vrátí výchozí pozici: černí muži na polích 1-12, bílí na 21-32, pole 13-20 prázdná, na tahu černý. Test ověří obsah všech 32 polí a stranu na tahu."
+    },
+    {
+      "title": "Prosté tahy muže (jen vpřed)",
+      "status": "done",
+      "detail": "Generátor tahů bez braní pro muže: černý jen SW/SE (k vyšším řadám), bílý jen NW/NE, cíl = prázdné pole; Move s jedním prvkem v path a prázdnými captures. Testy na ručních pozicích: zablokovaný muž (vlastním i soupeřovým kamenem, žádný skok), muž na kraji, muž bez tahu."
+    },
+    {
+      "title": "Prosté tahy dámy (všesměr, o 1 pole)",
+      "status": "done",
+      "detail": "Dáma táhne všemi 4 směry o právě 1 pole. Explicitní test proti dálkové dámě: na volné diagonále jen jeden cíl v každém směru. Testy i pro dámu v rohu a zablokovanou."
+    },
+    {
+      "title": "Kotva perft(1): přesně 7 tahů z výchozí pozice",
+      "status": "done",
+      "detail": "Test ověří přesnou množinu 7 tahů černého (9-13, 9-14, 10-14, 10-15, 11-15, 11-16, 12-16), ne jen počet; symetricky 7 tahů bílého. Hodnoty ručně, ne z kódu."
+    },
+    {
+      "title": "Export z indexu + zelený workspace",
+      "status": "done",
+      "detail": "Nové funkce exportované z indexu balíčku rules; typecheck, testy a lint celého workspace zelené."
+    }
+  ],
+  "startedAt": "2026-07-03T01:13:37.941Z",
+  "completedAt": "2026-07-03T01:24:06.374Z",
+  "autoCommit": {
+    "preSha": "967308a5840535857f705c66f8439b8c2c6f1553",
+    "subject": "Phase 3: Rozestavění a prosté tahy"
+  }
+}

@@ -12,6 +12,11 @@
       "id": 2,
       "title": "Typy a deska (rules)",
       "status": "done"
+    },
+    {
+      "id": 3,
+      "title": "Rozestavění a prosté tahy",
+      "status": "done"
     }
   ]
 }

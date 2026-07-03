@@ -7,6 +7,19 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-03
+
+### Added
+
+- Výchozí rozestavění partie (`initialPosition`): černí muži na polích 1-12,
+  bílí na 21-32, černý na tahu.
+- Generátor prostých tahů (bez braní): muž táhne jen vpřed o 1 pole, dáma
+  všemi čtyřmi směry o 1 pole (není dálková). Kotva perft(1): z výchozí
+  pozice přesně 7 tahů pro černého i bílého, ověřeno testy proti ručně
+  vypsaným tahům.
+- Poškozená pozice (deska s jinou délkou než 32 polí) vyhazuje `RangeError`
+  místo tichého vynechání tahů.
+
 ## [0.1.0] - 2026-07-03
 
 ### Added

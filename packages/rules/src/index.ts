@@ -17,3 +17,5 @@ export {
   jumpOf,
 } from './board.js';
 export type { Coords, Direction, DirTargets } from './board.js';
+export { initialPosition } from './position.js';
+export { simpleMovesFrom, generateSimpleMoves } from './moves.js';
