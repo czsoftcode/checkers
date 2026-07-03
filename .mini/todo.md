@@ -4,7 +4,7 @@
 > (`add` / `done` / `remove`); `mini next` offers the open items as candidate
 > phase ideas. You can also edit this checklist by hand.
 - [x] [M0] Kostra monorepa + CI: pnpm workspaces (balíčky rules/engine/server/web), TS strict, Vitest, lint, GitHub Actions (lint+test na push). Brána: prázdný test zelený v CI.
-- [ ] [M1] Typy a deska: Color/Cell/Position/Move, číslování polí 1-32, převod souřadnic, předpočítané tabulky NEIGHBORS[32][4] a JUMPS[32][4]. Brána: unit testy převodu a sousedů.
+- [x] [M1] Typy a deska: Color/Cell/Position/Move, číslování polí 1-32, převod souřadnic, předpočítané tabulky NEIGHBORS[32][4] a JUMPS[32][4]. Brána: unit testy převodu a sousedů.
 - [ ] [M1] Prosté tahy: rozestavění (černý 1-12, bílý 21-32, černý začíná), generátor tahů bez braní - muž jen vpřed o 1, dáma všesměr o 1 (NENÍ dálková). Brána: testy včetně dáma jen o 1 pole.
 - [ ] [M1] Braní jednoduché: skok přes soupeře na prázdné pole za ním, povinnost braní (při existenci skoku generátor nevrací prostý tah), muž bere jen vpřed, dáma všesměr. Brána: testy povinného braní.
 - [ ] [M1] Vícenásobný skok: rekurze + větvení z jednoho dopadu, kámen nelze přeskočit 2x v sekvenci, volba kratší větve je legální. Brána: testy multi-skoků a větvení (GDD 2.7).
@@ -26,3 +26,4 @@
 - [ ] [M5] Archiv partií (klient): ukládání dokončených partií do LocalStorage v PDN, tlačítko Export -> jeden .pdn soubor, ošetření QuotaExceededError. Brána: partie se uloží, export stáhne validní PDN; zpět do hry se nenačítá.
 - [ ] [M6] Hardening: víc souběžných partií, chování fronty, úklid procesů, zátěžový test. Brána: N souběžných partií bez zombie procesů a bez zamrznutí API.
 - [ ] [M6] (Podmíněně) Rust engine: za stejným protokolem, vlastní generátor pravidel přibitý stejným perftem + fixtures, self-play proti TS enginu. Brána: TS a Rust prohoditelné konfigurací serveru. Jen pokud TS engine nedosáhne na cíl (i).
+- [ ] [M6a] zavest bitboard zapis, pokud to bude potreba

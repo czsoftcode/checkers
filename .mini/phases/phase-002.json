@@ -1,0 +1,39 @@
+{
+  "id": 2,
+  "title": "Typy a deska (rules)",
+  "goal": "V balíčku rules vzniknou základní typy (Color, Cell, Position, Move), číslování polí 1-32 s převodem na souřadnice a zpět a předpočítané tabulky NEIGHBORS[32][4] a JUMPS[32][4]; brána: unit testy převodu souřadnic a sousedství proti ručně spočítaným hodnotám.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Základní typy knihovny rules",
+      "status": "done",
+      "detail": "V packages/rules/src vzniknou typy Color, Cell (prázdno/muž/dáma obou barev), Square (1-32), Position (32 políček + strana na tahu) a Move navržený pro vícenásobné skoky (sekvence dopadů + přeskočená pole). Exportováno z indexu balíčku, typecheck prochází."
+    },
+    {
+      "title": "Převod pole 1-32 na souřadnice a zpět",
+      "status": "done",
+      "detail": "Funkce číslo pole -> řádek/sloupec a opačně, standardní PDN orientace (1-4 nahoře u černého, 29-32 dole u bílého); netmavé políčko vrací chybu, ne tichou hodnotu. Testy proti ručně spočítané tabulce vybraných polí z lichých i sudých řad a z krajů desky."
+    },
+    {
+      "title": "Tabulka NEIGHBORS[32][4] se směrovou konvencí",
+      "status": "done",
+      "detail": "Pevná konvence indexů směrů (0-3 = 4 diagonály) zdokumentovaná v kódu; tabulka generovaná při načtení modulu z převodních funkcí, mimo desku null. Testy proti ručně spočítaným sousedům vybraných polí (roh, kraj, střed, lichá i sudá řada)."
+    },
+    {
+      "title": "Tabulka JUMPS[32][4] na stejných směrech",
+      "status": "done",
+      "detail": "JUMPS[pole][směr] = dopad za NEIGHBORS[pole][směr] ve stejném směru, mimo desku null. Testy ručně spočítaných skoků + kontrola vazby na NEIGHBORS (kde je skok, musí být i soused ve stejném indexu)."
+    },
+    {
+      "title": "Invariantní testy tabulek a zelené CI",
+      "status": "done",
+      "detail": "Testy vlastností přes celé tabulky: symetrie sousedství, počty sousedů (roh 2, kraj 2-3, střed 4), skok končí jen na poli 1-32. Lint + testy celého workspace zelené."
+    }
+  ],
+  "startedAt": "2026-07-03T00:49:10.757Z",
+  "completedAt": "2026-07-03T01:07:14.762Z",
+  "autoCommit": {
+    "preSha": "6ebae031286ccfa682f667cd2f0632b60d913e09",
+    "subject": "Phase 2: Typy a deska (rules)"
+  }
+}

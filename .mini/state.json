@@ -7,6 +7,11 @@
       "id": 1,
       "title": "Kostra monorepa + CI",
       "status": "done"
+    },
+    {
+      "id": 2,
+      "title": "Typy a deska (rules)",
+      "status": "done"
     }
   ]
 }
