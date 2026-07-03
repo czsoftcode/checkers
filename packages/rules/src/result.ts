@@ -1,24 +1,59 @@
 /**
- * Výsledek pozice.
+ * Výsledek pozice a výsledek stavu partie.
  */
 
 import { legalMoves } from './moves.js';
+import type { GameState } from './state.js';
+import { MAX_PLIES_WITHOUT_PROGRESS } from './state.js';
 import type { Position } from './types.js';
 
-/** Výsledek pozice: partie běží, nebo jedna strana vyhrála. */
-export type GameResult = 'ongoing' | 'black-wins' | 'white-wins';
+/**
+ * Výsledek partie. `gameResult` (jen pozice) `'draw'` nikdy nevrátí –
+ * remízy potřebují stav napříč tahy a umí je až `gameResultFromState`.
+ */
+export type GameResult = 'ongoing' | 'black-wins' | 'white-wins' | 'draw';
 
 /**
  * Hráč na tahu bez legálního tahu prohrává – i s kameny na desce
  * (pat v americké dámě neexistuje, past z GDD 2.7). Staví na kontraktu
  * „prázdné legalMoves = žádný tah" zafixovaném testy fáze 4.
- *
- * Remízy (trojí opakování, 80 půltahů bez postupu) potřebují stav NAD
- * rámec jedné pozice (historii, čítač) a řeší se samostatně (todo 8).
  */
 export function gameResult(position: Position): GameResult {
   if (legalMoves(position).length > 0) {
     return 'ongoing';
   }
   return position.turn === 'black' ? 'white-wins' : 'black-wins';
+}
+
+/**
+ * Výsledek stavu partie včetně remíz. Pořadí kontrol je rozhodnutí
+ * z diskuse fáze 8: PROHRA MÁ PŘEDNOST – kdo nemá tah, prohrál, i kdyby
+ * zároveň platila remízová podmínka. Pak remíza při 80 půltazích bez
+ * pokroku, nebo když se KTERÁKOLI pozice v historii (od posledního pokroku)
+ * vyskytla aspoň třikrát – ne jen aktuální. Konzument, který dávkově přehraje
+ * víc půltahů a zkontroluje až konec, tak opakování v rámci úseku nepřejede.
+ *
+ * KONTRAKT: vyhodnocuj po KAŽDÉM půltahu (viz `advanceState`). Přes pokrok
+ * detekce nedosáhne – braní/tah mužem nuluje čítač i historii, přejetá
+ * remíza z čítače je pryč. Ručně poskládaný stav s nekonzistentní historií
+ * nevede na falešnou remízu z aktuální pozice – ta se do historie počítá
+ * jen tehdy, když v ní opravdu je.
+ */
+export function gameResultFromState(state: GameState): GameResult {
+  const positional = gameResult(state.position);
+  if (positional !== 'ongoing') {
+    return positional;
+  }
+  if (state.pliesWithoutProgress >= MAX_PLIES_WITHOUT_PROGRESS) {
+    return 'draw';
+  }
+  const occurrences = new Map<string, number>();
+  for (const seen of state.repetitionHistory) {
+    const count = (occurrences.get(seen) ?? 0) + 1;
+    if (count >= 3) {
+      return 'draw';
+    }
+    occurrences.set(seen, count);
+  }
+  return 'ongoing';
 }

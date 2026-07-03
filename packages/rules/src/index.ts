@@ -23,5 +23,12 @@ export { initialPosition } from './position.js';
 // povinnost braní a napojení na ně by tiše nabízelo nelegální tahy.
 export { legalMoves } from './moves.js';
 export { applyMove } from './apply.js';
-export { gameResult } from './result.js';
+export {
+  MAX_PLIES_WITHOUT_PROGRESS,
+  positionKey,
+  initialGameState,
+  advanceState,
+} from './state.js';
+export type { GameState } from './state.js';
+export { gameResult, gameResultFromState } from './result.js';
 export type { GameResult } from './result.js';

@@ -37,6 +37,11 @@
       "id": 7,
       "title": "Detekce konce hry",
       "status": "done"
+    },
+    {
+      "id": 8,
+      "title": "Remízová pravidla a terminace",
+      "status": "done"
     }
   ]
 }

@@ -7,6 +7,22 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-03
+
+### Added
+
+- Stav partie (`GameState`): vrstva nad jednou pozicí - čítač půltahů bez
+  pokroku, historie pozic a `advanceState` pro posun po tahu. Pokrok
+  (braní nebo tah mužem, včetně proměny) čítač nuluje a historii zahazuje.
+- Remízová pravidla (`gameResultFromState`): remíza po 80 půltazích bez
+  braní a bez tahu mužem, nebo při trojím opakování stejné pozice se
+  stejnou stranou na tahu. Prohra bez tahu má před remízou přednost.
+  `GameResult` nově zná hodnotu `draw`.
+- Klíč pozice (`positionKey`): deterministická textová serializace desky
+  a strany na tahu; poškozenou pozici odmítá `RangeError`.
+- Garance terminace: každá partie skončí - ověřeno testem s 50 seedovanými
+  náhodnými partiemi (deterministický PRNG, žádná nekonečná hra).
+
 ## [0.6.0] - 2026-07-03
 
 ### Added

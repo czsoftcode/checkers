@@ -1,0 +1,39 @@
+{
+  "id": 8,
+  "title": "Remízová pravidla a terminace",
+  "goal": "Knihovna rules umí detekovat remízu nad rámec samotné pozice: nová vrstva stavu partie (pozice + čítač pliesWithoutProgress + historie pozic) s pravidly 80 půltahů bez braní a bez tahu mužem a trojí opakování stejné pozice se stejnou stranou na tahu; brána fáze jsou testy remíz (reset čítače braním i tahem muže, opakování dámami) a garance, že každá partie terminuje.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Klíč pozice a typ GameState",
+      "status": "done",
+      "detail": "positionKey(position) – deterministická textová serializace 32 polí + strany na tahu; typ GameState (immutable: pozice, pliesWithoutProgress, historie klíčů) a initialGameState(), kde výchozí pozice je 1. výskyt v historii. Testy klíče: stejná pozice = stejný klíč, jiná strana na tahu / jiné rozestavění = jiný klíč."
+    },
+    {
+      "title": "Posun stavu po tahu (advanceState)",
+      "status": "done",
+      "detail": "advanceState(state, move) obaluje applyMove: braní NEBO tah mužem (včetně proměny) → čítač 0 a historie vyčištěná; prostý tah dámou → čítač +1; nová pozice se vždy započte do historie. Testy: reset braním, reset tahem muže i proměnou, inkrement dámou."
+    },
+    {
+      "title": "Výsledek stavu s remízami",
+      "status": "done",
+      "detail": "GameResult rozšířit o 'draw'; gameResultFromState(state): nejdřív prohra bez tahu (má přednost – rozhodnutí z diskuse), pak remíza při 3. výskytu pozice nebo čítači >= 80. Testy: remíza po 80 půltazích, trojí opakování dámami, opakování přes braní se NEpočítá, prohra má přednost před remízou."
+    },
+    {
+      "title": "Test terminace seedovaným playoutem",
+      "status": "done",
+      "detail": "Random vs random se seedovaným generátorem (deterministický test, žádný Math.random): každá z ~50 partií z výchozí pozice skončí jiným výsledkem než ongoing do tvrdé meze půltahů (řádově tisíce). Brána garance terminace."
+    },
+    {
+      "title": "Export API a zelený workspace",
+      "status": "done",
+      "detail": "Nové typy a funkce vyexportovat z index.ts (rules zůstává čisté TS bez I/O); pnpm lint + typecheck + test zelené v celém workspace."
+    }
+  ],
+  "startedAt": "2026-07-03T03:36:35.757Z",
+  "completedAt": "2026-07-03T03:56:54.931Z",
+  "autoCommit": {
+    "preSha": "08becd924cea9712b871631ae996fe9e5c83c95c",
+    "subject": "Phase 8: Remízová pravidla a terminace"
+  }
+}
