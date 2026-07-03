@@ -22,3 +22,4 @@ export { initialPosition } from './position.js';
 // jumpMovesFrom, generateSimpleMoves) se záměrně neexportují – ignorují
 // povinnost braní a napojení na ně by tiše nabízelo nelegální tahy.
 export { legalMoves } from './moves.js';
+export { applyMove } from './apply.js';

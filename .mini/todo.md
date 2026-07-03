@@ -8,7 +8,7 @@
 - [x] [M1] Prosté tahy: rozestavění (černý 1-12, bílý 21-32, černý začíná), generátor tahů bez braní - muž jen vpřed o 1, dáma všesměr o 1 (NENÍ dálková). Brána: testy včetně dáma jen o 1 pole.
 - [x] [M1] Braní jednoduché: skok přes soupeře na prázdné pole za ním, povinnost braní (při existenci skoku generátor nevrací prostý tah), muž bere jen vpřed, dáma všesměr. Brána: testy povinného braní.
 - [x] [M1] Vícenásobný skok: rekurze + větvení z jednoho dopadu, kámen nelze přeskočit 2x v sekvenci, volba kratší větve je legální. Brána: testy multi-skoků a větvení (GDD 2.7).
-- [ ] [M1] Proměna: muž na poslední řadě soupeře se stává dámou; proměna UPROSTŘED skoku tah okamžitě ukončuje (nepokračuje). Brána: golden testy proměny.
+- [x] [M1] Proměna: muž na poslední řadě soupeře se stává dámou; proměna UPROSTŘED skoku tah okamžitě ukončuje (nepokračuje). Brána: golden testy proměny.
 - [ ] [M1] Aplikace tahu + konec hry: applyMove, detekce prohry hráče bez legálního tahu (i s kameny na desce, pat neexistuje). Brána: testy konce hry.
 - [ ] [M1] Remízová pravidla: trojí opakování pozice se stejnou stranou na tahu, 80 půltahů bez braní/tahu mužem (čítač pliesWithoutProgress, reset správně). Brána: testy remíz + garance terminace.
 - [ ] [M1] PDN zápis tahu: 22-18 (prostý), 26x17x10 (skok). Brána: testy notace obou směrů.

@@ -1,0 +1,39 @@
+{
+  "id": 6,
+  "title": "applyMove a proměna",
+  "goal": "Knihovna rules umí aplikovat legální tah na pozici (applyMove: posun kamene po path, odebrání captures, přepnutí strany na tahu) a muž končící na poslední řadě soupeře se stává dámou. Brána: golden testy proměny včetně pasti 'proměna uprostřed skoku ukončuje tah' - proměněný muž v tomtéž tahu nepokračuje v braní jako dáma. Detekce konce hry zůstává v todo 7.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "applyMove: prostý tah a jednoduchý skok",
+      "status": "done",
+      "detail": "Nový modul apply.ts: applyMove(position, move) vrátí novou pozici (kámen na cíli, brané kameny pryč, na tahu soupeř); vstup zůstane netknutý (test imutability). Tah se přehrává krok po kroku nad kopií desky."
+    },
+    {
+      "title": "applyMove: vícenásobný a kruhový skok",
+      "status": "done",
+      "detail": "Přehrání celé sekvence: trojskok a kruhový skok dámy s návratem na from (dáma zpět na 18, čtyři bílí pryč). Průběžná kontrola polí během přehrávání - dopad na uvolněné from je legální."
+    },
+    {
+      "title": "Strukturální validace se zuby",
+      "status": "done",
+      "detail": "Odmítnuté vstupy (výjimka): prázdná path, na from není kámen strany na tahu, obsazený dopad, braní prázdného pole nebo vlastního kamene, duplicitní captures, nesedící počty captures vs. path. Každé odmítnutí má test; plná legalita se vědomě nekontroluje."
+    },
+    {
+      "title": "Proměna - golden testy",
+      "status": "done",
+      "detail": "Muž končící na poslední řadě se stává dámou (černý 29-32, bílý 1-4), prostým tahem i skokem. Past end-to-end: 21x30 přes 25 s bílým na 26 - generátor končí na 30, applyMove vrátí dámu na 30, 26 zůstává, na tahu bílý. Dáma zůstává dámou."
+    },
+    {
+      "title": "Export, konzistence s generátorem, zelený workspace",
+      "status": "done",
+      "detail": "applyMove v indexu balíčku; test konzistence: každý tah z legalMoves na sadě pozic projde applyMove bez výjimky. Typecheck, testy, lint celého workspace."
+    }
+  ],
+  "startedAt": "2026-07-03T02:33:56.516Z",
+  "completedAt": "2026-07-03T02:46:57.027Z",
+  "autoCommit": {
+    "preSha": "a0a4c98aac74f3ceca57cdb36638ce91bb31074c",
+    "subject": "Phase 6: applyMove a proměna"
+  }
+}

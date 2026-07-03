@@ -35,8 +35,10 @@ function moveDirs(color: Color, kind: PieceKind): readonly Direction[] {
  * zachází konzervativně jako s obsazeným polem / kamenem, který nejde brát.
  * Přes `legalMoves` díra vyhodí RangeError vždy (iteruje všech 32 polí);
  * řídké pole navíc nevznikne z JSON (undefined v něm neexistuje).
+ *
+ * Interní helper sdílený s apply.ts – index balíčku ho neexportuje.
  */
-function cellAt(position: Position, square: Square): Cell {
+export function cellAt(position: Position, square: Square): Cell {
   if (position.board.length !== BOARD_SQUARES) {
     throw new RangeError(
       `Poškozená deska: očekávám ${String(BOARD_SQUARES)} polí, ne ${String(position.board.length)}`,

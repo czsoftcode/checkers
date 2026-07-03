@@ -7,6 +7,19 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-03
+
+### Added
+
+- Aplikace tahu (`applyMove`): vrací novou pozici (vstup se nemění), kámen
+  se přesune na konec sekvence, brané kameny zmizí, na tah jde soupeř.
+  Validuje strukturu tahu (geometrie kroků, volné dopady, soupeř na braných
+  polích) a při porušení vyhazuje `RangeError`; plnou legalitu drží
+  `legalMoves` (viz ADR fáze 6).
+- Proměna: muž končící na zadní řadě soupeře se stává dámou, prostým tahem
+  i skokem. Proměna ukončuje tah - proměněný muž v tomtéž tahu nepokračuje
+  v braní jako dáma (past z GDD 2.7, pokryto end-to-end testem).
+
 ## [0.4.0] - 2026-07-03
 
 ### Added

@@ -27,6 +27,11 @@
       "id": 5,
       "title": "Vícenásobný skok",
       "status": "done"
+    },
+    {
+      "id": 6,
+      "title": "applyMove a proměna",
+      "status": "done"
     }
   ]
 }
