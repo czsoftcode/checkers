@@ -7,8 +7,23 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-03
+
 ### Added
 
+- CLI hra (`@checkers/cli`, milník M2): kompletní partie americké dámy
+  v terminálu bez UI a serveru. Režim random vs random (důkaz, že pravidla
+  vždy terminují - remíza po 80 půltazích bez pokroku) a člověk vs random
+  se zadáváním tahů v PDN (`11-15`, `22x15`, `26x17x10`); chybný nebo
+  nelegální vstup dostane hlášku a nový prompt, partii nic neshodí.
+  ASCII deska ukazuje kameny (m/k/M/K) a čísla prázdných polí 1-32.
+  Spuštění: `pnpm --filter @checkers/cli start -- --mode random|human
+  [--seed <n>] [--color black|white]`; bez `--seed` se vypíše náhodný seed,
+  takže je každá partie reprodukovatelná. Exit kódy: 0 dohraná partie,
+  1 chyba, 2 partie přerušená člověkem (EOF/Ctrl+C).
+- Herní smyčka CLI je zároveň bránou legality: tah každé strategie
+  (i random hráče) projde jen přes členství v `legalMoves` - stejný princip,
+  jakým později server ověří tahy enginu.
 - Tvrdý strop hloubky perftu (`MAX_PERFT_DEPTH = 12`): hlubší volání odmítá
   `RangeError` místo prakticky nekonečného výpočtu - pojistka pro budoucí
   vystavení přes CLI/server (nález SEC-2).

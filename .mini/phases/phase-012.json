@@ -1,0 +1,47 @@
+{
+  "id": 12,
+  "title": "CLI hra (M2)",
+  "goal": "V terminálu jde odehrát partie random vs random (vždy terminuje díky pravidlu 80 půltahů) i člověk vs random přes PDN zápis tahů - kompletní partie bez UI a serveru jako důkaz kompletnosti rules.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Kostra balíčku packages/cli",
+      "status": "done",
+      "detail": "Nový workspace balíček @checkers/cli závislý jen na @checkers/rules, spustitelný přes pnpm, zapojený do lint/typecheck/test stejně jako ostatní balíčky; smoke test projde v CI."
+    },
+    {
+      "title": "Herní smyčka bez terminálu",
+      "status": "done",
+      "detail": "Čistá funkce playGame(strategieBílý, strategieČerný) nad initialGameState/advanceState/gameResultFromState; vrací výsledek a historii tahů. Kryté testem, že partie vždy skončí (opírá se o pravidlo 80 půltahů)."
+    },
+    {
+      "title": "Random hráč se seedovaným PRNG",
+      "status": "done",
+      "detail": "Seedovaný mulberry32 v cli/src (kopie - z test supportu rules se importovat nedá), výběr rovnoměrně z legalMoves. Test determinismu: stejný seed => identická partie."
+    },
+    {
+      "title": "Textové vykreslení desky a tahů",
+      "status": "done",
+      "detail": "ASCII render pozice (pole 1-32, muži/dámy obou barev) a výpis tahů v PDN přes formatMove; ověřeno testem na známé pozici."
+    },
+    {
+      "title": "Režim random vs random",
+      "status": "done",
+      "detail": "Příkaz odehraje celou partii, tiskne tahy a výsledek, končí exit 0; jakákoli chybová cesta končí nenulovým exit kódem. Test přes N seedů: vždy doběhne."
+    },
+    {
+      "title": "Režim člověk vs random",
+      "status": "done",
+      "detail": "Interaktivní vstup tahu v PDN přes readline + parseMove; nelegální nebo nesmyslný vstup vypíše srozumitelnou hlášku a ptá se znovu (žádný pád), EOF/Ctrl-C ukončí partii čistě."
+    }
+  ],
+  "startedAt": "2026-07-03T06:37:10.428Z",
+  "resolvedVerify": [
+    "Zahrát si interaktivní partii v opravdovém terminálu (TTY)"
+  ],
+  "completedAt": "2026-07-03T07:04:53.053Z",
+  "autoCommit": {
+    "preSha": "5e04257249800826eec0a1bed743f6c2cbaf9d78",
+    "subject": "Phase 12: CLI hra (M2)"
+  }
+}

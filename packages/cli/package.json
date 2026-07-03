@@ -1,0 +1,20 @@
+{
+  "name": "@checkers/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@checkers/rules": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "^4.20.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -57,6 +57,11 @@
       "id": 11,
       "title": "Úklid nálezů po M1",
       "status": "done"
+    },
+    {
+      "id": 12,
+      "title": "CLI hra (M2)",
+      "status": "done"
     }
   ]
 }
