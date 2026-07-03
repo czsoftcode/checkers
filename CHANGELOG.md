@@ -7,6 +7,30 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-03
+
+### Added
+
+- Časová kontrola enginu: iterativní prohlubování 1-25 s měkkým limitem.
+  Engine vrací výsledek poslední KOMPLETNÍ iterace - rozdělaná hloubka se
+  při vypršení času celá zahodí; hloubka 1 doběhne vždy, takže legální tah
+  existuje i při absurdně malém limitu. Doba odpovědi nepřekročí
+  `timeMs` + malou režii (brána M3: nejpomalejší tah 27 ms při limitu 25).
+- Quiescence: na hranici hloubky se povinné výměny dohrají do klidné
+  pozice, engine tak přestal „šlapat do braní" těsně za horizontem
+  (horizont efekt).
+
+### Changed
+
+- Protokol enginu zvednut na v2: zpráva `bestmove` má nově POVINNÉ pole
+  `timeMs` (měkký limit v ms, kladné celé číslo) - chybějící nebo vadná
+  hodnota vrací `error/invalid_message`. Pevná hloubka (`SEARCH_DEPTH`)
+  zmizela; hloubku určuje čas. Tvrdý strop (kill procesu) zůstává na
+  volajícím - orchestrace M4 počítá s `timeMs + 500`.
+- Brána M3 zpřísněna a splněna: 100 partií proti náhodnému hráči se
+  střídáním barev = 100 výher, 0 remíz, 0 proher; žádný tah nepřekročil
+  tvrdý strop a legalitu každého tahu ověřila nezávisle knihovna pravidel.
+
 ## [0.12.0] - 2026-07-03
 
 ### Changed

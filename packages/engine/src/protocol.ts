@@ -14,8 +14,11 @@
 
 import type { Move, Position } from '@checkers/rules';
 
-/** Verze protokolu; engine ji hlásí v odpovědi `hello`. */
-export const PROTOCOL_VERSION = 1;
+/**
+ * Verze protokolu; engine ji hlásí v odpovědi `hello`.
+ * v2: bestmove nese povinné `timeMs` (měkký časový limit searche).
+ */
+export const PROTOCOL_VERSION = 2;
 
 /** Identifikátor enginu pro protokolovou zprávu hello. */
 export const ENGINE_ID = 'checkers-ts-engine';
@@ -32,10 +35,18 @@ export interface HelloRequest {
 /**
  * Požadavek na tah v zadané pozici.
  *
- * Limity protokolu v1 (vědomé, ne opomenutí):
- * - nenese časový limit – engine hledá na pevnou hloubku (SEARCH_DEPTH)
- *   a doba tahu kolísá podle pozice; iterativní prohlubování + limity
- *   přijdou s fází časové kontroly (a zvednou verzi protokolu),
+ * `timeMs` je MĚKKÝ limit v milisekundách (kladné celé číslo): engine
+ * prohledává iterativním prohlubováním a vrací poslední kompletní iteraci;
+ * odpověď přijde nejpozději za timeMs + malou režii (jedno okno kontroly
+ * hodin + serializace; navíc hloubka 1 s quiescence běží vždy celá – viz
+ * search.ts, prakticky jednotky ms). Tvrdý strop (kill procesu) je věc
+ * volajícího – orchestrace M4 počítá s timeMs + 500 ms.
+ *
+ * Limity protokolu v2 (vědomé, ne opomenutí):
+ * - timeMs nemá horní mez: engine je jednovláknový a během searche nečte
+ *   stdin, absurdně velký limit ho tedy na dlouho zabaví. Volající je
+ *   důvěryhodný server, který timeouty vlastní; strop případně přidá M4
+ *   podle skutečných požadavků orchestrace,
  * - nenese remízový stav partie (čítač půltahů bez pokroku, historii
  *   opakování) – engine hodnotí jen samotnou pozici a o blížící se remíze
  *   neví; remízy autoritativně hlídá server přes GameState.
@@ -44,6 +55,7 @@ export interface BestmoveRequest {
   readonly type: 'bestmove';
   readonly id: MessageId;
   readonly position: Position;
+  readonly timeMs: number;
 }
 
 /** Všechny požadavky, kterým engine rozumí. */

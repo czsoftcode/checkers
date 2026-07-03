@@ -72,6 +72,11 @@
       "id": 14,
       "title": "Search jádro enginu (M3)",
       "status": "done"
+    },
+    {
+      "id": 15,
+      "title": "Časová kontrola a quiescence (M3)",
+      "status": "done"
     }
   ]
 }

@@ -17,7 +17,7 @@ describe('respondToLine – poslední záchrana', () => {
   });
 
   it('výjimka handleru vrací internal_error s obnoveným id a stackem na logu', () => {
-    const raw = JSON.stringify({ type: 'bestmove', id: 'r-2', position: initialPosition() });
+    const raw = JSON.stringify({ type: 'bestmove', id: 'r-2', position: initialPosition(), timeMs: 25 });
     const logged: string[] = [];
     const response = respondToLine(raw, brokenRng, (text) => logged.push(text));
     expect(response).toEqual({

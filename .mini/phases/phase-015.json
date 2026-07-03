@@ -1,0 +1,39 @@
+{
+  "id": 15,
+  "title": "Časová kontrola a quiescence (M3)",
+  "goal": "Engine hledá iterativním prohlubováním 1..N s měkkým časovým limitem (vrací výsledek poslední kompletní iterace) a quiescence prodloužením při povinných skocích - brána M3: porazí random hráče >=95 % ze 100 partií a nikdy nepřekročí tvrdý timeout.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Quiescence: prodloužení při povinných skocích",
+      "status": "done",
+      "detail": "negamax v hloubce 0 nekončí evaluací, dokud je strana na tahu v povinném skoku (legalMoves tehdy vrací jen skoky) - prohledá vynucenou výměnu až do klidné pozice. Terminace zaručená úbytkem materiálu. Test: fixture pozice s horizont efektem, kde pevná hloubka tah přecení a quiescence odhalí ztrátu; stávající testy search zůstávají zelené."
+    },
+    {
+      "title": "Přerušitelný search s deadline",
+      "status": "done",
+      "detail": "searchRoot/negamax dostanou injektovatelné hodiny (deterministické testy) a deadline; čas se kontroluje čítačem uzlů každých N uzlů. Překročení deadline přeruší běžící iteraci a její neúplný výsledek se zahodí. Test s falešnými hodinami: přerušení nastane a částečný výsledek se nikam nepropíše."
+    },
+    {
+      "title": "Iterativní prohlubování s měkkým limitem",
+      "status": "done",
+      "detail": "smyčka hloubek 1..MAX; hloubka 1 se dokončí vždy bez přerušení (vždy existuje legální výsledek); před startem další iterace odhad, zda se vejde do zbylého času. Vrací výsledek poslední kompletní iterace + dosaženou hloubku. Deterministické testy s falešnými hodinami (malý limit uřízne hloubku, velký dojde na MAX)."
+    },
+    {
+      "title": "Protokol v2: timeMs v bestmove",
+      "status": "done",
+      "detail": "BestmoveRequest dostane povinné pole timeMs (kladné celé číslo; vadná hodnota -> invalid_message), PROTOCOL_VERSION = 2, handler předá limit do searche. Aktualizace komentářů o limitech v protocol.ts a search.ts. Testy validace + integrační test podprocesu s timeMs."
+    },
+    {
+      "title": "Brána M3: série proti random + tvrdý timeout",
+      "status": "done",
+      "detail": "100 partií engine vs random se střídáním barev (vzor fáze 14), výher >=95 %; u každého tahu se měří doba odpovědi a assert drží pod tvrdým stropem (timeMs + 500, sladěno s plánovanou orchestrací M4). Report zaznamená rozložení dosažených hloubek."
+    }
+  ],
+  "startedAt": "2026-07-03T11:53:16.102Z",
+  "completedAt": "2026-07-03T12:40:20.355Z",
+  "autoCommit": {
+    "preSha": "84945f079550d66a3dfeaef06f19e38fa2231338",
+    "subject": "Phase 15: Časová kontrola a quiescence (M3)"
+  }
+}

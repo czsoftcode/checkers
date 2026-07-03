@@ -135,7 +135,7 @@ describe('engine jako podproces', () => {
 
   it('bestmove na výchozí pozici vrací tah obsažený v legalMoves', async () => {
     const proc = startEngine();
-    proc.send({ type: 'bestmove', id: 'm-1', position: initialPosition() });
+    proc.send({ type: 'bestmove', id: 'm-1', position: initialPosition(), timeMs: 100 });
     const response = (await proc.nextResponse()) as { type: string; id: string; move: unknown };
     expect(response.type).toBe('bestmove');
     expect(response.id).toBe('m-1');
@@ -144,15 +144,30 @@ describe('engine jako podproces', () => {
 
   it('bestmove přes podproces vrací tah ze search, ne náhodu (jediná výhra v 1)', async () => {
     // Pozice ze search.test.ts s jediným vyhrávajícím tahem 21→25; seed
-    // procesu je jedno – tie-break se u jednoprvkového výsledku neuplatní.
+    // procesu je jedno – tie-break se u jednoprvkového výsledku neuplatní
+    // a výsledek nezávisí ani na dosažené hloubce (výhra v 1 vede vždy).
     const proc = startEngine(['--seed', '7']);
     const position = makePosition('black', { 13: 'bm', 21: 'bm', 22: 'bm', 29: 'wm' });
-    proc.send({ type: 'bestmove', id: 'w-1', position });
+    proc.send({ type: 'bestmove', id: 'w-1', position, timeMs: 100 });
     await expect(proc.nextResponse()).resolves.toEqual({
       type: 'bestmove',
       id: 'w-1',
       move: { from: 21, path: [25], captures: [] },
     });
+  });
+
+  it('bestmove bez timeMs vrací invalid_message (protokol v2) a proces žije dál', async () => {
+    const proc = startEngine();
+    proc.send({ type: 'bestmove', id: 'v2-1', position: initialPosition() });
+    await expect(proc.nextResponse()).resolves.toMatchObject({
+      type: 'error',
+      id: 'v2-1',
+      code: 'invalid_message',
+    });
+    proc.send({ type: 'bestmove', id: 'v2-2', position: initialPosition(), timeMs: 50 });
+    const response = (await proc.nextResponse()) as { type: string; id: string };
+    expect(response.type).toBe('bestmove');
+    expect(response.id).toBe('v2-2');
   });
 
   it('zpráva rozsekaná doprostřed řádku i dvě zprávy v jednom zápisu fungují', async () => {

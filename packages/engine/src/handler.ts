@@ -14,7 +14,7 @@ import type { Cell, Position } from '@checkers/rules';
 
 import { ENGINE_ID, PROTOCOL_VERSION } from './protocol.js';
 import type { EngineResponse, ErrorCode, ErrorResponse, MessageId } from './protocol.js';
-import { SEARCH_DEPTH, searchRoot } from './search.js';
+import { searchTimed } from './search.js';
 
 /**
  * Zpracuje jeden řádek protokolu a vrátí odpověď.
@@ -22,8 +22,11 @@ import { SEARCH_DEPTH, searchRoot } from './search.js';
  * `rng` dodává náhodu (rozsah [0,1) jako Math.random) UŽ JEN pro tie-break
  * mezi tahy se shodným nejlepším skóre ze search – výběr tahu dělá negamax
  * (search.ts). Předává se zvenku, aby byl tie-break v testech seedovatelný.
+ *
+ * `now` jsou hodiny pro searchTimed – injektovatelné, aby šla hloubka
+ * searche v testech řídit deterministicky; výchozí jsou skutečné hodiny.
  */
-export function handleLine(rawLine: string, rng: () => number): EngineResponse {
+export function handleLine(rawLine: string, rng: () => number, now?: () => number): EngineResponse {
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawLine);
@@ -46,14 +49,30 @@ export function handleLine(rawLine: string, rng: () => number): EngineResponse {
     case 'hello':
       return { type: 'hello', id, protocol: PROTOCOL_VERSION, engine: ENGINE_ID };
     case 'bestmove':
-      return handleBestmove(id, parsed.position, rng);
+      return handleBestmove(id, parsed, rng, now);
     default:
       return errorResponse(id, 'unknown_type', `Neznámý typ zprávy "${parsed.type}".`);
   }
 }
 
-function handleBestmove(id: MessageId, rawPosition: unknown, rng: () => number): EngineResponse {
-  const position = parsePosition(rawPosition);
+function handleBestmove(
+  id: MessageId,
+  message: Record<string, unknown>,
+  rng: () => number,
+  now: (() => number) | undefined,
+): EngineResponse {
+  // timeMs patří k obálce zprávy (tvar požadavku) → invalid_message,
+  // kontroluje se před dražším parsováním pozice.
+  const timeMs = message.timeMs;
+  if (typeof timeMs !== 'number' || !Number.isSafeInteger(timeMs) || timeMs < 1) {
+    return errorResponse(
+      id,
+      'invalid_message',
+      'Zpráva bestmove musí mít pole "timeMs" – kladné celé číslo milisekund.',
+    );
+  }
+
+  const position = parsePosition(message.position);
   if (position === null) {
     return errorResponse(
       id,
@@ -67,7 +86,7 @@ function handleBestmove(id: MessageId, rawPosition: unknown, rng: () => number):
     return errorResponse(id, 'no_legal_moves', 'V pozici není žádný legální tah – partie skončila.');
   }
 
-  const { bestMoves } = searchRoot(position, SEARCH_DEPTH);
+  const { bestMoves } = searchTimed(position, now === undefined ? { timeMs } : { timeMs, now });
   const index = Math.floor(rng() * bestMoves.length);
   const move = bestMoves[index];
   if (move === undefined) {

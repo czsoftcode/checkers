@@ -7,21 +7,24 @@ import { searchRoot, WIN_SCORE } from '../src/search.js';
 import { makePosition, randomPlayedPosition } from './support/position.js';
 
 /**
- * Nezávislé orákulum pro vlastnostní test: čistý negamax BEZ ořezávání.
- * Záměrná duplicita logiky terminálu a horizontu – kdyby se test opíral
- * o search.ts, testoval by kód sám sebou.
+ * Nezávislé orákulum pro vlastnostní test: čistý negamax BEZ ořezávání,
+ * se stejnou specifikací quiescence (povinný skok na horizontu prodlužuje
+ * o půltah). Záměrná duplicita logiky terminálu a horizontu – kdyby se
+ * test opíral o search.ts, testoval by kód sám sebou.
  */
 function plainNegamax(position: Position, depth: number, ply: number): number {
   const moves = legalMoves(position);
   if (moves.length === 0) {
     return -(WIN_SCORE - ply);
   }
-  if (depth === 0) {
+  const forcedCapture = moves[0] !== undefined && moves[0].captures.length > 0;
+  if (depth <= 0 && !forcedCapture) {
     return evaluate(position);
   }
+  const childDepth = depth <= 0 ? 0 : depth - 1;
   let best = Number.NEGATIVE_INFINITY;
   for (const move of moves) {
-    best = Math.max(best, -plainNegamax(applyMove(position, move), depth - 1, ply + 1));
+    best = Math.max(best, -plainNegamax(applyMove(position, move), childDepth, ply + 1));
   }
   return best;
 }
@@ -76,6 +79,25 @@ describe('searchRoot – taktika s nezávisle ověřeným výsledkem', () => {
     expect(legalMoves(position)).toHaveLength(2);
     const result = searchRoot(position, 3);
     expect(result.bestMoves).toEqual([{ from: 10, path: [17], captures: [14] }]);
+  });
+
+  it('quiescence: tah do braní, který statická evaluace přeceňuje, nevybere ani v hloubce 1', () => {
+    // Horizont efekt: černá dáma 3 může na 7 nebo 8 – staticky nejlépe
+    // ohodnocené děti (dáma neztrácí žádný bonus), jenže obě pole visí
+    // do POVINNÉHO skoku bílého 11 a dáma (130) padá bez náhrady. Jediný
+    // bezpečný tah je muž 1→6, staticky HORŠÍ (opouští zadní řadu, -8+1).
+    // Pevná hloubka 1 bez quiescence by vybrala tahy dámou; quiescence
+    // dohraje vynucenou výměnu za horizontem a ztrátu odhalí.
+    const position = makePosition('black', { 1: 'bm', 3: 'bk', 5: 'wm', 11: 'wm' });
+    const safeMove = { from: 1, path: [6], captures: [] };
+    // Přibití předpokladu horizontu: dítě po tahu dámou je staticky lepší
+    // (kdyby se evaluace změnila a přestalo to platit, test ztrácí smysl
+    // a MÁ spadnout tady, ne tiše projít).
+    const staticAfter = (move: Move): number => -evaluate(applyMove(position, move));
+    expect(staticAfter({ from: 3, path: [7], captures: [] })).toBeGreaterThan(staticAfter(safeMove));
+
+    const result = searchRoot(position, 1);
+    expect(result.bestMoves).toEqual([safeMove]);
   });
 
   it('dvě stejně dobrá braní vrací obě (podklad pro tie-break v handleru)', () => {

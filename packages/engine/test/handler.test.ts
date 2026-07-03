@@ -12,6 +12,22 @@ function handle(raw: string, seed = 1) {
   return handleLine(raw, mulberry32(seed));
 }
 
+/**
+ * Deterministická varianta: krokující falešné hodiny (postup o 0,5 ms při
+ * každém odečtu), takže dosažená hloubka searche nezávisí na rychlosti
+ * stroje a dva běhy se stejným seedem vrací identickou odpověď.
+ */
+function handleDeterministic(raw: string, seed = 1) {
+  let t = 0;
+  return handleLine(raw, mulberry32(seed), () => {
+    t += 0.5;
+    return t;
+  });
+}
+
+/** Rychlý měkký limit pro testovací bestmove zprávy. */
+const TIME_MS = 25;
+
 /** Deska z `count` prázdných polí (typované, ať lint nevidí any[]). */
 function emptyBoard(count: number): null[] {
   return Array.from({ length: count }, () => null);
@@ -25,6 +41,12 @@ function positionWithoutMoves(): Position {
 }
 
 describe('handleLine – hello', () => {
+  it('verze protokolu je přibitá literálem (zvednutí = vědomá změna kontraktu)', () => {
+    // Ostatní testy porovnávají proti importované konstantě – to je vůči
+    // omylem změněné verzi tautologie; tady se kontrakt přibíjí natvrdo.
+    expect(PROTOCOL_VERSION).toBe(2);
+  });
+
   it('vrací protocol, engine id a echo id', () => {
     expect(handle(JSON.stringify({ type: 'hello', id: 'h-1' }))).toEqual({
       type: 'hello',
@@ -37,7 +59,7 @@ describe('handleLine – hello', () => {
 
 describe('handleLine – bestmove', () => {
   it('vrací legální tah z výchozí pozice s echo id', () => {
-    const raw = JSON.stringify({ type: 'bestmove', id: 'm-1', position: initialPosition() });
+    const raw = JSON.stringify({ type: 'bestmove', id: 'm-1', position: initialPosition(), timeMs: TIME_MS });
     const response = handle(raw);
     expect(response.type).toBe('bestmove');
     expect(response.id).toBe('m-1');
@@ -47,17 +69,20 @@ describe('handleLine – bestmove', () => {
     expect(legalMoves(initialPosition())).toContainEqual(response.move);
   });
 
-  it('stejný seed vybírá stejný tah (reprodukovatelnost)', () => {
-    const raw = JSON.stringify({ type: 'bestmove', id: 'm-2', position: initialPosition() });
-    expect(handle(raw, 42)).toEqual(handle(raw, 42));
+  it('stejný seed vybírá stejný tah (reprodukovatelnost s falešnými hodinami)', () => {
+    // Se skutečnými hodinami by dva běhy mohly dosáhnout různé hloubky
+    // a vybrat různé tahy – determinismus platí při stejném seedu I čase.
+    const raw = JSON.stringify({ type: 'bestmove', id: 'm-2', position: initialPosition(), timeMs: TIME_MS });
+    expect(handleDeterministic(raw, 42)).toEqual(handleDeterministic(raw, 42));
   });
 
   it('tah vybírá search, ne náhoda: jedinou výhru v 1 vrací při každém seedu', () => {
     // Stejná pozice jako v search.test.ts: jediný vyhrávající tah je 21→25
     // (zablokuje posledního bílého muže v rohu). Náhodný výběr ze 4 legálních
-    // tahů by přes 5 seedů skoro jistě aspoň jednou uhnul.
+    // tahů by přes 5 seedů skoro jistě aspoň jednou uhnul. Výsledek nezávisí
+    // na dosažené hloubce: výhra v 1 má WIN_SCORE - 1 v každé hloubce ≥ 1.
     const position = makePosition('black', { 13: 'bm', 21: 'bm', 22: 'bm', 29: 'wm' });
-    const raw = JSON.stringify({ type: 'bestmove', id: 'm-4', position });
+    const raw = JSON.stringify({ type: 'bestmove', id: 'm-4', position, timeMs: TIME_MS });
     for (const seed of [1, 2, 42, 777, 123456]) {
       expect(handle(raw, seed)).toEqual({
         type: 'bestmove',
@@ -68,8 +93,28 @@ describe('handleLine – bestmove', () => {
   });
 
   it('pozice bez legálních tahů vrací error no_legal_moves', () => {
-    const raw = JSON.stringify({ type: 'bestmove', id: 'm-3', position: positionWithoutMoves() });
+    const raw = JSON.stringify({ type: 'bestmove', id: 'm-3', position: positionWithoutMoves(), timeMs: TIME_MS });
     expect(handle(raw)).toMatchObject({ type: 'error', id: 'm-3', code: 'no_legal_moves' });
+  });
+
+  it.each([
+    ['chybějící timeMs', { type: 'bestmove', id: 't-1', position: initialPosition() }],
+    ['timeMs není číslo', { type: 'bestmove', id: 't-1', position: initialPosition(), timeMs: '100' }],
+    ['timeMs nula', { type: 'bestmove', id: 't-1', position: initialPosition(), timeMs: 0 }],
+    ['timeMs záporné', { type: 'bestmove', id: 't-1', position: initialPosition(), timeMs: -50 }],
+    ['timeMs necelé', { type: 'bestmove', id: 't-1', position: initialPosition(), timeMs: 1.5 }],
+    ['timeMs null', { type: 'bestmove', id: 't-1', position: initialPosition(), timeMs: null }],
+  ])('%s vrací invalid_message s echo id', (_label, message) => {
+    expect(handle(JSON.stringify(message))).toMatchObject({
+      type: 'error',
+      id: 't-1',
+      code: 'invalid_message',
+    });
+  });
+
+  it('vadný timeMs má přednost před vadnou pozicí (kontrola obálky dřív)', () => {
+    const raw = JSON.stringify({ type: 'bestmove', id: 't-2', position: 'e4', timeMs: 0 });
+    expect(handle(raw)).toMatchObject({ type: 'error', id: 't-2', code: 'invalid_message' });
   });
 });
 
@@ -147,7 +192,8 @@ describe('handleLine – chybové větve vstupu', () => {
       { type: 'bestmove', id: 'p-1', position: { board: emptyBoard(32), turn: 'green' } },
     ],
   ])('%s vrací invalid_position s echo id', (_label, message) => {
-    expect(handle(JSON.stringify(message))).toMatchObject({
+    // timeMs je validní, aby se došlo až ke kontrole pozice (obálka jde dřív)
+    expect(handle(JSON.stringify({ ...message, timeMs: TIME_MS }))).toMatchObject({
       type: 'error',
       id: 'p-1',
       code: 'invalid_position',
