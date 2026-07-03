@@ -18,4 +18,7 @@ export {
 } from './board.js';
 export type { Coords, Direction, DirTargets } from './board.js';
 export { initialPosition } from './position.js';
-export { simpleMovesFrom, generateSimpleMoves } from './moves.js';
+// Jediné veřejné API generátoru tahů. Stavební bloky (simpleMovesFrom,
+// jumpMovesFrom, generateSimpleMoves) se záměrně neexportují – ignorují
+// povinnost braní a napojení na ně by tiše nabízelo nelegální tahy.
+export { legalMoves } from './moves.js';

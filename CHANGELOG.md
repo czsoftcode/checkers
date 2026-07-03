@@ -7,6 +7,25 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-03
+
+### Added
+
+- Jednoduché braní: skok přes soupeřův kámen na prázdné pole za ním; muž
+  bere jen vpřed, dáma všemi čtyřmi směry.
+- Povinnost braní přes nové veřejné API `legalMoves`: existuje-li skok
+  kterékoli figury strany na tahu, prostý tah není legální. Prázdný seznam
+  tahů je zafixovaný kontrakt pro budoucí detekci konce hry.
+- Validace strany na tahu: pozice s neplatným `turn` vyhazuje `RangeError`
+  místo tichého „žádné tahy".
+
+### Changed
+
+- Generátory prostých tahů zmizely z veřejného API balíčku rules – jediným
+  vstupem pro konzumenty je `legalMoves` (stavební bloky ignorují povinnost
+  braní). Dočasné omezení: skok zatím končí po jednom braní, vícenásobné
+  skoky přijdou v další fázi.
+
 ## [0.2.0] - 2026-07-03
 
 ### Added

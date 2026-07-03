@@ -1,0 +1,34 @@
+{
+  "id": 4,
+  "title": "Jednoduché braní a povinnost",
+  "goal": "Knihovna rules generuje jednoduché skoky (přes soupeřův kámen na prázdné pole za ním; muž bere jen vpřed, dáma všesměr) a vynucuje povinnost braní přes nové veřejné legalMoves, které při existenci skoku nevrací žádný prostý tah; vícenásobné skoky zůstávají mimo (todo 5). Brána: testy povinného braní.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Generátor jednoduchých skoků",
+      "status": "done",
+      "detail": "Skoky z jednoho pole: přes soupeřův kámen na prázdné pole za ním (stejný index směru NEIGHBORS/JUMPS), muž bere jen vpřed, dáma všesměr; Move s path=[dopad], captures=[přeskočené pole]. Testy: černý přes bílého, vlastní kámen přeskočit nelze, obsazený dopad blokuje, skok přes kraj neexistuje, dáma bere i vzad, muž vzad ne."
+    },
+    {
+      "title": "legalMoves s povinností braní",
+      "status": "done",
+      "detail": "Veřejná funkce legalMoves(position): existuje-li skok kterékoli figury strany na tahu, vrací jen skoky, jinak prosté tahy. Testy: kámen se skokem i prostým tahem -> jen skok; skok jednoho kamene zakáže prosté tahy všech ostatních; bez skoků -> prosté tahy; z výchozí pozice 7 prostých tahů."
+    },
+    {
+      "title": "Zapouzdření stavebních bloků",
+      "status": "done",
+      "detail": "Z indexu balíčku zmizí generateSimpleMoves a simpleMovesFrom - veřejné API pro tahy je jen legalMoves. Stavební bloky zůstávají v moves.ts, testy je importují přímo odtud."
+    },
+    {
+      "title": "Explicitní test dočasného chování + zelený workspace",
+      "status": "done",
+      "detail": "Test výslovně pojmenovaný jako DOČASNÉ chování: skok končí po jednom braní, i když by mohl pokračovat, s komentářem na todo 5. Typecheck, testy a lint celého workspace zelené."
+    }
+  ],
+  "startedAt": "2026-07-03T01:30:42.974Z",
+  "completedAt": "2026-07-03T01:43:10.715Z",
+  "autoCommit": {
+    "preSha": "c7ad320d434f638a53265b4dfb174f66b35996c6",
+    "subject": "Phase 4: Jednoduché braní a povinnost"
+  }
+}

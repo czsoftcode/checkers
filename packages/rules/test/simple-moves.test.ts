@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Cell, Color, Move, Position } from '../src/index.js';
-import { generateSimpleMoves, initialPosition, simpleMovesFrom } from '../src/index.js';
+import { initialPosition } from '../src/index.js';
+// Stavební bloky se z indexu záměrně neexportují (ignorují povinnost braní) –
+// testy je importují přímo z modulu.
+import { generateSimpleMoves, simpleMovesFrom } from '../src/moves.js';
 
 /** Postaví pozici z výčtu obsazených polí; zbytek desky je prázdný. */
 function positionWith(pieces: readonly (readonly [number, Cell])[], turn: Color): Position {
