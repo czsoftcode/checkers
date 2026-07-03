@@ -16,6 +16,7 @@ import { initialPosition, legalMoves } from '@checkers/rules';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ENGINE_ID, PROTOCOL_VERSION } from '../src/protocol.js';
+import { makePosition } from './support/position.js';
 
 const pkgDir = fileURLToPath(new URL('..', import.meta.url));
 const RESPONSE_TIMEOUT_MS = 15_000;
@@ -139,6 +140,19 @@ describe('engine jako podproces', () => {
     expect(response.type).toBe('bestmove');
     expect(response.id).toBe('m-1');
     expect(legalMoves(initialPosition())).toContainEqual(response.move);
+  });
+
+  it('bestmove přes podproces vrací tah ze search, ne náhodu (jediná výhra v 1)', async () => {
+    // Pozice ze search.test.ts s jediným vyhrávajícím tahem 21→25; seed
+    // procesu je jedno – tie-break se u jednoprvkového výsledku neuplatní.
+    const proc = startEngine(['--seed', '7']);
+    const position = makePosition('black', { 13: 'bm', 21: 'bm', 22: 'bm', 29: 'wm' });
+    proc.send({ type: 'bestmove', id: 'w-1', position });
+    await expect(proc.nextResponse()).resolves.toEqual({
+      type: 'bestmove',
+      id: 'w-1',
+      move: { from: 21, path: [25], captures: [] },
+    });
   });
 
   it('zpráva rozsekaná doprostřed řádku i dvě zprávy v jednom zápisu fungují', async () => {

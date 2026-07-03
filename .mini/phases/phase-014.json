@@ -1,0 +1,39 @@
+{
+  "id": 14,
+  "title": "Search jádro enginu (M3)",
+  "goal": "Engine vybírá tah pomocí negamaxu s alfa-beta ořezáváním na pevnou hloubku a evaluací v1 (muž 100, dáma 130, bonus za zadní řadu, drobný postup vpřed) - brána: vybírá pouze legální tahy a v sérii partií poráží random hráče.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Evaluace v1 jako čistá funkce",
+      "status": "done",
+      "detail": "evaluate(position) vrací skóre z pohledu strany na tahu: muž 100, dáma 130, bonus za obsazenou zadní řadu, drobný bonus za postup mužů vpřed. Unit testy: počáteční pozice = 0, materiální převaha kladné skóre, symetrie (zrcadlová pozice s prohozenými barvami dává opačné skóre)."
+    },
+    {
+      "title": "Negamax s alfa-beta na pevnou hloubku",
+      "status": "done",
+      "detail": "searchBestMove(position, depth) vrací nejlepší tah + skóre; pozice bez tahů = prohra strany na tahu, skórování preferuje rychlejší výhru a pozdější prohru. Testy: výhra v 1 tahu, vynucená kombinace na 2 půltahy, vlastnostní test - alfa-beta dává stejné skóre jako čistý negamax bez ořezávání na náhodných pozicích."
+    },
+    {
+      "title": "Zapojení do handleru bestmove",
+      "status": "done",
+      "detail": "handleBestmove místo náhodného tahu volá search s konstantní hloubkou; rng zůstává jen jako tie-break mezi tahy se stejným skóre (seedovatelné). Chybové větve (invalid_position, no_legal_moves) beze změny; testy handleru aktualizované."
+    },
+    {
+      "title": "Brána: série partií proti random hráči",
+      "status": "done",
+      "detail": "Self-play test v packages/engine: N partií (střídání barev, seedovaný random soupeř) přes rules (advanceState, gameResultFromState, strop půltahů). Kritérium: engine neprohraje ani jednu partii a vyhraje jasnou většinu; hloubka zvolená tak, aby test doběhl v rozumném čase."
+    },
+    {
+      "title": "Integrační test podprocesu a poznámka k limitům",
+      "status": "done",
+      "detail": "Test přes skutečný podproces ověří, že bestmove vrací legální tah ze search (ne náhodu); do dokumentace protokolu poznámka, že v1 hledá na pevnou hloubku bez časové kontroly (fáze 15) a nevidí remízová pravidla (čítač půltahů, opakování)."
+    }
+  ],
+  "startedAt": "2026-07-03T08:04:21.390Z",
+  "completedAt": "2026-07-03T08:33:46.887Z",
+  "autoCommit": {
+    "preSha": "b8d14605973c1d4dd472565d43d8f57843cf235d",
+    "subject": "Phase 14: Search jádro enginu (M3)"
+  }
+}

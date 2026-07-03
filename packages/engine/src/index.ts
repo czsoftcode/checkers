@@ -22,3 +22,5 @@ export {
 } from './protocol.js';
 export { LineBuffer } from './line-buffer.js';
 export { handleLine } from './handler.js';
+export { evaluate, MAN_VALUE, KING_VALUE, BACK_ROW_BONUS, ADVANCE_BONUS } from './evaluate.js';
+export { searchRoot, SEARCH_DEPTH, WIN_SCORE, type SearchResult } from './search.js';

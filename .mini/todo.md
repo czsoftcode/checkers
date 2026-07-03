@@ -15,7 +15,7 @@
 - [x] [M1] Perft + fixtures: funkce perft(N), ověření hodnot 1-6 (7/49/302/1469/7361/36768) proti NEZÁVISLÉMU zdroji, sdílené fixtures/*.json. BRÁNA M1: perft 1-6 sedí, všechny testy z 2.7 zelené. Nic mimo rules nevzniká dřív.
 - [x] [M2] CLI hra: random vs random (musí vždy terminovat díky pravidlu 80 půltahů) a člověk vs random v terminálu. Brána: odehratelná partie bez UI a serveru = důkaz kompletnosti rules.
 - [x] [M3] Engine protokol: samostatný proces, JSON Lines přes stdin/stdout (hello, bestmove, error, pole id + protocol), řádkový buffer (ne data event naslepo). Brána: hello a bestmove přes skutečný podproces.
-- [ ] [M3] Search jádro: negamax + alfa-beta, evaluace v1 (muž 100, dáma 130, bonus za zadní řadu, drobný postup). Brána: vybírá jen legální tahy, poráží random hráče.
+- [x] [M3] Search jádro: negamax + alfa-beta, evaluace v1 (muž 100, dáma 130, bonus za zadní řadu, drobný postup). Brána: vybírá jen legální tahy, poráží random hráče.
 - [ ] [M3] Časová kontrola: iterativní prohlubování 1..N s měkkým limitem (vrací poslední KOMPLETNÍ iteraci, ne rozdělanou), quiescence - prodloužení o půltah při povinných skocích. BRÁNA M3: porazí random >=95 % ze 100, nikdy nepřekročí tvrdý timeout.
 - [ ] [M3] Síla pro cíl (i): silnější poziční evaluace (mobilita, kontrola dvojitého rohu) + transpoziční tabulky + Zobrist hash. Brána: self-play nová vs stará verze prokáže zlepšení (>=200 partií, střídání barev).
 - [ ] [M4] Server API: Fastify + zod, POST /games, GET /games/:id, POST /games/:id/moves, in-memory Map úložiště, 404 pro neexistující partii, 409 illegal_move + legalMoves. Brána: kompletní partie přes curl.

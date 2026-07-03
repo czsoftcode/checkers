@@ -5,8 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { handleLine } from '../src/handler.js';
 import { mulberry32 } from '../src/prng.js';
 import { ENGINE_ID, PROTOCOL_VERSION } from '../src/protocol.js';
+import { makePosition } from './support/position.js';
 
-/** Zavolá handleLine s čerstvým seedovaným PRNG. */
+/** Zavolá handleLine s čerstvým seedovaným PRNG (rng = tie-break searche). */
 function handle(raw: string, seed = 1) {
   return handleLine(raw, mulberry32(seed));
 }
@@ -49,6 +50,21 @@ describe('handleLine – bestmove', () => {
   it('stejný seed vybírá stejný tah (reprodukovatelnost)', () => {
     const raw = JSON.stringify({ type: 'bestmove', id: 'm-2', position: initialPosition() });
     expect(handle(raw, 42)).toEqual(handle(raw, 42));
+  });
+
+  it('tah vybírá search, ne náhoda: jedinou výhru v 1 vrací při každém seedu', () => {
+    // Stejná pozice jako v search.test.ts: jediný vyhrávající tah je 21→25
+    // (zablokuje posledního bílého muže v rohu). Náhodný výběr ze 4 legálních
+    // tahů by přes 5 seedů skoro jistě aspoň jednou uhnul.
+    const position = makePosition('black', { 13: 'bm', 21: 'bm', 22: 'bm', 29: 'wm' });
+    const raw = JSON.stringify({ type: 'bestmove', id: 'm-4', position });
+    for (const seed of [1, 2, 42, 777, 123456]) {
+      expect(handle(raw, seed)).toEqual({
+        type: 'bestmove',
+        id: 'm-4',
+        move: { from: 21, path: [25], captures: [] },
+      });
+    }
   });
 
   it('pozice bez legálních tahů vrací error no_legal_moves', () => {

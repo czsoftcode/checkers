@@ -7,6 +7,21 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-03
+
+### Changed
+
+- Engine už nehraje náhodně: zprávu `bestmove` odbavuje negamax
+  s alfa-beta ořezáváním na pevnou hloubku 6 a evaluací v1 (muž 100,
+  dáma 130, bonus za hlídanou zadní řadu, drobný bonus za postup mužů).
+  Engine preferuje rychlejší výhru a pozdější prohru; mezi stejně dobrými
+  tahy rozhoduje seedovatelný tie-break (dřívější `--seed` má teď jen
+  tuto roli). Brána M3 splněna: 12 seedovaných partií proti náhodnému
+  hráči = 12 výher, každý tah enginu ověřen nezávisle knihovnou pravidel.
+- Dokumentace protokolu nově výslovně uvádí limity v1: `bestmove` nenese
+  časový limit ani remízový stav partie (čítač půltahů, opakování) -
+  obojí přijde s fází časové kontroly.
+
 ## [0.11.0] - 2026-07-03
 
 ### Added

@@ -14,12 +14,14 @@ import type { Cell, Position } from '@checkers/rules';
 
 import { ENGINE_ID, PROTOCOL_VERSION } from './protocol.js';
 import type { EngineResponse, ErrorCode, ErrorResponse, MessageId } from './protocol.js';
+import { SEARCH_DEPTH, searchRoot } from './search.js';
 
 /**
  * Zpracuje jeden řádek protokolu a vrátí odpověď.
  *
- * `rng` dodává náhodu pro výběr tahu (rozsah [0,1) jako Math.random);
- * předává se zvenku, aby byl výběr v testech seedovatelný.
+ * `rng` dodává náhodu (rozsah [0,1) jako Math.random) UŽ JEN pro tie-break
+ * mezi tahy se shodným nejlepším skóre ze search – výběr tahu dělá negamax
+ * (search.ts). Předává se zvenku, aby byl tie-break v testech seedovatelný.
  */
 export function handleLine(rawLine: string, rng: () => number): EngineResponse {
   let parsed: unknown;
@@ -65,8 +67,9 @@ function handleBestmove(id: MessageId, rawPosition: unknown, rng: () => number):
     return errorResponse(id, 'no_legal_moves', 'V pozici není žádný legální tah – partie skončila.');
   }
 
-  const index = Math.floor(rng() * moves.length);
-  const move = moves[index];
+  const { bestMoves } = searchRoot(position, SEARCH_DEPTH);
+  const index = Math.floor(rng() * bestMoves.length);
+  const move = bestMoves[index];
   if (move === undefined) {
     // rng mimo kontrakt [0, 1) – programátorská chyba, zachytí ji respondToLine
     throw new RangeError(`Engine: rng vrátil hodnotu mimo [0, 1), index ${String(index)}`);

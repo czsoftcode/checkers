@@ -29,7 +29,17 @@ export interface HelloRequest {
   readonly id: MessageId;
 }
 
-/** Požadavek na tah v zadané pozici. */
+/**
+ * Požadavek na tah v zadané pozici.
+ *
+ * Limity protokolu v1 (vědomé, ne opomenutí):
+ * - nenese časový limit – engine hledá na pevnou hloubku (SEARCH_DEPTH)
+ *   a doba tahu kolísá podle pozice; iterativní prohlubování + limity
+ *   přijdou s fází časové kontroly (a zvednou verzi protokolu),
+ * - nenese remízový stav partie (čítač půltahů bez pokroku, historii
+ *   opakování) – engine hodnotí jen samotnou pozici a o blížící se remíze
+ *   neví; remízy autoritativně hlídá server přes GameState.
+ */
 export interface BestmoveRequest {
   readonly type: 'bestmove';
   readonly id: MessageId;
