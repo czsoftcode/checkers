@@ -3,7 +3,7 @@
 > Archive of future ideas and changes for this project. Managed by `mini todo`
 > (`add` / `done` / `remove`); `mini next` offers the open items as candidate
 > phase ideas. You can also edit this checklist by hand.
-- [ ] [M0] Kostra monorepa + CI: pnpm workspaces (balíčky rules/engine/server/web), TS strict, Vitest, lint, GitHub Actions (lint+test na push). Brána: prázdný test zelený v CI.
+- [x] [M0] Kostra monorepa + CI: pnpm workspaces (balíčky rules/engine/server/web), TS strict, Vitest, lint, GitHub Actions (lint+test na push). Brána: prázdný test zelený v CI.
 - [ ] [M1] Typy a deska: Color/Cell/Position/Move, číslování polí 1-32, převod souřadnic, předpočítané tabulky NEIGHBORS[32][4] a JUMPS[32][4]. Brána: unit testy převodu a sousedů.
 - [ ] [M1] Prosté tahy: rozestavění (černý 1-12, bílý 21-32, černý začíná), generátor tahů bez braní - muž jen vpřed o 1, dáma všesměr o 1 (NENÍ dálková). Brána: testy včetně dáma jen o 1 pole.
 - [ ] [M1] Braní jednoduché: skok přes soupeře na prázdné pole za ním, povinnost braní (při existenci skoku generátor nevrací prostý tah), muž bere jen vpřed, dáma všesměr. Brána: testy povinného braní.

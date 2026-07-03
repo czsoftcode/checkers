@@ -1,0 +1,39 @@
+{
+  "id": 1,
+  "title": "Kostra monorepa + CI",
+  "goal": "Postavit pnpm workspaces se čtyřmi balíčky (rules, engine, server, web) s TypeScript strict, Vitest a lintem; GitHub Actions spouští lint + test na push. Brána: prázdný (smoke) test zelený v CI.",
+  "status": "doing",
+  "steps": [
+    {
+      "title": "Kořen monorepa: pnpm workspace",
+      "status": "done",
+      "detail": "Root package.json (private, engines Node >=24, packageManager pnpm), pnpm-workspace.yaml, .gitignore, .nvmrc s Node 24. Ověření: pnpm install projde bez chyb."
+    },
+    {
+      "title": "Sdílený TypeScript strict základ",
+      "status": "done",
+      "detail": "tsconfig.base.json v kořeni se strict: true a moderním nastavením (ES2022 moduly, noUncheckedIndexedAccess). Ověření: balíčky ho v dalším kroku rozšíří a typecheck projde."
+    },
+    {
+      "title": "Čtyři balíčky se stub kódem",
+      "status": "done",
+      "detail": "packages/rules, packages/engine, packages/server, packages/web - každý s package.json, tsconfig.json a minimálním src/index.ts (žádná herní logika). Ověření: pnpm -r typecheck zelený."
+    },
+    {
+      "title": "Vitest + smoke testy",
+      "status": "done",
+      "detail": "Vitest v kořeni, v každém balíčku jeden smoke test (import stub modulu + triviální assert, ne jen expect(true)). Ověření: pnpm -r test zelený, 4 testy."
+    },
+    {
+      "title": "ESLint",
+      "status": "done",
+      "detail": "Flat config v kořeni s typescript-eslint, skript pnpm lint. Ověření: lint zelený a zároveň umí selhat (zkusmo na porušeném souboru)."
+    },
+    {
+      "title": "GitHub Actions CI",
+      "status": "todo",
+      "detail": "Workflow .github/workflows/ci.yml: na push checkout, pnpm + Node 24 s cache, install, lint, typecheck, test. Ověření: push na GitHub a zelený běh přes gh run watch = brána fáze splněna."
+    }
+  ],
+  "startedAt": "2026-07-03T00:24:32.115Z"
+}
