@@ -1,0 +1,29 @@
+{
+  "id": 7,
+  "title": "Detekce konce hry",
+  "goal": "Knihovna rules umí říct výsledek pozice funkcí gameResult(position): hráč na tahu bez legálního tahu prohrává, i když má kameny na desce (pat neexistuje); staví na kontraktu prázdné legalMoves = žádný tah. Brána: testy konce hry - prohra bez kamenů, prohra se zablokovanými kameny, neukončená partie. Remízy (todo 8) sem nepatří - potřebují stav nad rámec pozice.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Funkce gameResult(position)",
+      "status": "done",
+      "detail": "Nový modul result.ts: gameResult(position) vrací 'ongoing' | 'black-wins' | 'white-wins'. Prázdné legalMoves pro stranu na tahu = prohra strany na tahu. legalMoves se počítá interně (žádný volitelný parametr - pozvánka k nekonzistenci). Export z indexu."
+    },
+    {
+      "title": "Testy konce hry (brána fáze)",
+      "status": "done",
+      "detail": "Strana na tahu bez kamenů prohrává; zablokované kameny = prohra (pat neexistuje, past GDD 2.7); výchozí pozice = ongoing; symetricky obě barvy. Navíc reálný tok: tah přes applyMove, který soupeře zablokuje/vezme poslední kámen, vede na pozici s výsledkem."
+    },
+    {
+      "title": "Zelený workspace",
+      "status": "done",
+      "detail": "Typecheck, testy a lint celého workspace zelené; poškozená pozice vyhazuje RangeError i přes gameResult (test)."
+    }
+  ],
+  "startedAt": "2026-07-03T03:01:09.406Z",
+  "completedAt": "2026-07-03T03:08:10.722Z",
+  "autoCommit": {
+    "preSha": "714bd81e03f20a572651ec12214545ef8e1f1b56",
+    "subject": "Phase 7: Detekce konce hry"
+  }
+}

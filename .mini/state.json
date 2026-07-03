@@ -32,6 +32,11 @@
       "id": 6,
       "title": "applyMove a proměna",
       "status": "done"
+    },
+    {
+      "id": 7,
+      "title": "Detekce konce hry",
+      "status": "done"
     }
   ]
 }

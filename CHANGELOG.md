@@ -7,6 +7,15 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-03
+
+### Added
+
+- Detekce konce hry (`gameResult`): hráč na tahu bez legálního tahu
+  prohrává - i se zablokovanými kameny na desce (pat v americké dámě
+  neexistuje). Vrací `ongoing` / `black-wins` / `white-wins`; remízová
+  pravidla přijdou samostatně.
+
 ## [0.5.0] - 2026-07-03
 
 ### Added
