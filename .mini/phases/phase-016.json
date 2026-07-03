@@ -1,0 +1,39 @@
+{
+  "id": 16,
+  "title": "Poziční evaluace + self-play harness",
+  "goal": "Engine dostane silnější poziční evaluaci (mobilita, kontrola dvojitého rohu, soudržnost zadní řady) a vznikne self-play harness (nová vs. stará evaluace, >=200 partií, střídání barev, randomizovaná zahájení) - brána: nová evaluace prokazatelně vítězí nad starou.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Injektovatelná evaluace do searche",
+      "status": "done",
+      "detail": "searchRoot/negamax/searchTimed dostanou volitelný parametr eval funkce, default = produkční evaluate; produkční cesta se tvarově nemění. Ověření: stávající testy searche zelené + nový test, že podstrčená eval funkce reálně změní vybraný tah."
+    },
+    {
+      "title": "Evaluace v2: mobilita, dvojitý roh, zadní řada",
+      "status": "done",
+      "detail": "Nová funkce evaluateV2 vedle staré (obě exportované). Složky, vše celočíselné: mobilita = rozdíl počtu prostých tahů obou stran (uvnitř evaluate); dvojitý roh = bonus za kámen na polích 4/8 (černý) a 25/29 (bílý) - ověřit číslování; soudržnost zadní řady = zobecnění BACK_ROW_BONUS na počet vlastních mužů držených vzadu, dokud má soupeř co proměnit. Unit testy na každou složku zvlášť na ručních pozicích."
+    },
+    {
+      "title": "Randomizovaná párovaná zahájení",
+      "status": "done",
+      "detail": "Generátor: ze seedu zahraj K náhodných úvodních půltahů (návrh K=4) -> startovní pozice; funkce vrátí sadu zahájení, každé pro obě přiřazení barev (color swap). Deterministické dle seedu. Test: stejný seed = stejná zahájení; obě přiřazení dostanou tutéž pozici; zahájení legální a ještě nerozhodnutá (obě strany mají tahy)."
+    },
+    {
+      "title": "Self-play harness (modul + skript)",
+      "status": "done",
+      "detail": "Čistý modul: dvě eval funkce -> N párovaných partií na FIXNÍ hloubce se střídáním barev, seedovaný tie-break, remízová pravidla přes GameState, půltahový strop. Vrátí skóre (W/D/L z pohledu nové) + informativní telemetrii rychlosti. Spustitelný jako pnpm skript pro plný běh; malý vitest smoke test (malé N) do CI."
+    },
+    {
+      "title": "Brána: kontrolní běh + srovnání nové vs. staré",
+      "status": "done",
+      "detail": "Gate skript: nejdřív kontrolní běh stará-vs-stará (N>=200) změří šumové pásmo (~50 %), pak experiment nová-vs-stará (N>=200) za stejných zahájení. PASS = (a) žádná regrese (prohry <= výhry) A ZÁROVEŇ (b) skóre experimentu měřitelně nad kontrolním pásmem. Skript vypíše obě čísla + telemetrii. Neúspěch je platný výsledek, ne důvod měnit práh. Fixní hloubka nízká (5-6), ať plný běh trvá jednotky minut."
+    }
+  ],
+  "startedAt": "2026-07-03T13:27:35.204Z",
+  "completedAt": "2026-07-03T14:41:16.790Z",
+  "autoCommit": {
+    "preSha": "ef97dfa7cb5926c42385224bf662cc70cdabe14f",
+    "subject": "Phase 16: Poziční evaluace + self-play harness"
+  }
+}

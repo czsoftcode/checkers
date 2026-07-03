@@ -40,6 +40,15 @@ import type { Move, Position } from '@checkers/rules';
 import { evaluate } from './evaluate.js';
 
 /**
+ * Statická evaluace listu z pohledu strany na tahu (celé číslo). Injektuje
+ * se do searche, aby šly v self-play harnessu srovnat dvě verze evaluace
+ * v jednom procesu; výchozí je produkční `evaluate`. Celočíselnost je
+ * KONTRAKT (viz hlavička souboru, trik okna `best - 1`) – search si ji
+ * nevynucuje, dodržet ji musí každá dosazená funkce.
+ */
+export type EvalFn = (position: Position) => number;
+
+/**
  * Skóre výhry v kořeni; skutečná hodnota v uzlu je `WIN_SCORE - ply`.
  * Řádově výš než součet materiálu (max ~12 × 130), aby se výhra nikdy
  * nepletla s poziční převahou.
@@ -115,12 +124,21 @@ export interface SearchResult {
  * programátorská chyba volajícího (handler ji odbavuje dřív jako
  * `no_legal_moves`) → RangeError, žádný tichý fallback.
  */
-export function searchRoot(position: Position, depth: number): SearchResult {
-  return rootSearch(position, depth, null);
+export function searchRoot(
+  position: Position,
+  depth: number,
+  evaluateFn: EvalFn = evaluate,
+): SearchResult {
+  return rootSearch(position, depth, null, evaluateFn);
 }
 
 /** Kořen searche; s hodinami umí vyhodit SearchAborted (chytá searchTimed). */
-function rootSearch(position: Position, depth: number, clock: SearchClock | null): SearchResult {
+function rootSearch(
+  position: Position,
+  depth: number,
+  clock: SearchClock | null,
+  evaluateFn: EvalFn,
+): SearchResult {
   if (!Number.isInteger(depth) || depth < 1) {
     throw new RangeError(`Neplatná hloubka prohledávání: ${String(depth)}`);
   }
@@ -134,7 +152,15 @@ function rootSearch(position: Position, depth: number, clock: SearchClock | null
   for (const move of moves) {
     // Okno dítěte je (-beta, -alfa) s alfou kořene `best - 1` (viz hlavička).
     const rootAlpha = bestMoves.length === 0 ? Number.NEGATIVE_INFINITY : best - 1;
-    const value = -negamax(applyMove(position, move), depth - 1, 1, Number.NEGATIVE_INFINITY, -rootAlpha, clock);
+    const value = -negamax(
+      applyMove(position, move),
+      depth - 1,
+      1,
+      Number.NEGATIVE_INFINITY,
+      -rootAlpha,
+      clock,
+      evaluateFn,
+    );
     if (value > best) {
       best = value;
       bestMoves = [move];
@@ -163,6 +189,7 @@ function negamax(
   alpha: number,
   beta: number,
   clock: SearchClock | null,
+  evaluateFn: EvalFn,
 ): number {
   tickClock(clock);
   const moves = legalMoves(position);
@@ -173,13 +200,13 @@ function negamax(
   // ověřit první tah.
   const forcedCapture = moves[0] !== undefined && moves[0].captures.length > 0;
   if (depth <= 0 && !forcedCapture) {
-    return evaluate(position);
+    return evaluateFn(position);
   }
   const childDepth = depth <= 0 ? 0 : depth - 1;
 
   let best = Number.NEGATIVE_INFINITY;
   for (const move of moves) {
-    const value = -negamax(applyMove(position, move), childDepth, ply + 1, -beta, -alpha, clock);
+    const value = -negamax(applyMove(position, move), childDepth, ply + 1, -beta, -alpha, clock, evaluateFn);
     if (value > best) {
       best = value;
       if (value > alpha) {
@@ -201,6 +228,8 @@ export interface TimedSearchOptions {
   readonly maxDepth?: number;
   /** Injektovatelné hodiny pro deterministické testy (výchozí performance.now). */
   readonly now?: () => number;
+  /** Injektovatelná statická evaluace (výchozí produkční `evaluate`). */
+  readonly evaluate?: EvalFn;
 }
 
 /** Výsledek časovaného searche. */
@@ -237,11 +266,12 @@ export function searchTimed(position: Position, options: TimedSearchOptions): Ti
     throw new RangeError(`Neplatný strop hloubky: ${String(maxDepth)}`);
   }
   const now = options.now ?? currentTimeMs;
+  const evaluateFn = options.evaluate ?? evaluate;
 
   const start = now();
   const deadline = start + timeMs;
 
-  let result: TimedSearchResult = { ...rootSearch(position, 1, null), depth: 1 };
+  let result: TimedSearchResult = { ...rootSearch(position, 1, null, evaluateFn), depth: 1 };
   let lastIterationMs = now() - start;
 
   for (let depth = 2; depth <= maxDepth; depth++) {
@@ -251,7 +281,12 @@ export function searchTimed(position: Position, options: TimedSearchOptions): Ti
     }
     let iteration: SearchResult;
     try {
-      iteration = rootSearch(position, depth, { now, deadline, nodesUntilCheck: NODES_PER_TIME_CHECK });
+      iteration = rootSearch(
+        position,
+        depth,
+        { now, deadline, nodesUntilCheck: NODES_PER_TIME_CHECK },
+        evaluateFn,
+      );
     } catch (error) {
       if (error instanceof SearchAborted) {
         break;

@@ -7,6 +7,24 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-03
+
+### Added
+
+- Self-play harness a brána (`pnpm --filter @checkers/engine selfplay-gate
+  [zahájení] [hloubka]`) pro srovnávání dvou evaluací: párovaná randomizovaná
+  zahájení se střídáním barev, fixní hloubka (izoluje kvalitu evaluace od
+  rychlosti), kontrolní běh jako sanity check harnessu a statistický práh
+  (50 % + 2σ dle N). Odlišené exit kódy (0 PASS / 1 FAIL / 2 špatný argument /
+  3 neočekávaná chyba), aby se pád nemaskoval jako legitimní neúspěch.
+- Injektovatelná evaluace do searche (`EvalFn` v `searchRoot`/`searchTimed`) -
+  umožňuje spustit víc variant evaluace v jednom procesu; produkční default
+  zůstává beze změny.
+- Kandidátní evaluace v2 (mobilita, kontrola dvojitého rohu, podmíněná zadní
+  řada). Změřena self-play bránou proti v1 (≥ 200 partií, hloubky 4 a 5):
+  převahu NEPROKÁZALA (remízovější, marginálně slabší, 2-3× pomalejší).
+  **Produkční evaluace zůstává v1**; v2 je zatím jen kandidát k dalšímu ladění.
+
 ## [0.13.0] - 2026-07-03
 
 ### Added

@@ -22,12 +22,22 @@ export {
 } from './protocol.js';
 export { LineBuffer } from './line-buffer.js';
 export { handleLine } from './handler.js';
-export { evaluate, MAN_VALUE, KING_VALUE, BACK_ROW_BONUS, ADVANCE_BONUS } from './evaluate.js';
+export {
+  evaluate,
+  evaluateV2,
+  MAN_VALUE,
+  KING_VALUE,
+  BACK_ROW_BONUS,
+  ADVANCE_BONUS,
+  MOBILITY_WEIGHT,
+  DOUBLE_CORNER_BONUS,
+} from './evaluate.js';
 export {
   searchRoot,
   searchTimed,
   MAX_SEARCH_DEPTH,
   WIN_SCORE,
+  type EvalFn,
   type SearchResult,
   type TimedSearchOptions,
   type TimedSearchResult,

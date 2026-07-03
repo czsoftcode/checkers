@@ -77,6 +77,11 @@
       "id": 15,
       "title": "Časová kontrola a quiescence (M3)",
       "status": "done"
+    },
+    {
+      "id": 16,
+      "title": "Poziční evaluace + self-play harness",
+      "status": "done"
     }
   ]
 }

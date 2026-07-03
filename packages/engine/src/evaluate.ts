@@ -15,8 +15,8 @@
  * hodnotí jedinou pozici bez historie.
  */
 
-import { BOARD_SQUARES, squareToCoords } from '@checkers/rules';
-import type { Color, Position } from '@checkers/rules';
+import { BOARD_SQUARES, legalMoves, squareToCoords } from '@checkers/rules';
+import type { Color, Position, Square } from '@checkers/rules';
 
 /** Hodnota muže. */
 export const MAN_VALUE = 100;
@@ -70,4 +70,115 @@ export function evaluate(position: Position): number {
   }
   // Rozdíl místo negace: `-(black - white)` by u vyrovnané pozice vrátil -0.
   return position.turn === 'black' ? black - white : white - black;
+}
+
+/**
+ * Váha mobility: kolik bodů má rozdíl JEDNOHO legálního tahu navíc. Malá
+ * proti materiálu (muž 100) – mobilita je jemné poziční koření, ne důvod
+ * obětovat kámen.
+ */
+export const MOBILITY_WEIGHT = 2;
+
+/** Bonus za vlastní kámen (muž i dáma) na vlastním dvojitém rohu. */
+export const DOUBLE_CORNER_BONUS = 4;
+
+/**
+ * Vlastní dvojitý roh: tmavý roh desky + pole za ním. Číslování 1–32
+ * (řada 0 = zadní řada černého nahoře): černý roh je pole 4 (řada 0, col 7)
+ * a 8 (řada 1, col 6); bílý roh je pole 29 (řada 7, col 0) a 25 (řada 6,
+ * col 1). Druhé dva rohy desky jsou světlé (nehrací) = jednoduché rohy.
+ */
+const DOUBLE_CORNER_SQUARES: Record<Color, ReadonlySet<Square>> = {
+  black: new Set<Square>([4, 8]),
+  white: new Set<Square>([25, 29]),
+};
+
+/**
+ * Evaluace v2 (kandidát fáze 16) – k v1 (materiál, postup, zadní řada)
+ * přidává tři poziční složky. Skóre je z pohledu STRANY NA TAHU a VŽDY
+ * celé číslo (kontrakt searche – trik okna `best - 1`, viz search.ts).
+ *
+ * Složky proti v1:
+ * - **mobilita** = `MOBILITY_WEIGHT × (počet legálních tahů strany na tahu
+ *   − počet legálních tahů soupeře)`. Mobilita jde přes VEŘEJNÉ `legalMoves`
+ *   (rules záměrně neexportuje generátor prostých tahů) – proto: má-li
+ *   soupeř povinné braní, počítá se počet skokových sekvencí, ne prostých
+ *   tahů. ZNÁMÝ DEFEKT (self-review fáze 16, nález 3): když soupeř MUSÍ brát
+ *   (typicky můj kámen visí), `oppMoves` je malé → term mě „odmění" právě
+ *   v pozici, kde hrozím ztrátou materiálu. Pletou se tak dva opačné významy
+ *   („soupeř je omezený" vs. „soupeř mě nutně sebere"). V klidném listu, kde
+ *   search evaluaci volá, strana NA TAHU braní nemá (počítá prosté tahy);
+ *   defekt se týká hypoteticky prohozeného soupeře. Kandidát na opravu, až
+ *   se bude evaluace ladit – jedno z možných vysvětlení, proč v2 v bráně
+ *   neprokázala převahu.
+ * - **dvojitý roh**: `DOUBLE_CORNER_BONUS` za vlastní kámen na vlastním
+ *   dvojitém rohu (obranně cenné pole).
+ * - **zadní řada podmíněně**: bonus za muže na vlastní zadní řadě se počítá
+ *   jen dokud má SOUPEŘ aspoň jednoho muže (má co proměnit). Nemá-li soupeř
+ *   muže (jen dámy), hlídání zadní řady je bezcenné → bez bonusu. (v1 dává
+ *   bonus bezpodmínečně.)
+ *
+ * Poškozenou desku odmítá RangeError stejně jako v1.
+ */
+export function evaluateV2(position: Position): number {
+  let black = 0;
+  let white = 0;
+  let blackMen = 0;
+  let whiteMen = 0;
+  let blackBackRow = 0;
+  let whiteBackRow = 0;
+
+  for (let square = 1; square <= BOARD_SQUARES; square++) {
+    const cell = position.board[square - 1];
+    if (cell === undefined) {
+      throw new RangeError(`Poškozená pozice: díra v board na poli ${String(square)}`);
+    }
+    if (cell === null) {
+      continue;
+    }
+    let value: number;
+    if (cell.kind === 'king') {
+      value = KING_VALUE;
+    } else {
+      const { row } = squareToCoords(square);
+      const advance = cell.color === 'black' ? row : 7 - row;
+      value = MAN_VALUE + ADVANCE_BONUS * advance;
+      if (cell.color === 'black') {
+        blackMen++;
+        if (row === BACK_ROW.black) {
+          blackBackRow++;
+        }
+      } else {
+        whiteMen++;
+        if (row === BACK_ROW.white) {
+          whiteBackRow++;
+        }
+      }
+    }
+    if (DOUBLE_CORNER_SQUARES[cell.color].has(square)) {
+      value += DOUBLE_CORNER_BONUS;
+    }
+    if (cell.color === 'black') {
+      black += value;
+    } else {
+      white += value;
+    }
+  }
+
+  // Zadní řada se cení jen dokud má soupeř muže (má co proměnit).
+  if (whiteMen > 0) {
+    black += BACK_ROW_BONUS * blackBackRow;
+  }
+  if (blackMen > 0) {
+    white += BACK_ROW_BONUS * whiteBackRow;
+  }
+
+  const material = position.turn === 'black' ? black - white : white - black;
+
+  const opponent: Color = position.turn === 'black' ? 'white' : 'black';
+  const myMoves = legalMoves(position).length;
+  const oppMoves = legalMoves({ board: position.board, turn: opponent }).length;
+  const mobility = MOBILITY_WEIGHT * (myMoves - oppMoves);
+
+  return material + mobility;
 }

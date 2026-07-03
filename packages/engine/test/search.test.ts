@@ -3,7 +3,7 @@ import type { Move, Position } from '@checkers/rules';
 import { describe, expect, it } from 'vitest';
 
 import { evaluate } from '../src/evaluate.js';
-import { searchRoot, WIN_SCORE } from '../src/search.js';
+import { searchRoot, searchTimed, WIN_SCORE } from '../src/search.js';
 import { makePosition, randomPlayedPosition } from './support/position.js';
 
 /**
@@ -130,6 +130,48 @@ describe('searchRoot – shoda s čistým negamaxem bez ořezávání', () => {
     const actual = searchRoot(position, 4);
     expect(actual.score).toBe(expected.score);
     expect(actual.bestMoves).toEqual(expected.bestMoves);
+  });
+});
+
+describe('searchRoot – injektovaná evaluace řídí výběr tahu', () => {
+  it('podstrčená (negovaná) evaluace vybere jiný tah než produkční', () => {
+    // Klidná pozice (žádné braní): černý muž 25 je krok od proměny (25→29/30
+    // = dáma), muž 13 jen postupuje (13→18). Bílý muž 6 je daleko, má tah
+    // (6→1/2), takže po černém tahu partie POKRAČUJE (děti nejsou terminální
+    // a evaluace se v listu opravdu zavolá) a nikdo nic nebere. Produkční
+    // evaluace v hloubce 1 preferuje proměnu (dáma > muž); negovaná evaluace
+    // obrátí preference a proměně se naopak vyhne.
+    const position = makePosition('black', { 13: 'bm', 25: 'bm', 6: 'wm' });
+    const moves = legalMoves(position);
+    // Zuby: kdyby všechny děti měly stejné skóre (např. po zásahu do evaluace,
+    // který zruší rozdíl mezi proměnou a postupem), je test bezcenný a MÁ
+    // spadnout tady, ne tiše projít.
+    const childScores = new Set(moves.map((move) => evaluate(applyMove(position, move))));
+    expect(childScores.size).toBeGreaterThan(1);
+
+    const negated: (p: Position) => number = (p) => -evaluate(p);
+    const defaultBest = searchRoot(position, 1).bestMoves;
+    const negatedBest = searchRoot(position, 1, negated).bestMoves;
+
+    expect(defaultBest.length).toBeGreaterThan(0);
+    expect(negatedBest.length).toBeGreaterThan(0);
+    // Injektovaná funkce je skutečně na cestě výběru: obrácené skóre = jiný tah.
+    expect(negatedBest).not.toEqual(defaultBest);
+  });
+
+  it('searchTimed respektuje injektovanou evaluaci a bez ní použije produkční default', () => {
+    // Stejná pozice jako výše. maxDepth 1 → searchTimed doběhne jen hloubku 1
+    // (bez hodin), takže výsledek nezávisí na čase a je deterministický.
+    const position = makePosition('black', { 13: 'bm', 25: 'bm', 6: 'wm' });
+    const negated: (p: Position) => number = (p) => -evaluate(p);
+
+    const withDefault = searchTimed(position, { timeMs: 1000, maxDepth: 1 });
+    const withNegated = searchTimed(position, { timeMs: 1000, maxDepth: 1, evaluate: negated });
+
+    // Podstrčená evaluace mění výběr i na časované cestě.
+    expect(withNegated.bestMoves).not.toEqual(withDefault.bestMoves);
+    // Bez options.evaluate se použije produkční evaluate → shoda se searchRoot.
+    expect(withDefault.bestMoves).toEqual(searchRoot(position, 1).bestMoves);
   });
 });
 
