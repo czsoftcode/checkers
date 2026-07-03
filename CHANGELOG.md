@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-03
+
+### Added
+
+- PDN notace tahu: `formatMove` převádí tah na text (prostý tah `22-18`,
+  skok s celou sekvencí dopadů `26x17x10`), `parseMove` z textu tah
+  zrekonstruuje včetně dopočtu braných kamenů z geometrie skoků. Nesmyslný
+  zápis i strukturálně vadný tah odmítá `RangeError`. Round-trip
+  (tah → text → stejný tah) je ověřený nad všemi legálními tahy
+  20 náhodných partií. Zkrácený zápis skoku (`26x10` bez mezidopadů)
+  se vědomě nepodporuje - PDN se jen exportuje, cizí soubory se nečtou.
+
 ## [0.7.0] - 2026-07-03
 
 ### Added

@@ -119,3 +119,25 @@ export function neighborOf(square: Square, dir: Direction): Square | null {
 export function jumpOf(square: Square, dir: Direction): Square | null {
   return lookUp(JUMPS, square, dir);
 }
+
+/** Všechny čtyři směry v pořadí indexů {@link DIR}. */
+export const ALL_DIRS: readonly Direction[] = [DIR.NW, DIR.NE, DIR.SW, DIR.SE];
+
+/** True, když `target` je soused `from` o 1 diagonální krok (kterýkoli směr). */
+export function isNeighbor(from: Square, target: Square): boolean {
+  return ALL_DIRS.some((dir) => NEIGHBORS[from - 1]?.[dir] === target);
+}
+
+/**
+ * Najde směr, kterým vede skok z `from` na `landing`, a vrátí přeskakované
+ * pole; null, když `landing` není dopad žádného skoku z `from`. Pole mimo
+ * 1–32 nevyhazují – prostě žádný skok nenajdou (chování zděděné z tabulek).
+ */
+export function jumpedSquareBetween(from: Square, landing: Square): Square | null {
+  for (const dir of ALL_DIRS) {
+    if (JUMPS[from - 1]?.[dir] === landing) {
+      return NEIGHBORS[from - 1]?.[dir] ?? null;
+    }
+  }
+  return null;
+}

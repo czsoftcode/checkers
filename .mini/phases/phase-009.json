@@ -1,0 +1,39 @@
+{
+  "id": 9,
+  "title": "PDN notace tahu",
+  "goal": "Knihovna rules umí převést tah oběma směry mezi typem Move a PDN zápisem – formatMove (prostý tah 22-18, skok s celou sekvencí dopadů 26x17x10) a parseMove, které z textu zrekonstruuje i brané kameny z geometrie skoků a nesmyslný zápis odmítne chybou; brána fáze jsou testy notace obou směrů včetně round-trip (Move → text → stejný Move). Zkrácený zápis skoku (26x10 bez mezidopadů) a PDN celé partie (hlavičky, číslování) do fáze nepatří.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Sdílená geometrie skoku (refactor)",
+      "status": "done",
+      "detail": "Privátní jumpedSquareBetween z apply.ts přesunout do board.ts jako sdílenou funkci; apply.ts ji importuje. Čistý přesun bez změny chování – stávajících 217 testů zůstává zelených."
+    },
+    {
+      "title": "formatMove: Move → PDN text",
+      "status": "done",
+      "detail": "Prostý tah 22-18 (from + jediný dopad), skok 26x17x10 (from + celá sekvence dopadů spojená x). Strukturálně nesmyslný Move (prázdná path) odmítá RangeError. Testy: prostý tah, jednoduchý skok, vícenásobný skok, kruhový skok dámy s opakovaným polem v path."
+    },
+    {
+      "title": "parseMove: PDN text → Move",
+      "status": "done",
+      "detail": "Rozpozná oddělovač (- prostý = přesně 2 pole, x skok = 2+ polí) a z geometrie skoků dopočítá captures. Nesmyslný zápis odmítá RangeError: cizí znaky, pole mimo 1-32, smíšené oddělovače, jediné pole, prostý tah na nesousední pole, skok bez existující skokové geometrie. Plnou legalitu dál hlídá brána členství v legalMoves – parser ověřuje jen strukturu, stejný kontrakt jako applyMove."
+    },
+    {
+      "title": "Round-trip test nad reálnými tahy",
+      "status": "done",
+      "detail": "Seedovaný playout (stejná technika jako test terminace): pro každý legální tah všech navštívených pozic platí parseMove(formatMove(move)) = původní tah (deep equal, včetně captures). Notace se tím přibije k reálnému generátoru, ne jen k ručně vypsaným případům."
+    },
+    {
+      "title": "Export API a zelený workspace",
+      "status": "done",
+      "detail": "formatMove a parseMove vyexportovat z index.ts; pnpm lint + typecheck + test zelené v celém workspace."
+    }
+  ],
+  "startedAt": "2026-07-03T04:11:59.161Z",
+  "completedAt": "2026-07-03T04:27:08.045Z",
+  "autoCommit": {
+    "preSha": "5462b45aa1b89f3f17cba8d56f62b4b77298d440",
+    "subject": "Phase 9: PDN notace tahu"
+  }
+}

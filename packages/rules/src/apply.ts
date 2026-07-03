@@ -4,32 +4,12 @@
  * varianta s undo se proti ní přibije testem ekvivalence.
  */
 
-import type { Direction } from './board.js';
-import { DIR, JUMPS, NEIGHBORS, squareToCoords } from './board.js';
+import { isNeighbor, jumpedSquareBetween, squareToCoords } from './board.js';
 import { cellAt } from './moves.js';
-import type { Cell, Color, Move, Position, Square } from './types.js';
-
-const ALL_DIRS: readonly Direction[] = [DIR.NW, DIR.NE, DIR.SW, DIR.SE];
+import type { Cell, Color, Move, Position } from './types.js';
 
 /** Řada proměny = zadní řada soupeře: černý končí dole (řada 7), bílý nahoře (řada 0). */
 const PROMOTION_ROW: Record<Color, number> = { black: 7, white: 0 };
-
-/**
- * Najde směr, kterým vede skok z `from` na `landing`, a vrátí přeskakované
- * pole; null, když `landing` není dopad žádného skoku z `from`.
- */
-function jumpedSquareBetween(from: Square, landing: Square): Square | null {
-  for (const dir of ALL_DIRS) {
-    if (JUMPS[from - 1]?.[dir] === landing) {
-      return NEIGHBORS[from - 1]?.[dir] ?? null;
-    }
-  }
-  return null;
-}
-
-function isNeighbor(from: Square, target: Square): boolean {
-  return ALL_DIRS.some((dir) => NEIGHBORS[from - 1]?.[dir] === target);
-}
 
 /**
  * Aplikuje tah a vrátí NOVOU pozici (vstup se nemutuje): kámen se posune na

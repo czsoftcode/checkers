@@ -32,3 +32,4 @@ export {
 export type { GameState } from './state.js';
 export { gameResult, gameResultFromState } from './result.js';
 export type { GameResult } from './result.js';
+export { formatMove, parseMove } from './notation.js';
