@@ -1,0 +1,7 @@
+{
+  "name": "blocked-position",
+  "description": "Zablokovaná pozice (GDD 2.7, pat neexistuje): černý muž 21 má vpřed jen SE na 25 (SW je mimo desku) - tam stojí bílý a dopad skoku 30 je obsazený. Černý na tahu nemá žádný legální tah a prohrává, i když má kámen. Pozice je dosažitelná v legální partii.",
+  "board": "....................m...M....M..",
+  "turn": "black",
+  "expectedMoves": []
+}

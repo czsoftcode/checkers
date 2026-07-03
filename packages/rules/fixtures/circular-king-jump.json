@@ -1,0 +1,7 @@
+{
+  "name": "circular-king-jump",
+  "description": "Kruhový skok dámy (GDD 2.7): černá dáma 18 obkrouží kruh 4 bílých mužů oběma směry a vrátí se na výchozí pole; pátý skok neexistuje (zákaz dvojího přeskočení).",
+  "board": ".....MM......MM..k..............",
+  "turn": "black",
+  "expectedMoves": ["18x11x2x9x18", "18x9x2x11x18"]
+}

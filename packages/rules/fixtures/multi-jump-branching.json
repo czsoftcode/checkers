@@ -1,0 +1,7 @@
+{
+  "name": "multi-jump-branching",
+  "description": "Větvení multi-skoku (GDD 2.7): černý muž 9 bere přes 14 na 18, z 18 se větví přes 22 na 25 nebo přes 23 na 27 - dva samostatné tahy.",
+  "board": "........m....M.......MM.........",
+  "turn": "black",
+  "expectedMoves": ["9x18x25", "9x18x27"]
+}

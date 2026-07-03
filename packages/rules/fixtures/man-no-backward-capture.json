@@ -1,0 +1,7 @@
+{
+  "name": "man-no-backward-capture",
+  "description": "Muž nebere vzad (GDD 2.7): černý muž 9 bere přes 14 na 18; z 18 stojí bílý na 15 vzad (NE) - dáma by pokračovala, muž končí na 18.",
+  "board": "........m....MM.................",
+  "turn": "black",
+  "expectedMoves": ["9x18"]
+}

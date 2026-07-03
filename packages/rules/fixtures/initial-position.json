@@ -1,0 +1,8 @@
+{
+  "name": "initial-position",
+  "description": "Výchozí rozestavění: černí muži 1-12, bílí 21-32, černý na tahu. Perft 1-6 dle nezávislého zdroje (Aart Bik).",
+  "board": "mmmmmmmmmmmm........MMMMMMMMMMMM",
+  "turn": "black",
+  "expectedMoves": ["10-14", "10-15", "11-15", "11-16", "12-16", "9-13", "9-14"],
+  "perft": [7, 49, 302, 1469, 7361, 36768]
+}

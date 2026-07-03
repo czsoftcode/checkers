@@ -7,6 +7,23 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-03
+
+### Added
+
+- Perft (`perft(position, depth)`): počet listových uzlů stromu legálních
+  tahů; vícenásobný skok je jeden tah. Hodnoty 1-6 z výchozí pozice sedí
+  na čísla nezávislého zdroje (Aart Bik): 7/49/302/1469/7361/36768 -
+  generátor tahů je tím ověřený proti světu, milník M1 (knihovna pravidel)
+  je uzavřený.
+- Sdílené fixtures (`packages/rules/fixtures/*.json`): jazykově neutrální
+  kontrakt pravidel - výchozí pozice s perft hodnotami + pasti z GDD 2.7
+  (povinné braní, větvení multi-skoku, zákaz zastavení uprostřed větve,
+  muž nebere vzad, proměna ukončuje tah, kruhový skok dámy, zablokovaná
+  pozice). Formát popsán ve `fixtures/README.md`; stejné soubory později
+  přibijí i případný Rust engine. Testy fixtures načítají z JSON a
+  poškozený soubor hlasitě odmítnou.
+
 ## [0.8.0] - 2026-07-03
 
 ### Added

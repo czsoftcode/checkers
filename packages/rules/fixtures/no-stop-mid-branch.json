@@ -1,0 +1,7 @@
+{
+  "name": "no-stop-mid-branch",
+  "description": "Zákaz zastavení uprostřed větve (GDD 2.7): větev přes 14 pokračuje na 2 braní (10x17x26), zastavit na 17 nejde; kratší větev 10x19 je legální vedle delší (maximum braní se nevyžaduje).",
+  "board": ".........m...MM......M..........",
+  "turn": "black",
+  "expectedMoves": ["10x17x26", "10x19"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "promotion-ends-move",
+  "description": "Proměna ukončuje tah (GDD 2.7): černý muž 21 bere přes 25 na 30 (dámská řada). Dáma z 30 by mohla brát dál přes 26, ale tah proměnou končí.",
+  "board": "....................m...MM......",
+  "turn": "black",
+  "expectedMoves": ["21x30"]
+}

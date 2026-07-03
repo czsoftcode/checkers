@@ -12,7 +12,7 @@
 - [x] [M1] Aplikace tahu + konec hry: applyMove, detekce prohry hráče bez legálního tahu (i s kameny na desce, pat neexistuje). Brána: testy konce hry.
 - [x] [M1] Remízová pravidla: trojí opakování pozice se stejnou stranou na tahu, 80 půltahů bez braní/tahu mužem (čítač pliesWithoutProgress, reset správně). Brána: testy remíz + garance terminace.
 - [x] [M1] PDN zápis tahu: 22-18 (prostý), 26x17x10 (skok). Brána: testy notace obou směrů.
-- [ ] [M1] Perft + fixtures: funkce perft(N), ověření hodnot 1-6 (7/49/302/1469/7361/36768) proti NEZÁVISLÉMU zdroji, sdílené fixtures/*.json. BRÁNA M1: perft 1-6 sedí, všechny testy z 2.7 zelené. Nic mimo rules nevzniká dřív.
+- [x] [M1] Perft + fixtures: funkce perft(N), ověření hodnot 1-6 (7/49/302/1469/7361/36768) proti NEZÁVISLÉMU zdroji, sdílené fixtures/*.json. BRÁNA M1: perft 1-6 sedí, všechny testy z 2.7 zelené. Nic mimo rules nevzniká dřív.
 - [ ] [M2] CLI hra: random vs random (musí vždy terminovat díky pravidlu 80 půltahů) a člověk vs random v terminálu. Brána: odehratelná partie bez UI a serveru = důkaz kompletnosti rules.
 - [ ] [M3] Engine protokol: samostatný proces, JSON Lines přes stdin/stdout (hello, bestmove, error, pole id + protocol), řádkový buffer (ne data event naslepo). Brána: hello a bestmove přes skutečný podproces.
 - [ ] [M3] Search jádro: negamax + alfa-beta, evaluace v1 (muž 100, dáma 130, bonus za zadní řadu, drobný postup). Brána: vybírá jen legální tahy, poráží random hráče.

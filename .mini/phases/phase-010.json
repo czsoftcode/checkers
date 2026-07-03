@@ -1,0 +1,39 @@
+{
+  "id": 10,
+  "title": "Perft a fixtures (brána M1)",
+  "goal": "Knihovna rules má funkci perft(position, depth) – počet listových uzlů stromu legálních tahů, vícenásobný skok = jeden tah – a její hodnoty 1–6 z výchozí pozice sedí na čísla nezávislého zdroje (7/49/302/1469/7361/36768); vedle toho vzniknou sdílené fixtures/*.json (pozice + očekávané legální tahy v PDN + perft hodnoty) načítané testy z JSON. Nesedící perft = chyba generátoru, očekávané hodnoty se neupravují. Tím je milník M1 uzavřený; fixtures později přibijí i případný Rust engine.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Funkce perft(position, depth)",
+      "status": "done",
+      "detail": "Rekurzivně: hloubka 0 = 1 list, jinak součet přes legalMoves + applyMove. Vícenásobný skok je jeden tah (plyne z generátoru). Záporná/neceločíselná hloubka odmítá RangeError. Základní testy: perft(0) = 1, perft(1) = 7 z výchozí pozice."
+    },
+    {
+      "title": "Perft 1–6 proti nezávislému zdroji",
+      "status": "done",
+      "detail": "Test s natvrdo zapsanými hodnotami 7/49/302/1469/7361/36768 (publikované hodnoty pro americkou dámu, Aart Bik). Nesedící číslo = chyba generátoru, očekávané hodnoty se NEUPRAVUJÍ. Kumulativně ~46k uzlů, výkonově triviální."
+    },
+    {
+      "title": "Formát a obsah fixtures/*.json",
+      "status": "done",
+      "detail": "Jazykově neutrální JSON v packages/rules/fixtures/: pozice (32znakový řetězec desky v kódování positionKey + strana na tahu), očekávané legální tahy v PDN (setříděné), příp. perft hodnoty. Obsah: výchozí pozice + pasti z GDD 2.7 (povinné braní, větvení multi-skoku, zákaz zastavení uprostřed, proměna ukončuje tah, muž nebere vzad, kruhový skok dámy, zablokovaná pozice). Formát zdokumentovaný ve fixtures/README.md – kontrakt pro budoucí Rust engine."
+    },
+    {
+      "title": "Testy načítající fixtures z JSON",
+      "status": "done",
+      "detail": "Test projde všechny fixtures/*.json: dekóduje pozici, porovná legalMoves (přes formatMove) s očekávanou množinou tahů a ověří perft hodnoty. Poškozená fixture (vadný řetězec desky, vadné PDN, prázdný soubor) musí test hlasitě shodit, ne tiše přeskočit."
+    },
+    {
+      "title": "Brána M1: export a zelený workspace",
+      "status": "done",
+      "detail": "perft vyexportovat z index.ts; pnpm lint + typecheck + test zelené; explicitní kontrola, že všechny testy pastí z GDD 2.7 (rozeseté po fázích 3-6) jsou zelené – tím je milník M1 formálně uzavřený."
+    }
+  ],
+  "startedAt": "2026-07-03T04:37:36.958Z",
+  "completedAt": "2026-07-03T04:59:35.756Z",
+  "autoCommit": {
+    "preSha": "6ead5ec19e3391d330b1606deff0d4c98db7507d",
+    "subject": "Phase 10: Perft a fixtures (brána M1)"
+  }
+}

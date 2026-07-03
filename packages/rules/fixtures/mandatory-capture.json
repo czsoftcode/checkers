@@ -1,0 +1,7 @@
+{
+  "name": "mandatory-capture",
+  "description": "Povinnost braní (GDD 2.7): černý má prosté tahy z 9, ale skok 10x19 existuje - prosté tahy nejsou legální.",
+  "board": "........mm....M.................",
+  "turn": "black",
+  "expectedMoves": ["10x19"]
+}
