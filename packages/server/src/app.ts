@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { gameResultFromState } from '@checkers/rules';
 import type { Color } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { formatGamePdn, writeGamePdn } from './archive.js';
 import { findLegalMove, gameToDto, legalMoveDtos } from './dto.js';
 import { ERROR_CODES, sendError } from './errors.js';
 import { GameStore } from './store.js';
@@ -33,12 +34,19 @@ export interface BuildAppOptions {
    * hraje klient) – zpětně kompatibilní chování z fáze 18.
    */
   readonly engine?: EngineMover;
+  /**
+   * Adresář pro archivní PDN dokončených partií. Když chybí, archivace je
+   * VYPNUTÁ (žádný zápis na disk) – tak běží testy i manuální režim, které
+   * disk řešit nechtějí. Reálný běh mu předá cestu z env (`main.ts`).
+   */
+  readonly pdnDir?: string;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
   const store = new GameStore();
   const engine = options.engine;
+  const pdnDir = options.pdnDir;
 
   // Jednotná obálka i pro chyby z frameworku: rozbité JSON tělo přijde jako 4xx
   // s `statusCode`, přemapuje se na invalid_request. Neočekávaná chyba (např.
@@ -84,7 +92,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return reply.send(gameToDto(record.id, record.state, record.engineStatus));
   });
 
-  app.post<{ Params: { id: string } }>('/games/:id/moves', (req, reply) => {
+  app.post<{ Params: { id: string } }>('/games/:id/moves', async (req, reply) => {
     const record = store.get(req.params.id);
     if (record === undefined) {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
@@ -134,6 +142,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
     }
 
+    // Když partii ukončil PRÁVĚ tento tah člověka (černý vyhrál/remíza), archivuj
+    // na disk. `maybeTriggerEngine` níž je s tímhle vzájemně vyloučené (spustí se
+    // jen když je partie `ongoing`), pořadí mezi nimi je proto jedno.
+    await maybeArchive(next);
+
     // Je-li zapojený engine a je na tahu (bílý), spusť jeho tah NA POZADÍ –
     // handler nikdy nečeká na engine. Klient tah uvidí pollingem GET.
     maybeTriggerEngine(next);
@@ -157,6 +170,29 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
     store.setEngineStatus(record.id, 'thinking');
     void runEngineMove(record.id);
+  }
+
+  /**
+   * Když je partie v `record` terminální a ještě nebyla archivována, zapiš ji
+   * jako PDN na disk. `markArchived` je atomický check-and-set (viz store) –
+   * zaručuje zápis PRÁVĚ JEDNOU i kdyby se sem přišlo víckrát. Sestavení PDN
+   * (`formatGamePdn`) může vyhodit u poškozeného stavu – to je chyba serveru a
+   * MÁ padnout hlasitě; naopak selhání I/O (`writeGamePdn`) partii neshodí.
+   * Bez `pdnDir` (nebo běžící partie) je no-op.
+   */
+  async function maybeArchive(record: GameRecord): Promise<void> {
+    if (pdnDir === undefined) {
+      return;
+    }
+    const result = gameResultFromState(record.state);
+    if (result === 'ongoing') {
+      return;
+    }
+    if (!store.markArchived(record.id)) {
+      return; // už archivováno nebo partie zmizela
+    }
+    const pdn = formatGamePdn(record.moves, result, new Date());
+    await writeGamePdn(pdnDir, record.id, pdn);
   }
 
   /**
@@ -208,8 +244,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         return;
       }
 
-      store.applyMove(id, legal);
+      const afterEngine = store.applyMove(id, legal);
       store.setEngineStatus(id, 'idle');
+
+      // Tah enginu mohl partii ukončit (bílý vyhrál / remíza) – archivuj.
+      // Uvnitř try schválně: kdyby zápis/sestavení házelo, spadne to do větve
+      // `error` (engine status), partie nespadne. `writeGamePdn` I/O chybu
+      // stejně jen loguje; házet by mohl jen bug v `formatGamePdn`.
+      if (afterEngine !== undefined) {
+        await maybeArchive(afterEngine);
+      }
     } catch (error) {
       console.error(`Tah enginu selhal pro partii ${id}:`, error);
       store.setEngineStatus(id, 'error');

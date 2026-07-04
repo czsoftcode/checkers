@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-04
+
+### Added
+
+- Archiv dokončených partií na disk: po skončení partie server zapíše kompletní
+  PDN celé hry jako `<id>.pdn` (7 hlavičkových tagů, číslované tahy, výsledkový
+  token). Zápis je atomický (`.tmp` + přejmenování), jednosměrný (zpět do hry se
+  nenačítá - stav dál žije v paměti serveru) a best-effort: selhání zápisu (plný
+  disk, chybějící práva) partii neshodí, jen se zaloguje. Cílový adresář určuje
+  proměnná `CHECKERS_PDN_DIR` (výchozí `.pdn/`, ignorováno gitem). Nahrazuje
+  dříve plánovaný klientský LocalStorage archiv.
+
 ## [0.20.0] - 2026-07-04
 
 ### Added

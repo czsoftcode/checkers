@@ -112,6 +112,11 @@
       "id": 22,
       "title": "Klient napojen na server",
       "status": "done"
+    },
+    {
+      "id": 23,
+      "title": "Server ukládá partie na disk",
+      "status": "done"
     }
   ]
 }

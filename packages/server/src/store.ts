@@ -21,32 +21,63 @@ import type { GameState, Move } from '@checkers/rules';
  */
 export type EngineStatus = 'idle' | 'thinking' | 'error';
 
-/** Záznam partie: id + stav pravidel + stav tahu enginu. */
+/** Záznam partie: id + stav pravidel + stav tahu enginu + historie tahů. */
 export interface GameRecord {
   readonly id: string;
   readonly state: GameState;
   readonly engineStatus: EngineStatus;
+  /**
+   * Odehrané tahy v pořadí. Drží je jen store – `GameState` je zahazuje
+   * (nese pozici + čítače, ne seznam tahů), a z finální pozice se zpětně
+   * zrekonstruovat nedají. Podklad pro archivní PDN celé partie (fáze 23).
+   */
+  readonly moves: readonly Move[];
+  /** Byla partie už archivována na disk? Pojistka proti dvojímu zápisu. */
+  readonly archived: boolean;
 }
 
 interface StoredGame {
   state: GameState;
   engineStatus: EngineStatus;
+  moves: Move[];
+  archived: boolean;
 }
 
 export class GameStore {
   private readonly games = new Map<string, StoredGame>();
 
+  /**
+   * Snímek uloženého stavu do neměnného záznamu. `moves` se KOPÍRUJE, ne sdílí:
+   * bez kopie by `record.moves` byl živý odkaz na pole, které store dál mutuje –
+   * archivace by pak mohla vzít jiný seznam tahů, než jaký v partii byl v okamžiku
+   * jejího konce. Move je readonly, stačí mělká kopie pole.
+   */
+  private toRecord(id: string, game: StoredGame): GameRecord {
+    return {
+      id,
+      state: game.state,
+      engineStatus: game.engineStatus,
+      moves: [...game.moves],
+      archived: game.archived,
+    };
+  }
+
   /** Založí novou partii ve výchozím rozestavění (černý na tahu, engine idle). */
   create(): GameRecord {
     const id = randomUUID();
-    const game: StoredGame = { state: initialGameState(), engineStatus: 'idle' };
+    const game: StoredGame = {
+      state: initialGameState(),
+      engineStatus: 'idle',
+      moves: [],
+      archived: false,
+    };
     this.games.set(id, game);
-    return { id, ...game };
+    return this.toRecord(id, game);
   }
 
   get(id: string): GameRecord | undefined {
     const game = this.games.get(id);
-    return game === undefined ? undefined : { id, ...game };
+    return game === undefined ? undefined : this.toRecord(id, game);
   }
 
   /**
@@ -60,8 +91,26 @@ export class GameStore {
     if (game === undefined) {
       return undefined;
     }
+    // Nejdřív posun stavu (na poškozeném vstupu vyhodí RangeError PŘED zápisem
+    // do historie – do `moves` se tak nikdy nedostane tah, který se neaplikoval).
     game.state = advanceState(game.state, move);
-    return { id, ...game };
+    game.moves.push(move);
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Označí partii za archivovanou. Vrací `true`, jen když se stav PRÁVĚ TEĎ
+   * překlopil z false na true; `false` znamená „už archivováno" nebo „partie
+   * zmizela". Slouží jako atomický check-and-set (Node je jednovláknový, mezi
+   * čtením a zápisem není `await`) – zaručuje zápis PDN právě jednou.
+   */
+  markArchived(id: string): boolean {
+    const game = this.games.get(id);
+    if (game === undefined || game.archived) {
+      return false;
+    }
+    game.archived = true;
+    return true;
   }
 
   /**
@@ -75,6 +124,6 @@ export class GameStore {
       return undefined;
     }
     game.engineStatus = status;
-    return { id, ...game };
+    return this.toRecord(id, game);
   }
 }

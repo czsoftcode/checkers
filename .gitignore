@@ -3,3 +3,6 @@ dist/
 coverage/
 *.tsbuildinfo
 .DS_Store
+
+# Archiv dokončených partií (PDN) – výstup serveru, ne zdroj pravdy (fáze 23)
+.pdn/

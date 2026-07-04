@@ -1,0 +1,47 @@
+{
+  "id": 23,
+  "title": "Server ukládá partie na disk",
+  "goal": "Po skončení partie server atomicky (zápis do .tmp + rename ve stejném adresáři) uloží kompletní PDN partie do konfigurovatelného adresáře (env proměnná, výchozí .pdn/ v rootu repa, přidán do .gitignore) jako <id>.pdn. Jednosměrně: zpět se do hry nenačítá a stav dál žije v paměti serveru (server zůstává autoritou). Selhání zápisu (plný disk, chybějící práva, neexistující adresář) partii NEshodí - jen se zaloguje přes server logger. Mimo rozsah: klientský LocalStorage archiv, tlačítko Export, načítání partií zpět, procházení/analýza v appce.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Store: evidence tahů + příznak archived",
+      "status": "done",
+      "detail": "StoredGame/GameRecord dostane moves: Move[] (plněné v applyMove — pokryje tah člověka i enginu) a archived: boolean s metodou pro označení. Unit test: po sérii applyMove drží tahy ve správném pořadí; archived jde nastavit právě jednou."
+    },
+    {
+      "title": "Serializér celé partie do PDN (balík server, čistá funkce) + unit test",
+      "status": "done",
+      "detail": "formatGamePdn(moves, result, date) vrátí text se 7 STR tagy ([Event Checkers], [Site local], [Date YYYY.MM.DD], [Round -], [White Engine], [Black Human], [Result token]), movetext s full-move číslováním (černý+bílý půltah), jednotlivé tahy přes formatMove z rules. Token: black-wins->0-1, white-wins->1-0, draw->1/2-1/2. Test se zuby: lichý počet půltahů, všechny tři tokeny, prázdný seznam defenzivně."
+    },
+    {
+      "title": "Atomický zápis na disk + konfigurace",
+      "status": "done",
+      "detail": "Zápis <id>.pdn přes <id>.pdn.tmp + fs.rename v témže adresáři, mkdir({recursive}); při chybě unlink .tmp a jen console.error; try obaluje výhradně I/O (nemaskovat chybu sestavení PDN). buildApp dostane pdnDir?, main.ts čte CHECKERS_PDN_DIR (default .pdn vůči process.cwd()), .pdn/ přidán do .gitignore."
+    },
+    {
+      "title": "Napojení archivace na terminální stav (právě jednou)",
+      "status": "done",
+      "detail": "Po applyMove na obou místech (POST /moves ř.131 a runEngineMove ř.211): když gameResultFromState(state) !== 'ongoing' a partie není archived, sestav PDN a zapiš (await), pak označ archived. Funguje i bez enginu (engine === undefined). Zápis partii neshodí."
+    },
+    {
+      "title": "Integrační a selhací testy",
+      "status": "done",
+      "detail": "Přes mkdtemp odehrát krátkou partii do reálného konce -> <id>.pdn existuje, má hlavičku, správný token a očíslované tahy. Selhání: nezapisovatelný/neexistující nadřazený adresář -> partie nespadne, jen log, žádný .tmp nezůstane. Ověřit zápis právě jednou (opakovaný polling/GET nepřepíše)."
+    },
+    {
+      "title": "Sebekontrola unhappy path + nezávislý self-review",
+      "status": "done",
+      "detail": "Projít unhappy path změněného kódu (prázdný seznam tahů, re-entrance archivace, rozsah catch, stav při selhání I/O). Fáze sahá na chybové cesty a vstupní body procesu -> pustit nezávislého sub-agenta s čerstvým kontextem."
+    }
+  ],
+  "startedAt": "2026-07-04T17:14:21.838Z",
+  "resolvedVerify": [
+    "Načíst exportovaný .pdn ve vnějším nástroji na rozbor partií"
+  ],
+  "completedAt": "2026-07-04T18:03:52.798Z",
+  "autoCommit": {
+    "preSha": "8d9b08ae1f0e812d36026a32daf007b4c71f6919",
+    "subject": "Phase 23: Server ukládá partie na disk"
+  }
+}
