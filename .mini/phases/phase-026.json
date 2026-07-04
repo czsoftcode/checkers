@@ -1,0 +1,34 @@
+{
+  "id": 26,
+  "title": "Náhodné pozadí hry z obrázků",
+  "goal": "Web klient při nové hře náhodně vybere jeden z obrázků background_<NN>.webp z packages/web/src/assets (počet zjištěn automaticky přes Vite import.meta.glob, ne natvrdo zadaný) a nastaví ho jako CSS pozadí herní plochy; přidání dalších obrázků nevyžaduje změnu kódu, jen rebuild. Losování proběhne při startu nové hry.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Modul backgrounds.ts: glob výčet + čistá pickBackground (s testem)",
+      "status": "done",
+      "detail": "Nový packages/web/src/backgrounds.ts: backgroundUrls: string[] z import.meta.glob('./assets/background_*.webp', { eager: true, query: '?url', import: 'default' }) (hodnoty objektu). Čistá pickBackground(urls, rng = Math.random): string | null. Test test/backgrounds.test.ts se zuby: deterministické rng vybere očekávaný prvek; prázdný seznam → null bez výjimky."
+    },
+    {
+      "title": "Skrytý <img class=page-bg> + losování ve startNewGame",
+      "status": "done",
+      "detail": "V app-shell.ts vytvořit jednou <img class='page-bg'>, vložit pod obsah. Ve startNewGame() PŘED createGame nastavit img.src = pickBackground(backgroundUrls, Math.random) ?? '' (null → prázdné, zůstane barevné pozadí). Žádné element.style."
+    },
+    {
+      "title": "CSS .page-bg v styles.css",
+      "status": "done",
+      "detail": "position: fixed; inset: 0; width/height 100%; object-fit: cover; z-index: -1 (pod obsahem, panel má 10); pointer-events: none. Vše přes třídu, žádné inline styly."
+    },
+    {
+      "title": "Ověření + nezávislý self-review",
+      "status": "done",
+      "detail": "pnpm typecheck + Vitest zelené; vite build projde a výčet obrázků je NEPRÁZDNÝ (glob syntaxe sedí Vite 8). Ruční: Nová hra/reload mění pozadí. Nezávislý sub-agent projde unhappy path: prázdný glob, z-index/pointer-events, CSP."
+    }
+  ],
+  "startedAt": "2026-07-04T21:33:17.457Z",
+  "completedAt": "2026-07-04T21:44:10.153Z",
+  "autoCommit": {
+    "preSha": "d7c1261f0c12b2ffad1705606064aaa6357d032c",
+    "subject": "Phase 26: Náhodné pozadí hry z obrázků"
+  }
+}

@@ -7,6 +7,16 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-07-04
+
+### Added
+
+- Náhodné pozadí stránky: web klient při každé nové partii (i po obnovení
+  stránky) náhodně vybere jeden z obrázků `background_<NN>.webp` ve
+  `packages/web/src/assets/` a zobrazí ho jako pozadí celé plochy. Počet obrázků
+  se zjišťuje automaticky při buildu – přidání dalších obrázků nevyžaduje změnu
+  kódu, jen rebuild.
+
 ## [0.23.0] - 2026-07-04
 
 ### Added

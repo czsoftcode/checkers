@@ -127,6 +127,11 @@
       "id": 25,
       "title": "Nabídka remízy: AI rozhodne",
       "status": "done"
+    },
+    {
+      "id": 26,
+      "title": "Náhodné pozadí hry z obrázků",
+      "status": "done"
     }
   ]
 }

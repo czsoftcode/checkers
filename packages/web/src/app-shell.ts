@@ -9,6 +9,7 @@
  * včetně jeho pollingu a založit nový) a potvrzení vzdání.
  */
 
+import { backgroundUrls, pickBackground } from './backgrounds.js';
 import { createBoardController } from './controller.js';
 import type {
   BoardController,
@@ -48,6 +49,15 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
 
   const element = document.createElement('div');
   element.className = 'game';
+
+  // Pozadí CELÉ stránky: skrytý `<img>` na celý viewport, POD veškerým obsahem
+  // (z-index/pozici řeší třída `.page-bg` v styles.css; `pointer-events: none`,
+  // ať nezachytává kliky do desky). URL se losuje při každé nové partii ve
+  // `startNewGame`. Nastavuje se přes `src` (atribut, ne styl) → CSP se ho netýká.
+  const pageBg = document.createElement('img');
+  pageBg.className = 'page-bg';
+  pageBg.alt = '';
+  element.append(pageBg);
 
   // Panel (stav + tlačítka) je plovoucí v pravém horním rohu (CSS position:
   // fixed), aby NEzabíral místo ve sloupci s deskou – jinak by se výška panelu
@@ -199,6 +209,9 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     }
     loading = true;
     showConfirm(false);
+    // Nové pozadí HNED (před await createGame), ať se přehodí okamžitě. Prázdný
+    // výčet (`null`) → src='' → zůstane výchozí barevné pozadí z CSS, žádný pád.
+    pageBg.src = pickBackground(backgroundUrls) ?? '';
     // Zbytek po minulé partii: schovej hlášku nabídky remízy.
     offerMsg.textContent = '';
     offerMsg.classList.add('hidden');

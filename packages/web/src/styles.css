@@ -30,6 +30,21 @@ body {
   justify-content: flex-start;
 }
 
+/* Pozadí celé stránky: obrázek přes celý viewport, POD veškerým obsahem
+   (z-index: -1 < deska 0 < panel 10). `pointer-events: none`, ať nezachytává
+   kliky do desky. `object-fit: cover` vyplní plochu bez deformace. Když je
+   `src` prázdný (žádný obrázek), prvek nic nevykreslí a prosvítá barevné
+   pozadí z `body`. */
+.page-bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+  pointer-events: none;
+}
+
 /* Stav + tlačítka v pravém horním rohu, mimo tok – nezmenšují hrací plochu. */
 .panel {
   position: fixed;
