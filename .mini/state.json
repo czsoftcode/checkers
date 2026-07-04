@@ -132,6 +132,11 @@
       "id": 26,
       "title": "Náhodné pozadí hry z obrázků",
       "status": "done"
+    },
+    {
+      "id": 27,
+      "title": "Animace tahu včetně meziskoků",
+      "status": "done"
     }
   ]
 }

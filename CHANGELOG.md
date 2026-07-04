@@ -7,7 +7,21 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
-## [0.24.0] - 2026-07-04
+## [0.25.0] - 2026-07-05
+
+### Added
+
+- Animace tahu na desce: po tahu (počítače i vlastním) se kámen plynule přesune
+  z výchozího na cílové pole místo skoku beze změny. U vícenásobného skoku projde
+  jednotlivými mezidopady po diagonále a na každém se krátce zastaví, aby bylo
+  vidět, kudy skok vedl; sebrané kameny mizí postupně, jak je kámen přeskakuje.
+  Tah se odvozuje z porovnání pozic (server se nezměnil). Prohlížeč bez podpory
+  Web Animations API i režim „omezený pohyb" spadnou na okamžité překreslení.
+
+### Fixed
+
+- Web: nadbytečné přetypování ve výčtu obrázků pozadí (`import.meta.glob`), které
+  hlásil lint.
 
 ### Added
 

@@ -1,0 +1,44 @@
+{
+  "id": 27,
+  "title": "Animace tahu včetně meziskoků",
+  "goal": "Klient z porovnání staré a nové pozice odvodí přesunutý kámen a sebrané soupeřovy kameny, geometricky zrekonstruuje cestu (mezidopady) vícenásobného skoku a animuje kámen plynule diagonálně po jednotlivých skocích přes Web Animations API (CSP-safe, bez inline stylů), přičemž sebrané kameny mizí postupně, jak jsou přeskakovány; při nejednoznačné rekonstrukci se použije fallback rovný posun start→cíl.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Čistý modul rekonstrukce tahu z diffu + testy",
+      "status": "done",
+      "detail": "Nový packages/web/src/move-diff.ts s čistou funkcí diffMove(prev,next): najde from/to/captured a přes DFS seřadí hops (mezidopady). Vrací {from,to,hops,captured} nebo null když diff neodpovídá právě jednomu tahu (pojistka jeden diff=jeden tah). Víc platných cest (kruhový skok dámy) → varianta po směru hodinových ručiček (shoelace, Y roste dolů). DFS bez cesty → hops=[to] (fallback rovný posun). Testy: prostý tah, jednoduchý skok, vynucený trojskok, kruhový skok dámy (ověří směr hodinových ručiček), ne-tah/dva plies → null."
+    },
+    {
+      "title": "CSS: vyzdvižený kámen během animace + mizení sebraných",
+      "status": "done",
+      "detail": "Do styles.css třída .piece.moving (vyšší z-index než ostatní kameny i zvýraznění) a třída pro plynulé zmizení sebraného kamene. Vše přes třídy (CSP), žádný inline styl."
+    },
+    {
+      "title": "Animační přehrávač v board-view (WAAPI, řetěz skoků)",
+      "status": "done",
+      "detail": "Funkce, která pro zrekonstruovaný tah přehraje pohyb: pixelové offsety z getBoundingClientRect buněk, element.animate([...],{duration,easing,fill:'none'}) skok po skoku (await každého finished), na konci každého skoku odebere příslušný sebraný kámen (progresivní braní), přidá/odebere .moving. Konstanta HOP_MS≈180. Běží na recyklovaném elementu kamene (neshodit klikání)."
+    },
+    {
+      "title": "Napojení do update(): předchozí pozice, přerušitelnost, fallback",
+      "status": "done",
+      "detail": "board-view drží poslední vykreslenou pozici; v update() zavolá diffMove → když je tah, spustí animaci (jinak dnešní tiché překreslení). Přerušitelnost: nová jiná pozice během animace → běžící kámen okamžitě skočí na konec a zpracuje se nová (žádná fronta). Fallback hops=[to]=rovný posun. Bez WAAPI (jsdom/starý prohlížeč) → tiché překreslení."
+    },
+    {
+      "title": "Ověření + nezávislý self-review",
+      "status": "done",
+      "detail": "pnpm -w build, lint, vitest zelené. Ruční kontrola v prohlížeči: tah AI, vlastní vícenásobný skok, postupné mizení sebraných, proměna na konci, Nová hra během animace. Navíc nezávislý sub-agent (čerstvý kontext) na self-review, protože fáze sahá na chybové/okrajové cesty a sdílený tvar dat mezi moduly."
+    }
+  ],
+  "startedAt": "2026-07-04T22:05:25.402Z",
+  "resolvedVerify": [
+    "Vizuální dojem animace v reálném prohlížeči proti enginu",
+    "„Nová hra“ a přerušení uprostřed běžící animace",
+    "Kruhový skok dámy po směru hodinových ručiček"
+  ],
+  "completedAt": "2026-07-04T22:44:54.782Z",
+  "autoCommit": {
+    "preSha": "b1e1568045de66d6784358868bcc1bc8afa3cb63",
+    "subject": "Phase 27: Animace tahu včetně meziskoků"
+  }
+}

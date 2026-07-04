@@ -348,6 +348,7 @@ export function createBoardController(
     dispose: () => {
       disposed = true;
       clearInterval(timer);
+      view.dispose(); // ukonči případnou běžící animaci tahu (WAAPI + časovače)
     },
   };
 }

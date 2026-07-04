@@ -188,6 +188,14 @@ body {
   pointer-events: none;
 }
 
+/* Kámen právě animovaného tahu: vizuálně nad ostatními kameny i zvýrazněním, ať
+   se při přesunu „nepodleze" pod jiný kámen. Posun samotný řídí Web Animations
+   API (transform) v board-view – žádný inline styl (CSP). */
+.piece.moving {
+  position: relative;
+  z-index: 5;
+}
+
 .piece.black {
   background: radial-gradient(circle at 35% 30%, #555, #111);
   border: 2px solid #000;

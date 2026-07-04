@@ -15,11 +15,11 @@
  * `query: '?url', import: 'default'` dá místo modulu rovnou řetězec s URL (Vite 8).
  * Prázdné pole (žádný soubor v assets) je legální stav – `pickBackground` ho zvládne.
  */
-const modules = import.meta.glob('./assets/background_*.webp', {
+const modules = import.meta.glob<string>('./assets/background_*.webp', {
   eager: true,
   query: '?url',
   import: 'default',
-}) as Record<string, string>;
+});
 
 export const backgroundUrls: string[] = Object.values(modules);
 
