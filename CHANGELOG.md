@@ -7,6 +7,34 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-07-04
+
+### Added
+
+- Napojení web klienta na autoritativní server (konec hot-seatu). Klient při
+  načtení založí partii (`POST /games`) a vykreslí pozici ze serveru, tah člověka
+  pošle na `POST /games/:id/moves` a desku nastaví na plný stav z odpovědi; tah
+  enginu (bílý) zachytí pollingem `GET /games/:id` à 250 ms. Klient je jen
+  prezentace serverového stavu - `rules` v něm zůstávají výhradně na zvýrazňování
+  legálních tahů, tah už neprovádí lokálně. Server zůstává jedinou autoritou.
+- Vite proxy `/games` na server (relativní cesty, žádné CORS) a typovaný klient
+  serveru (`server-client.ts`) nad `fetch`. Odpověď serveru se ověřuje runtime
+  guardem tvaru: ne-JSON tělo (např. z proxy) nebo drift kontraktu skončí
+  `ServerError`, ne tichým poškozením desky.
+
+### Changed
+
+- Během tahu enginu (na tahu bílý) klient nepustí žádný výběr; jedním requestem
+  naráz (single-flight) se hlídá, aby se polling a odeslaný tah nepřekryly.
+- Neúspěšná odpověď na tah (409/404/5xx i výpadek sítě) desku nezasekne - stav se
+  dorovná z `GET` a klik se zase povolí.
+
+### Fixed
+
+- Spolehlivost kliku: kameny se při překreslení už nerecyklují (deska se
+  aktualizuje idempotentně). Dřív polling à 250 ms recykloval DOM a klik na kámen
+  se občas spolkl (musel se trefit mimo kámen); zároveň mizí i blikání kamenů.
+
 ## [0.19.0] - 2026-07-04
 
 ### Added
