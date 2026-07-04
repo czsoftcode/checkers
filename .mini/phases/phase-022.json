@@ -1,0 +1,47 @@
+{
+  "id": 22,
+  "title": "Klient napojen na server",
+  "goal": "Web klient místo lokálního applyMove vytvoří partii přes POST /games, tah člověka odešle na POST /games/:id/moves a desku nastaví na autoritativní GameDto z odpovědi, a pollingem GET /games/:id (~250 ms) zachytí a zobrazí odpovědní tah enginu - klient se stává prezentací serverového stavu, ne druhým rozhodčím. Mimo rozsah: optimistický tah + mismatch resync, stavový řádek, zobrazení konce hry, PDN archiv.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Vite proxy + typovaný server-klient",
+      "status": "done",
+      "detail": "vite.config.ts: proxy /games -> 127.0.0.1:3000. Nový modul server-client.ts nad fetch s createGame()/getGame(id)/postMove(id, from, path) vracejícími typovaný GameDto (position/result z rules, engineStatus union). Non-2xx -> typovaná chyba, ne tichý undefined. Ověření: unit test s mock fetch na metodu/URL/tělo i chybovou větev."
+    },
+    {
+      "title": "Controller: async, stav bere ze serveru",
+      "status": "done",
+      "detail": "Controller přijme injektovaný klient. Dokončení sekvence (prázdné nextTargets) už nevolá applyMove, ale postMove(from, path) a desku nastaví na vrácený GameDto. Výběr povolen jen když position.turn === black (na tahu engine -> nic nejde vybrat). Během běžícího requestu se klikání ignoruje (jeden tah naráz). Ověření: unit testy s fake klientem - tah pošle správné from+path, deska přebere serverovou pozici; klik za bílého nepošle nic; applyMove z klientské cesty zmizí."
+    },
+    {
+      "title": "Polling tahu enginu (single-flight)",
+      "status": "done",
+      "detail": "Jeden interval 250 ms na controller volá getGame a reconciluje desku na plný serverový stav; sdílený busy zámek s POST -> v jednu chvíli jen jeden request, tik se jinak přeskočí. engineStatus === error -> console.error, deska se nezasekne. Ověření: unit test - poll přebere novou pozici enginu; když request běží, tik se přeskočí; error stav zaloguje a nespadne."
+    },
+    {
+      "title": "Bootstrap: partie ze serveru + načítání",
+      "status": "done",
+      "detail": "main.ts při načtení zavolá createGame, desku vykreslí z odpovědi; do té doby stav načítání (ne lokální initialPosition()). Seedování z rules mizí. Ověření: ruční - načtení stránky založí partii a ukáže startovní pozici ze serveru."
+    },
+    {
+      "title": "Defenzivní cesty: neúspěch + resync",
+      "status": "done",
+      "detail": "Na non-2xx z postMove (409/404/5xx) i síťovou chybu: console.error + resync přes getGame a překreslení, deska se nezasekne. 409 illegal -> resync z GET, ne z error těla (to nese jen legalMoves). Ověření: unit test - odmítnutý postMove spustí getGame a překreslí, controller nezamrzne."
+    },
+    {
+      "title": "Sebekontrola unhappy path + nezávislý self-review",
+      "status": "done",
+      "detail": "Projít prázdný/null/timeout/síťová chyba na měněných cestách; ruční e2e brána (spustit server+web, člověk zahraje tah, vidí odpověď enginu). Protože fáze sahá na vstupní bod procesu, chybové cesty i kontrakt mezi moduly, pustit nezávislého sub-agenta (čerstvý kontext) na self-review."
+    }
+  ],
+  "startedAt": "2026-07-04T16:06:25.479Z",
+  "resolvedVerify": [
+    "Vizuální hra v prohlížeči proti enginu"
+  ],
+  "completedAt": "2026-07-04T16:46:02.053Z",
+  "autoCommit": {
+    "preSha": "0fd7b8f3c99a68ec7a4390dbd3559bfdf5ce883b",
+    "subject": "Phase 22: Klient napojen na server"
+  }
+}

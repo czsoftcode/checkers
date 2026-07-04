@@ -79,6 +79,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Klik projde skrz kámen na stabilní .square – pojistka proti spolknutí kliku
+     při překreslení. Kámen sám nikdy není cílem kliku, výběr řídí pole pod ním. */
+  pointer-events: none;
 }
 
 .piece.black {

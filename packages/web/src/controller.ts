@@ -1,26 +1,33 @@
 /**
- * Spojení modelu výběru (`selection`) s vykreslením (`board-view`) a lokálním
- * provedením tahu.
+ * Spojení modelu výběru (`selection`) s vykreslením (`board-view`) a s
+ * autoritativním serverem.
  *
- * Drží lokální stav: aktuální pozici (mění se po každém tahu) a rozpracovaný
- * výběr `{ from, path }` – výchozí kámen a už naklikané dopady vícenásobného
- * skoku. Legalitu i dokončení tahu určuje výhradně knihovna `rules`; klient sám
- * nerozhoduje, co je legální. Provedení tahu je zatím lokální (`applyMove`), bez
- * serveru – po tahu je na tahu druhá barva (hot-seat), napojení enginu řeší
- * todo 20.
+ * Klient UŽ NENÍ druhý rozhodčí: tah neaplikuje lokálně, ale pošle ho serveru
+ * (`postMove`) a desku nastaví na `GameDto`, který server vrátí. Tah enginu
+ * (bílý) zachytí opakované dotazování (`getGame` à 250 ms). `rules` v klientu
+ * zůstávají jen na zvýrazňování legálních tahů (výběr kamene, dopady skoku) –
+ * jediným zdrojem pravdy o stavu partie je server.
  *
- * Pravidla kliknutí:
- * - klik na vlastní kámen ho vybere (a případně přepne z jiného výběru),
- * - klik na zvýrazněný další dopad prodlouží sekvenci; jakmile z předpony
- *   nevede další dopad, tah se provede a deska se překreslí,
- * - klik na vybraný kámen, cizí/prázdné pole nebo mimo desku zruší celý výběr.
+ * Člověk hraje ČERNÉ (server má napevno engine = bílý). Vybírat a táhnout jde
+ * jen když je na tahu člověk (`position.turn === 'black'`).
+ *
+ * Single-flight: v jednu chvíli běží jen jeden request (POST tahu i GET poll).
+ * `GameDto` nenese pořadové číslo, takže dva souběžné snímky nejde spolehlivě
+ * seřadit – jediný request naráz ten závod obchází. Kliknutí během běžícího
+ * requestu se ignoruje.
  */
 
-import { applyMove } from '@checkers/rules';
-import type { Position, Square } from '@checkers/rules';
+import type { Color, Square } from '@checkers/rules';
 
 import { createBoardView } from './board-view.js';
-import { nextTargets, resolveMove, selectableAt } from './selection.js';
+import { nextTargets, selectableAt } from './selection.js';
+import type { GameDto, ServerClient } from './server-client.js';
+
+/** Barva, kterou hraje člověk. Server má engine napevno jako bílého. */
+const HUMAN_COLOR: Color = 'black';
+
+/** Interval opakovaného dotazu na stav (kvůli tahu enginu na pozadí). */
+const POLL_INTERVAL_MS = 250;
 
 /** Rozpracovaný výběr: výchozí kámen a už naklikané dopady (bez `from`). */
 interface Selection {
@@ -31,19 +38,49 @@ interface Selection {
 /** Ovládaná deska připravená k vložení do stránky. */
 export interface BoardController {
   readonly element: HTMLElement;
+  /** Zastaví polling (uklidí interval). V SPA se běžně nevolá; slouží testům. */
+  dispose(): void;
 }
 
-/** Vytvoří desku nad danou počáteční pozicí. */
-export function createBoardController(initial: Position): BoardController {
-  let position = initial;
+export interface BoardControllerOptions {
+  /** Perioda pollingu v ms (výchozí {@link POLL_INTERVAL_MS}). */
+  readonly pollIntervalMs?: number;
+}
+
+/**
+ * Vytvoří desku napojenou na server. `game` je počáteční stav (typicky z
+ * `POST /games`); `client` obstarává komunikaci se serverem.
+ */
+export function createBoardController(
+  client: ServerClient,
+  game: GameDto,
+  options: BoardControllerOptions = {},
+): BoardController {
+  let position = game.position;
   let selection: Selection | null = null;
+  // `true`, dokud běží nějaký request (POST tahu nebo GET poll). Drží single-flight
+  // i zámek proti klikání během odesílání tahu.
+  let busy = false;
+
+  const gameId = game.id;
   const view = createBoardView(handleClick);
+  const timer = setInterval(() => {
+    void poll();
+  }, options.pollIntervalMs ?? POLL_INTERVAL_MS);
 
   function handleClick(square: Square | null): void {
+    // Když běží request nebo není na tahu člověk (engine přemýšlí), klik zahodíme.
+    // Bez kontroly barvy by šlo vybrat bílý kámen (selectableAt jen porovnává
+    // cell.color === turn), zahrát za engine a dostat 409.
+    if (busy || position.turn !== HUMAN_COLOR) {
+      return;
+    }
+
     if (square === null) {
       selection = null;
     } else if (selection !== null && isTarget(square)) {
       advance(square);
+      return; // advance si řídí render sám (i asynchronně po odeslání tahu)
     } else if (selectableAt(position, square) && !isSelectedFrom(square)) {
       // Nový výběr vlastního kamene (i přepnutí z jiného). Klik na už vybraný
       // výchozí kámen sem nespadne – padá do else a výběr se zruší.
@@ -63,7 +100,7 @@ export function createBoardController(initial: Position): BoardController {
     return selection !== null && selection.from === square;
   }
 
-  /** Prodlouží sekvenci o dopad `square`; když je tah kompletní, provede ho. */
+  /** Prodlouží sekvenci o dopad `square`; když je tah kompletní, odešle ho serveru. */
   function advance(square: Square): void {
     if (selection === null) {
       return;
@@ -71,16 +108,72 @@ export function createBoardController(initial: Position): BoardController {
     const path = [...selection.path, square];
     if (nextTargets(position, selection.from, path).length > 0) {
       selection = { from: selection.from, path }; // ještě pokračuje (další dopad/větvení)
+      render();
       return;
     }
-    // Žádné pokračování → sekvence je úplná. resolveMove nesmí vrátit null
-    // (rules garantuje, že maximální cesta odpovídá právě jednomu tahu), ale
-    // kdyby přesto vrátil, výběr se zruší – nikdy nezamrzneme.
-    const move = resolveMove(position, selection.from, path);
-    if (move !== null) {
-      position = applyMove(position, move);
-    }
+    // Žádné pokračování → sekvence je úplná. Server dostane výchozí pole a CELOU
+    // naklikanou cestu; `path` smí mít duplicity (kruhový skok dámy), proto se
+    // posílá tak, jak je – bez redukce přes Set. Legalitu ověří server.
+    void sendMove(selection.from, path);
+  }
+
+  /**
+   * Odešle tah serveru a desku nastaví na vrácený stav. Výběr se zruší hned
+   * (zvýraznění zmizí), kámen se přesune až po odpovědi serveru – bez
+   * optimistického předběhnutí. Selhání (odmítnutí, síť) neshodí desku: stav se
+   * dorovná z GET a klik se zase povolí.
+   */
+  async function sendMove(from: Square, path: readonly Square[]): Promise<void> {
     selection = null;
+    busy = true;
+    render();
+    try {
+      applyServerState(await client.postMove(gameId, from, path));
+    } catch (error) {
+      console.error('Server tah nepřijal, synchronizuji stav ze serveru:', error);
+      await resync();
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  /**
+   * Opakovaný dotaz na stav – takhle klient uvidí tah enginu. Single-flight:
+   * když už request běží (odesílá se tah / běží jiný poll), tik se přeskočí.
+   */
+  async function poll(): Promise<void> {
+    if (busy) {
+      return; // jiný request běží – tenhle tik zahodíme (single-flight)
+    }
+    busy = true;
+    try {
+      applyServerState(await client.getGame(gameId));
+    } catch (error) {
+      console.error('Dotaz na stav partie selhal:', error);
+    } finally {
+      busy = false;
+    }
+  }
+
+  /** Dorovnání stavu ze serveru po neúspěšném tahu. Nikdy nevyhazuje. */
+  async function resync(): Promise<void> {
+    try {
+      applyServerState(await client.getGame(gameId));
+    } catch (error) {
+      console.error('Dorovnání stavu selhalo, deska zůstává na poslední pozici:', error);
+    }
+  }
+
+  /** Přebere plný stav ze serveru a překreslí. Deska nikdy nedopočítává sama. */
+  function applyServerState(dto: GameDto): void {
+    position = dto.position;
+    if (dto.engineStatus === 'error') {
+      // Engine selhal – partie stojí na tahu člověka nebo čeká; viditelné hlášení
+      // řeší až další fáze. Tady jen nezaseknout a nechat stopu v konzoli.
+      console.error('Engine hlásí chybu (engineStatus=error).');
+    }
+    render();
   }
 
   function render(): void {
@@ -97,5 +190,10 @@ export function createBoardController(initial: Position): BoardController {
   }
 
   render();
-  return { element: view.element };
+  return {
+    element: view.element,
+    dispose: () => {
+      clearInterval(timer);
+    },
+  };
 }

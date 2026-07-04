@@ -69,13 +69,28 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
   return { element, update };
 }
 
-/** Nahradí (nebo odstraní) kámen v jednom poli podle jeho obsahu. */
+/**
+ * Srovná kámen v jednom poli s jeho obsahem. Idempotentně: pokud kámen zůstává,
+ * element se NErecykluje – jen se případně upraví třída (proměna man→king).
+ *
+ * Recyklace (smazat + znovu vytvořit při každém překreslení) by při pollingu à
+ * 250 ms spolkla klik: kdyby se `.piece` vyměnil mezi mousedown a mouseup, klik
+ * by na kámen nedopadl. Proto se element mění jen při reálné změně obsahu pole.
+ */
 function renderPiece(cell: HTMLElement, piece: Cell): void {
-  cell.querySelector('.piece')?.remove();
+  const existing = cell.querySelector('.piece');
   if (piece === null) {
+    existing?.remove();
+    return;
+  }
+  const className = piece.kind === 'king' ? `piece ${piece.color} king` : `piece ${piece.color}`;
+  if (existing !== null) {
+    if (existing.className !== className) {
+      existing.className = className; // stejný element, jen jiný stav (proměna)
+    }
     return;
   }
   const el = document.createElement('div');
-  el.className = piece.kind === 'king' ? `piece ${piece.color} king` : `piece ${piece.color}`;
+  el.className = className;
   cell.append(el);
 }

@@ -1,14 +1,21 @@
 // @vitest-environment jsdom
-import { initialPosition } from '@checkers/rules';
-import type { Cell, Color, Position } from '@checkers/rules';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { applyMove, initialPosition, legalMoves } from '@checkers/rules';
+import type { Cell, Color, Move, Position } from '@checkers/rules';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createBoardController } from '../src/controller.js';
+import { createBoardView } from '../src/board-view.js';
+import type { GameDto, ServerClient } from '../src/server-client.js';
+import { ServerError } from '../src/server-client.js';
 
-function mount(position: Position = initialPosition()): HTMLElement {
-  const { element } = createBoardController(position);
-  document.body.append(element);
-  return element;
+/** Perioda, při které se polling v běžných testech nespustí. */
+const HUGE_INTERVAL = 1_000_000;
+
+const disposers: (() => void)[] = [];
+
+/** Serverový stav ve tvaru pro klienta; `result`/`legalMoves` klient nečte. */
+function gameDto(position: Position, engineStatus: GameDto['engineStatus'] = 'idle'): GameDto {
+  return { id: 'g1', position, result: 'ongoing', legalMoves: [], engineStatus };
 }
 
 /** Postaví pozici z řídkého zápisu `{ pole: kámen }` (pole 1–32). */
@@ -20,6 +27,65 @@ function position(turn: Color, pieces: Record<number, Cell>): Position {
 const blackMan: Cell = { color: 'black', kind: 'man' };
 const whiteMan: Cell = { color: 'white', kind: 'man' };
 const blackKing: Cell = { color: 'black', kind: 'king' };
+
+/** Najde v pozici tah odpovídající from + celé cestě (jinak vyhodí – fake „server"). */
+function findMove(pos: Position, from: number, path: readonly number[]): Move {
+  const move = legalMoves(pos).find(
+    (m) => m.from === from && m.path.length === path.length && m.path.every((s, i) => s === path[i]),
+  );
+  if (move === undefined) {
+    throw new Error(`fake server dostal nelegální tah: from=${String(from)} path=${path.join(',')}`);
+  }
+  return move;
+}
+
+interface Fake {
+  readonly client: ServerClient;
+  readonly posted: { from: number; path: number[] }[];
+  current(): Position;
+}
+
+/**
+ * Fake serveru pro testy: chová se jako autorita – tah člověka ověří a aplikuje
+ * přes `rules` (jako reálný server) a vrací plný stav. `posted` zaznamenává, co
+ * dostal, ať jde ověřit odeslané from+path.
+ */
+function serverFake(start: Position): Fake {
+  let pos = start;
+  const posted: { from: number; path: number[] }[] = [];
+  return {
+    posted,
+    current: () => pos,
+    client: {
+      createGame: () => Promise.resolve(gameDto(pos)),
+      getGame: () => Promise.resolve(gameDto(pos)),
+      postMove: (_id, from, path) => {
+        posted.push({ from, path: [...path] });
+        pos = applyMove(pos, findMove(pos, from, path));
+        return Promise.resolve(gameDto(pos));
+      },
+    },
+  };
+}
+
+interface MountOpts {
+  readonly client?: ServerClient;
+  readonly game?: GameDto;
+  readonly pollIntervalMs?: number;
+}
+
+function mount(start: Position = initialPosition(), opts: MountOpts = {}): HTMLElement {
+  const client = opts.client ?? serverFake(start).client;
+  const game = opts.game ?? gameDto(start);
+  const controller = createBoardController(client, game, {
+    pollIntervalMs: opts.pollIntervalMs ?? HUGE_INTERVAL,
+  });
+  disposers.push(() => {
+    controller.dispose();
+  });
+  document.body.append(controller.element);
+  return controller.element;
+}
 
 function hasPiece(root: HTMLElement, square: number, cls: string): boolean {
   return squareEl(root, square).querySelector(`.piece.${cls}`) !== null;
@@ -41,8 +107,19 @@ function click(el: HTMLElement): void {
   el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
+const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 beforeEach(() => {
   document.body.replaceChildren();
+});
+
+afterEach(() => {
+  for (const dispose of disposers.splice(0)) {
+    dispose();
+  }
+  document.body.replaceChildren();
+  vi.restoreAllMocks();
 });
 
 describe('render desky', () => {
@@ -57,8 +134,6 @@ describe('render desky', () => {
   });
 
   it('má správnou orientaci: pole 1–4 v horní řadě, 29–32 v dolní', () => {
-    // Zuby proti posunu/zrcadlení mapování: kdyby coordsToSquare bylo otočené
-    // nebo posunuté, čísla v krajních řadách by neseděla.
     const board = mount();
     const cells = [...board.querySelectorAll<HTMLElement>('.square')];
     expect(cells).toHaveLength(64);
@@ -118,9 +193,19 @@ describe('interakce výběru', () => {
 
     expect(board.querySelectorAll('.selected')).toHaveLength(0);
   });
+
+  it('když je na tahu engine (bílý), klik nic nevybere ani neodešle', () => {
+    const whiteTurn = position('white', { 22: whiteMan, 9: blackMan });
+    const fake = serverFake(whiteTurn);
+    const board = mount(whiteTurn, { client: fake.client, game: gameDto(whiteTurn, 'thinking') });
+
+    click(squareEl(board, 22)); // bílý kámen – ale hraje engine
+    expect(board.querySelectorAll('.selected')).toHaveLength(0);
+    expect(fake.posted).toEqual([]);
+  });
 });
 
-describe('vícenásobný skok a provedení tahu', () => {
+describe('vícenásobný skok a odeslání tahu serveru', () => {
   // Černý muž 6 přeskočí bílé 10 a 18, cesta [15, 22].
   const doubleJump = (): Position =>
     position('black', { 6: blackMan, 10: whiteMan, 18: whiteMan });
@@ -134,34 +219,42 @@ describe('vícenásobný skok a provedení tahu', () => {
     expect(squareEl(board, 6).classList.contains('selected')).toBe(true);
     expect(squareEl(board, 15).classList.contains('path')).toBe(true);
     expect(squareEl(board, 22).classList.contains('target')).toBe(true);
-    // Tah ještě není proveden – kámen pořád stojí na výchozím poli.
+    // Tah ještě není odeslán – kámen pořád stojí na výchozím poli.
     expect(hasPiece(board, 6, 'black')).toBe(true);
   });
 
-  it('dokončení sekvence provede tah přes rules a překreslí desku', () => {
-    const board = mount(doubleJump());
+  it('dokončení sekvence odešle serveru celé from+path a překreslí desku', async () => {
+    const fake = serverFake(doubleJump());
+    const board = mount(doubleJump(), { client: fake.client });
     click(squareEl(board, 6));
     click(squareEl(board, 15));
-    click(squareEl(board, 22)); // poslední dopad → provedení
+    click(squareEl(board, 22)); // poslední dopad → odeslání
+    await tick();
 
-    expect(hasPiece(board, 22, 'black')).toBe(true); // kámen dorazil
-    expect(isEmpty(board, 6)).toBe(true); // opustil výchozí pole
-    expect(isEmpty(board, 10)).toBe(true); // sebráno
-    expect(isEmpty(board, 18)).toBe(true); // sebráno
-    // Po tahu žádné zbytkové zvýraznění.
+    expect(fake.posted).toEqual([{ from: 6, path: [15, 22] }]);
+    expect(hasPiece(board, 22, 'black')).toBe(true); // stav ze serveru: kámen dorazil
+    expect(isEmpty(board, 6)).toBe(true);
+    expect(isEmpty(board, 10)).toBe(true); // sebráno serverem
+    expect(isEmpty(board, 18)).toBe(true);
     expect(board.querySelectorAll('.selected, .path, .target')).toHaveLength(0);
   });
 
-  it('u větvení nespadne do prvního směru, ale nabídne obě větve', () => {
+  it('u větvení nespadne do prvního směru, ale nabídne obě větve', async () => {
     // Dáma 1 skočí přes 6 na 10, pak buď přes 7 na 3, nebo přes 14 na 17.
-    const board = mount(position('black', { 1: blackKing, 6: whiteMan, 7: whiteMan, 14: whiteMan }));
+    const branch = (): Position =>
+      position('black', { 1: blackKing, 6: whiteMan, 7: whiteMan, 14: whiteMan });
+    const fake = serverFake(branch());
+    const board = mount(branch(), { client: fake.client });
     click(squareEl(board, 1));
     click(squareEl(board, 10)); // společný první dopad
 
     expect(squareEl(board, 3).classList.contains('target')).toBe(true);
     expect(squareEl(board, 17).classList.contains('target')).toBe(true);
 
-    click(squareEl(board, 17)); // zvolená větev → provedení
+    click(squareEl(board, 17)); // zvolená větev → odeslání
+    await tick();
+
+    expect(fake.posted).toEqual([{ from: 1, path: [10, 17] }]);
     expect(hasPiece(board, 17, 'black')).toBe(true);
     expect(isEmpty(board, 6)).toBe(true);
     expect(isEmpty(board, 14)).toBe(true);
@@ -186,7 +279,6 @@ describe('vícenásobný skok a provedení tahu', () => {
 
     click(squareEl(board, 6)); // klik zpět na výchozí kámen = úplný reset
     expect(board.querySelectorAll('.selected, .path, .target')).toHaveLength(0);
-    // Nic se neprovedlo – kámen i oběti zůstávají.
     expect(hasPiece(board, 6, 'black')).toBe(true);
     expect(hasPiece(board, 10, 'white')).toBe(true);
   });
@@ -195,20 +287,176 @@ describe('vícenásobný skok a provedení tahu', () => {
     const board = mount(doubleJump());
     click(squareEl(board, 6));
     click(squareEl(board, 15)); // mezidopad
-    // Pole 22 je jediný další dopad; klik na jiné hrací pole (např. 1) = reset.
-    click(squareEl(board, 1));
+    click(squareEl(board, 1)); // jiné hrací pole = reset
     expect(board.querySelectorAll('.selected, .path, .target')).toHaveLength(0);
     expect(hasPiece(board, 6, 'black')).toBe(true);
   });
 
-  it('proměna na dámu při dopadu na poslední řadu se vykreslí jako king', () => {
+  it('proměna na dámu při dopadu na poslední řadu se vykreslí jako king', async () => {
     // Černý muž 23 přeskočí bílého 27 a dopadne na 32 (poslední řada) → dáma.
-    const board = mount(position('black', { 23: blackMan, 27: whiteMan }));
+    const promo = (): Position => position('black', { 23: blackMan, 27: whiteMan });
+    const board = mount(promo(), { client: serverFake(promo()).client });
     click(squareEl(board, 23));
     click(squareEl(board, 32));
+    await tick();
 
     expect(hasPiece(board, 32, 'black')).toBe(true);
     expect(squareEl(board, 32).querySelector('.piece.king')).not.toBeNull();
     expect(isEmpty(board, 27)).toBe(true);
+  });
+});
+
+describe('stabilita kamenů při překreslení (nález 22-1)', () => {
+  it('opakovaný update() se stejnou pozicí nerecykluje .piece element', () => {
+    // Regrese: kdyby renderPiece kámen pokaždé mazal a tvořil znovu, poll à 250 ms
+    // by spolkl klik, který na kámen právě padá. Element musí zůstat tentýž.
+    const view = createBoardView(() => undefined);
+    const pos = initialPosition();
+    view.update({ position: pos, selected: null, path: [], targets: [] });
+    const before = view.element.querySelector('[data-square="9"] .piece');
+    expect(before).not.toBeNull();
+
+    view.update({ position: pos, selected: null, path: [], targets: [] });
+    const after = view.element.querySelector('[data-square="9"] .piece');
+    expect(after).toBe(before); // stejná instance – žádná recyklace
+  });
+
+  it('proměna man→king upraví třídu beze změny elementu', () => {
+    const view = createBoardView(() => undefined);
+    view.update({ position: position('black', { 9: blackMan }), selected: null, path: [], targets: [] });
+    const man = view.element.querySelector('[data-square="9"] .piece');
+    expect(man?.classList.contains('king')).toBe(false);
+
+    view.update({ position: position('black', { 9: blackKing }), selected: null, path: [], targets: [] });
+    const king = view.element.querySelector('[data-square="9"] .piece');
+    expect(king).toBe(man); // tentýž element
+    expect(king?.classList.contains('king')).toBe(true);
+  });
+
+  it('odchod kamene z pole element odstraní', () => {
+    const view = createBoardView(() => undefined);
+    view.update({ position: position('black', { 9: blackMan }), selected: null, path: [], targets: [] });
+    expect(view.element.querySelector('[data-square="9"] .piece')).not.toBeNull();
+
+    view.update({ position: position('black', {}), selected: null, path: [], targets: [] });
+    expect(view.element.querySelector('[data-square="9"] .piece')).toBeNull();
+  });
+});
+
+describe('polling tahu enginu', () => {
+  it('opakovaný dotaz přebere tah enginu a překreslí desku', async () => {
+    const before = position('white', { 22: whiteMan }); // na tahu engine
+    const after = position('black', { 18: whiteMan }); // engine už táhl
+    const client: ServerClient = {
+      createGame: () => Promise.resolve(gameDto(before, 'thinking')),
+      getGame: () => Promise.resolve(gameDto(after)),
+      postMove: () => Promise.resolve(gameDto(after)),
+    };
+    const board = mount(before, { client, game: gameDto(before, 'thinking'), pollIntervalMs: 5 });
+    expect(hasPiece(board, 22, 'white')).toBe(true); // před pollingem
+
+    await delay(30);
+    expect(isEmpty(board, 22)).toBe(true);
+    expect(hasPiece(board, 18, 'white')).toBe(true);
+  });
+
+  it('single-flight: dokud běží tah, polling se přeskočí', async () => {
+    const start = initialPosition();
+    let resolvePost: (value: GameDto) => void = () => undefined;
+    const pending = new Promise<GameDto>((resolve) => {
+      resolvePost = resolve;
+    });
+    let getCount = 0;
+    const client: ServerClient = {
+      createGame: () => Promise.resolve(gameDto(start)),
+      getGame: () => {
+        getCount += 1;
+        return Promise.resolve(gameDto(start));
+      },
+      postMove: () => pending, // tah „visí" → busy zůstává true
+    };
+    const board = mount(start, { client, pollIntervalMs: 5 });
+
+    click(squareEl(board, 9));
+    click(squareEl(board, 13)); // prostý tah 9→13 → sendMove, postMove visí
+    const countAfterClick = getCount;
+
+    await delay(30); // proběhlo by víc poll tiků
+    expect(getCount).toBe(countAfterClick); // žádný poll neproběhl (busy)
+
+    resolvePost(gameDto(start)); // úklid – ať promise nezůstane висet
+    await tick();
+  });
+});
+
+describe('defenzivní cesty', () => {
+  it('odmítnutý tah (409) dorovná stav z GET a deska se nezasekne', async () => {
+    const start = initialPosition();
+    const resynced = position('black', { 14: blackMan }); // odlišný serverový stav
+    let getCount = 0;
+    const client: ServerClient = {
+      createGame: () => Promise.resolve(gameDto(start)),
+      getGame: () => {
+        getCount += 1;
+        return Promise.resolve(gameDto(resynced));
+      },
+      postMove: () => Promise.reject(new ServerError(409, 'illegal_move', 'Nelegální tah')),
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const board = mount(start, { client });
+    click(squareEl(board, 9));
+    click(squareEl(board, 13)); // sendMove → postMove reject → resync přes GET
+    await tick();
+
+    expect(getCount).toBeGreaterThanOrEqual(1); // proběhlo dorovnání z GET
+    expect(hasPiece(board, 14, 'black')).toBe(true); // deska přebrala serverový stav
+
+    // Deska není zaseknutá: nový klik zase vybírá.
+    click(squareEl(board, 14));
+    expect(squareEl(board, 14).classList.contains('selected')).toBe(true);
+  });
+
+  it('síťová chyba při tahu nezasekne desku (busy se uvolní)', async () => {
+    const start = initialPosition();
+    let getFails = true;
+    const client: ServerClient = {
+      createGame: () => Promise.resolve(gameDto(start)),
+      // I dorovnání selže (síť pořád dole) – nesmí to nechat desku zaseknutou.
+      getGame: () =>
+        getFails
+          ? Promise.reject(new ServerError(0, undefined, 'síť'))
+          : Promise.resolve(gameDto(start)),
+      postMove: () => Promise.reject(new ServerError(0, undefined, 'síť')),
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const board = mount(start, { client });
+    click(squareEl(board, 9));
+    click(squareEl(board, 13)); // tah selže, i resync selže
+    await tick();
+
+    getFails = false; // „síť se vrátila"
+    // Deska se nezasekla – další výběr funguje.
+    click(squareEl(board, 9));
+    expect(squareEl(board, 9).classList.contains('selected')).toBe(true);
+  });
+
+  it('engineStatus=error z pollingu jen zaloguje a desku nezasekne', async () => {
+    const start = initialPosition();
+    const client: ServerClient = {
+      createGame: () => Promise.resolve(gameDto(start)),
+      getGame: () => Promise.resolve(gameDto(start, 'error')),
+      postMove: () => Promise.resolve(gameDto(start)),
+    };
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const board = mount(start, { client, pollIntervalMs: 5 });
+    await delay(30); // proběhl poll s engineStatus=error
+
+    expect(errorSpy).toHaveBeenCalled(); // chyba se zalogovala
+    // Deska žije: na tahu je pořád člověk (černý), výběr funguje.
+    click(squareEl(board, 9));
+    expect(squareEl(board, 9).classList.contains('selected')).toBe(true);
   });
 });

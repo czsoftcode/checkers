@@ -107,6 +107,11 @@
       "id": 21,
       "title": "UI vícenásobného skoku",
       "status": "done"
+    },
+    {
+      "id": 22,
+      "title": "Klient napojen na server",
+      "status": "done"
     }
   ]
 }

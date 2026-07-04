@@ -22,7 +22,7 @@
 - [x] [M4] Orchestrace enginu: podproces + fronta (v1 sériově), NIKDY synchronně v handleru, tvrdý timeout = timeMs+500, kill + restart + 1 retry s timeMs/2, úklid zombie procesů při startu i vypnutí. BRÁNA M4: kill enginu uprostřed přemýšlení -> partie přežije.
 - [x] [M5] Šachovnice: CSS grid deska, vykreslení pozice, výběr kamene, zvýraznění legálních tahů přes sdílenou rules. Brána: klikatelná deska se správným zvýrazněním.
 - [x] [M5] UI vícenásobného skoku: doklikávání sekvence dopadů a volba větve (nejhorší UX část hry - navrhnout interakci předem). Brána: hráč zadá multi-skok i větvení bez zaseknutí.
-- [ ] [M5] Optimistický tah + resync: okamžitá odezva UI, po odpovědi serveru sync na plný stav, při neshodě tvrdý resync + log, polling GET ~250 ms, stavový řádek, konec hry. BRÁNA v1: splněna definice hotového ze sekce 0.
+- [x] [M5] Optimistický tah + resync: okamžitá odezva UI, po odpovědi serveru sync na plný stav, při neshodě tvrdý resync + log, polling GET ~250 ms, stavový řádek, konec hry. BRÁNA v1: splněna definice hotového ze sekce 0.
 - [ ] [M5] Archiv partií (klient): ukládání dokončených partií do LocalStorage v PDN, tlačítko Export -> jeden .pdn soubor, ošetření QuotaExceededError. Brána: partie se uloží, export stáhne validní PDN; zpět do hry se nenačítá.
 - [ ] [M6] Hardening: víc souběžných partií, chování fronty, úklid procesů, zátěžový test. Brána: N souběžných partií bez zombie procesů a bez zamrznutí API.
 - [ ] [M6] (Podmíněně) Rust engine: za stejným protokolem, vlastní generátor pravidel přibitý stejným perftem + fixtures, self-play proti TS enginu. Brána: TS a Rust prohoditelné konfigurací serveru. Jen pokud TS engine nedosáhne na cíl (i).
