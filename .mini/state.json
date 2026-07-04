@@ -87,6 +87,11 @@
       "id": 17,
       "title": "Transpoziční tabulky + Zobrist hash",
       "status": "done"
+    },
+    {
+      "id": 18,
+      "title": "Server API (Fastify + zod)",
+      "status": "done"
     }
   ]
 }

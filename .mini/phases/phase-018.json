@@ -1,0 +1,44 @@
+{
+  "id": 18,
+  "title": "Server API (Fastify + zod)",
+  "goal": "REST server s Fastify + zod a in-memory úložištěm partií (Map), endpointy POST /games, GET /games/:id, POST /games/:id/moves, validace každého tahu přes sdílenou knihovnu rules (server jako jediná autorita), 404 pro neexistující partii a 409 illegal_move s přiloženým seznamem legalMoves; brána = kompletní partie (oba tahy ručně) odehraná přes curl, bez enginu.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Závislosti + kostra app (buildApp / main)",
+      "status": "done",
+      "detail": "Přidat fastify a zod do katalogu pnpm-workspace.yaml + do packages/server. buildApp() vrátí nakonfigurovanou Fastify instanci (bez listen), main.ts ji spustí na DEFAULT_PORT. Ověření: typecheck projde, app.inject() test potvrdí, že se app postaví."
+    },
+    {
+      "title": "Serializace stavu + match tahu (čisté helpery)",
+      "status": "done",
+      "detail": "gameToDto(id, state) → { id, position, result, legalMoves } (result z gameResultFromState); findLegalMove(position, from, path) = deep-equal shoda from + celé pole path proti legalMoves, vrací Move | undefined. Unit testy včetně path s duplicitami (kruhový skok dámy) a nesedícího/prázdného path."
+    },
+    {
+      "title": "Store + POST /games + GET /games/:id",
+      "status": "done",
+      "detail": "In-memory Map<id, GameRecord>, crypto.randomUUID(). POST /games založí partii z initialGameState() (černý na tahu), vrátí 201 + game DTO. GET /games/:id vrátí DTO, neexistující id → 404. Pokryto app.inject() testy."
+    },
+    {
+      "title": "POST /games/:id/moves — validace + aplikace tahu",
+      "status": "done",
+      "detail": "zod schéma těla { from, path } (čísla 1-32). Tok: 404 neznámá partie → 409 game_over pro skončenou → findLegalMove → 409 illegal_move + legalMoves, jinak advanceState a vrácení nového DTO. RangeError z rules se nemaskuje (probublá jako 500)."
+    },
+    {
+      "title": "Jednotná chybová obálka + testy se zuby",
+      "status": "done",
+      "detail": "Chybová odpověď má strojově čitelný code (invalid_request / game_not_found / illegal_move / game_over). Testy zafixují drátový kontrakt (tvar Move i chybové obálky) a projdou unhappy path: rozbité/prázdné/mimo-schéma tělo (400), tah druhé strany a ignorované povinné braní (409 illegal_move), tah po konci hry (409 game_over). Dočasné rozbití validace musí shodit test."
+    },
+    {
+      "title": "Curl brána: kompletní partie skriptem",
+      "status": "done",
+      "detail": "Bash skript odehraje celou partii přes reálně běžící server: založí hru, ve smyčce čte legalMoves z GET a posílá první legální tah, dokud result !== ongoing. Ověří, že server nikdy neodmítl legální tah a partie skončí terminálním výsledkem; plus explicitní curl volání demonstrující 404 a 409."
+    }
+  ],
+  "startedAt": "2026-07-04T12:52:20.343Z",
+  "completedAt": "2026-07-04T13:24:16.850Z",
+  "autoCommit": {
+    "preSha": "efb1c68539211c04078fc72c67da764b176d08fc",
+    "subject": "Phase 18: Server API (Fastify + zod)"
+  }
+}

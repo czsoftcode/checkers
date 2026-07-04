@@ -18,7 +18,7 @@
 - [x] [M3] Search jádro: negamax + alfa-beta, evaluace v1 (muž 100, dáma 130, bonus za zadní řadu, drobný postup). Brána: vybírá jen legální tahy, poráží random hráče.
 - [x] [M3] Časová kontrola: iterativní prohlubování 1..N s měkkým limitem (vrací poslední KOMPLETNÍ iteraci, ne rozdělanou), quiescence - prodloužení o půltah při povinných skocích. BRÁNA M3: porazí random >=95 % ze 100, nikdy nepřekročí tvrdý timeout.
 - [x] [M3] Síla pro cíl (i): silnější poziční evaluace (mobilita, kontrola dvojitého rohu) + transpoziční tabulky + Zobrist hash. Brána: self-play nová vs stará verze prokáže zlepšení (>=200 partií, střídání barev).
-- [ ] [M4] Server API: Fastify + zod, POST /games, GET /games/:id, POST /games/:id/moves, in-memory Map úložiště, 404 pro neexistující partii, 409 illegal_move + legalMoves. Brána: kompletní partie přes curl.
+- [x] [M4] Server API: Fastify + zod, POST /games, GET /games/:id, POST /games/:id/moves, in-memory Map úložiště, 404 pro neexistující partii, 409 illegal_move + legalMoves. Brána: kompletní partie přes curl.
 - [ ] [M4] Orchestrace enginu: podproces + fronta (v1 sériově), NIKDY synchronně v handleru, tvrdý timeout = timeMs+500, kill + restart + 1 retry s timeMs/2, úklid zombie procesů při startu i vypnutí. BRÁNA M4: kill enginu uprostřed přemýšlení -> partie přežije.
 - [ ] [M5] Šachovnice: CSS grid deska, vykreslení pozice, výběr kamene, zvýraznění legálních tahů přes sdílenou rules. Brána: klikatelná deska se správným zvýrazněním.
 - [ ] [M5] UI vícenásobného skoku: doklikávání sekvence dopadů a volba větve (nejhorší UX část hry - navrhnout interakci předem). Brána: hráč zadá multi-skok i větvení bez zaseknutí.
@@ -28,3 +28,4 @@
 - [ ] [M6] (Podmíněně) Rust engine: za stejným protokolem, vlastní generátor pravidel přibitý stejným perftem + fixtures, self-play proti TS enginu. Brána: TS a Rust prohoditelné konfigurací serveru. Jen pokud TS engine nedosáhne na cíl (i).
 - [ ] [M6a] zavest bitboard zapis, pokud to bude potreba
 - [ ] [M6] Engine LineBuffer: limit maximální délky řádku (např. 1 MB) - proud dat bez \n dnes roste v paměti bez omezení až k OOM; při překročení zahodit buffer a odpovědět error (nález self-review fáze 13)
+- [ ] [M3/M6] Inkrementální Zobrist hashování v searchi: XOR rozdílu při tahu (kámen, braní, proměna, obrat strany) místo přepočtu z 32 polí na uzel. Motivace: fáze 17 měřila, že TT je na hodinách přínosná až od hloubky ~7; níž ji přebije režie přepočtu hashe. Inkrement bod zlomu posune dolů → TT přínosná i na provozních hloubkách 5-7. Brána: tt-gate ukáže poměr času s TT/bez TT < 1 i na hloubce 6. Jen pokud bude síla enginu na čas potřeba.

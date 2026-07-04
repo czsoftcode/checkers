@@ -7,6 +7,23 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-04
+
+### Added
+
+- Autoritativní HTTP server partie (`@checkers/server`, Fastify + zod): založení
+  partie (`POST /games`), přečtení stavu (`GET /games/:id`) a odehrání tahu
+  (`POST /games/:id/moves`). Partie žijí v paměti serveru (bez databáze).
+- Server je jediný zdroj pravdy o pravidlech: legalita každého tahu se ověřuje
+  proti sdílené knihovně `rules`. Klient posílá jen výchozí pole a cestu dopadů
+  (`{ from, path }`); která pole se berou, si server odvodí sám - klient braní
+  nediktuje. Odpověď u nelegálního tahu přikládá aktuální seznam legálních tahů.
+- Jednotná chybová obálka se strojově čitelným kódem (`invalid_request`,
+  `not_found`, `game_not_found`, `illegal_move`, `game_over`) - i pro neznámou
+  cestu a nelegální tah.
+- Brána `packages/server/scripts/curl-gate.sh`: odehraje kompletní partii přes
+  reálně běžící server a ověří, že server nepřijme žádný nelegální tah.
+
 ## [0.15.0] - 2026-07-04
 
 ### Added
