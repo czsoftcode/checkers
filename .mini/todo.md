@@ -20,7 +20,7 @@
 - [x] [M3] Síla pro cíl (i): silnější poziční evaluace (mobilita, kontrola dvojitého rohu) + transpoziční tabulky + Zobrist hash. Brána: self-play nová vs stará verze prokáže zlepšení (>=200 partií, střídání barev).
 - [x] [M4] Server API: Fastify + zod, POST /games, GET /games/:id, POST /games/:id/moves, in-memory Map úložiště, 404 pro neexistující partii, 409 illegal_move + legalMoves. Brána: kompletní partie přes curl.
 - [x] [M4] Orchestrace enginu: podproces + fronta (v1 sériově), NIKDY synchronně v handleru, tvrdý timeout = timeMs+500, kill + restart + 1 retry s timeMs/2, úklid zombie procesů při startu i vypnutí. BRÁNA M4: kill enginu uprostřed přemýšlení -> partie přežije.
-- [ ] [M5] Šachovnice: CSS grid deska, vykreslení pozice, výběr kamene, zvýraznění legálních tahů přes sdílenou rules. Brána: klikatelná deska se správným zvýrazněním.
+- [x] [M5] Šachovnice: CSS grid deska, vykreslení pozice, výběr kamene, zvýraznění legálních tahů přes sdílenou rules. Brána: klikatelná deska se správným zvýrazněním.
 - [ ] [M5] UI vícenásobného skoku: doklikávání sekvence dopadů a volba větve (nejhorší UX část hry - navrhnout interakci předem). Brána: hráč zadá multi-skok i větvení bez zaseknutí.
 - [ ] [M5] Optimistický tah + resync: okamžitá odezva UI, po odpovědi serveru sync na plný stav, při neshodě tvrdý resync + log, polling GET ~250 ms, stavový řádek, konec hry. BRÁNA v1: splněna definice hotového ze sekce 0.
 - [ ] [M5] Archiv partií (klient): ukládání dokončených partií do LocalStorage v PDN, tlačítko Export -> jeden .pdn soubor, ošetření QuotaExceededError. Brána: partie se uloží, export stáhne validní PDN; zpět do hry se nenačítá.

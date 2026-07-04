@@ -97,6 +97,11 @@
       "id": 19,
       "title": "Orchestrace enginu: podproces + fronta",
       "status": "done"
+    },
+    {
+      "id": 20,
+      "title": "Šachovnice: vykreslení a zvýraznění",
+      "status": "done"
     }
   ]
 }

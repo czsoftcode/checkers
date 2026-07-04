@@ -1,0 +1,43 @@
+{
+  "id": 20,
+  "title": "Šachovnice: vykreslení a zvýraznění",
+  "goal": "Postavit Vite scaffolding webového klienta a CSS grid desku, která vykreslí zadanou pozici z knihovny rules, umožní vybrat kámen kliknutím a zvýrazní jeho legální tahy voláním sdílené rules (lokálně, bez serveru; respektuje povinné braní; bez inline stylů/scriptů kvůli CSP). Brána: klikatelná deska se správným zvýrazněním legálních tahů.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Vite scaffolding balíčku web",
+      "status": "done",
+      "detail": "vite.config.ts, index.html, dev/build/typecheck skripty, závislost na @checkers/rules. Bez inline scriptů (modul se linkuje externě). Výstup: pnpm --filter @checkers/web dev naservíruje stránku, build + typecheck projdou."
+    },
+    {
+      "title": "Mapovací vrstva pole↔mřížka + render pozice",
+      "status": "done",
+      "detail": "CSS grid 8×8 v externím .css (žádné inline styly), obarvení polí, vykreslení initialPosition() — muži i dámy obou barev na správných polích přes squareToCoords. Výstup: deska zobrazí výchozí rozestavění vizuálně správně."
+    },
+    {
+      "title": "Model výběru a zvýraznění (čistá logika)",
+      "status": "done",
+      "detail": "Samostatný modul bez DOM: selectableAt(position, square) a targetsFor(position, square) = cílová pole legálních tahů z pole přes legalMoves (první dopad každého tahu; plná sekvence multi-skoku je todo 19). Respektuje povinné braní. Výstup: unit testy včetně pozice s vynuceným skokem."
+    },
+    {
+      "title": "Interakce: klik vybírá a zvýrazňuje",
+      "status": "done",
+      "detail": "Napojení modelu na DOM — klik na vlastní kámen ho vybere a zvýrazní cíle; klik na prázdné/cizí pole nebo znovu na vybraný kámen výběr zruší. Stav jen lokálně, tah se neprovádí. Výstup: klikatelná deska se správným zvýrazněním (brána fáze)."
+    },
+    {
+      "title": "Sebekontrola unhappy path + smoke test DOM",
+      "status": "done",
+      "detail": "Chování bez legálních tahů (prázdné zvýraznění), klik mimo desku, kámen bez tahů; smoke test renderu (jsdom) že mřížka má 32 hracích polí. Výstup: testy mají zuby."
+    }
+  ],
+  "startedAt": "2026-07-04T14:43:22.967Z",
+  "resolvedVerify": [
+    "Vizuální podoba desky v prohlížeči (pnpm --filter @checkers/web dev)",
+    "Zvýraznění při kliknutí pohledem"
+  ],
+  "completedAt": "2026-07-04T15:04:59.745Z",
+  "autoCommit": {
+    "preSha": "2321afdc82ef6f32a43e604b208738415449a550",
+    "subject": "Phase 20: Šachovnice: vykreslení a zvýraznění"
+  }
+}

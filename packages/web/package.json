@@ -3,15 +3,21 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@checkers/rules": "workspace:*"
+  },
   "devDependencies": {
+    "@types/node": "catalog:",
+    "jsdom": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }

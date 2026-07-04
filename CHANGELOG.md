@@ -7,6 +7,16 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-07-04
+
+### Added
+
+- Webový klient (`@checkers/web`, Vite + vanilla TS): šachovnice 8×8 v prohlížeči.
+  Vykreslí výchozí rozestavění, klik na vlastní kámen ho vybere a zvýrazní jeho
+  legální tahy. Legalita jde výhradně přes sdílenou knihovnu `rules`, takže deska
+  respektuje i povinné braní - když je k dispozici skok, prosté tahy se nenabídnou.
+  Zatím bez serveru a bez provádění tahů (jen výběr a zvýraznění).
+
 ## [0.17.0] - 2026-07-04
 
 ### Added

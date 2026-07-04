@@ -1,0 +1,101 @@
+:root {
+  /* Skoro celá výška okna; na úzkých oknech omezeno šířkou, ať se deska vejde. */
+  --board-size: min(90vh, 94vw);
+  --square: calc(var(--board-size) / 8);
+  --light: #e8d3a1;
+  --dark: #8a5a2b;
+  --frame: #4a3418;
+  --selected: #f5d442;
+  --target: rgba(74, 222, 128, 0.85);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2vh 2rem;
+  box-sizing: border-box;
+  background: #232323;
+  color: #eee;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, var(--square));
+  grid-template-rows: repeat(8, var(--square));
+  width: var(--board-size);
+  height: var(--board-size);
+  border: 6px solid var(--frame);
+  box-sizing: content-box;
+}
+
+.square {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.square.light {
+  background: var(--light);
+}
+
+.square.dark {
+  background: var(--dark);
+  cursor: pointer;
+}
+
+/* Zvýraznění vybraného kamene: rámeček uvnitř pole. */
+.square.selected {
+  outline: 4px solid var(--selected);
+  outline-offset: -4px;
+}
+
+/* Cílové pole legálního tahu: terčík uprostřed. */
+.square.target::after {
+  content: '';
+  position: absolute;
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  background: var(--target);
+  pointer-events: none;
+}
+
+.piece {
+  width: 72%;
+  height: 72%;
+  border-radius: 50%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.piece.black {
+  background: radial-gradient(circle at 35% 30%, #555, #111);
+  border: 2px solid #000;
+}
+
+.piece.white {
+  background: radial-gradient(circle at 35% 30%, #fff, #c4c4c4);
+  border: 2px solid #8a8a8a;
+}
+
+/* Dáma: korunka uprostřed kamene. */
+.piece.king::before {
+  content: '♛';
+  font-size: calc(var(--square) * 0.42);
+  line-height: 1;
+}
+
+.piece.black.king::before {
+  color: #e8c34a;
+}
+
+.piece.white.king::before {
+  color: #7a5a10;
+}

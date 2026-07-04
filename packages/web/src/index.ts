@@ -1,7 +1,7 @@
 /**
  * Webový klient (Vite + vanilla TS) – šachovnice v prohlížeči.
- * Zatím jen kostra balíčku, UI přijde v M5.
+ * Sdílené konstanty balíčku; samotné bootstrapování je v `main.ts`.
  */
 
-/** Titulek aplikace. */
+/** Titulek aplikace (i `document.title`). */
 export const APP_TITLE = 'Americká dáma';
