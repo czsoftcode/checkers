@@ -23,6 +23,8 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 - Web: nadbytečné přetypování ve výčtu obrázků pozadí (`import.meta.glob`), které
   hlásil lint.
 
+## [0.24.0] - 2026-07-04
+
 ### Added
 
 - Náhodné pozadí stránky: web klient při každé nové partii (i po obnovení
