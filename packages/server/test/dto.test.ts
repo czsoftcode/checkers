@@ -25,7 +25,7 @@ const BLACK_KING: Cell = { color: 'black', kind: 'king' };
 
 describe('gameToDto', () => {
   it('výchozí pozice: ongoing, černý na tahu, 7 prostých tahů', () => {
-    const dto = gameToDto('abc', initialGameState(), 'idle');
+    const dto = gameToDto('abc', initialGameState(), 'idle', 'ongoing');
     expect(dto.id).toBe('abc');
     expect(dto.position.turn).toBe('black');
     expect(dto.result).toBe('ongoing');
@@ -37,6 +37,14 @@ describe('gameToDto', () => {
       expect(move.captures).toEqual([]);
       expect(move.path).toHaveLength(1);
     }
+  });
+
+  it('result se PŘEDÁVÁ zvenčí (efektivní výsledek), DTO ho neodvozuje z pozice', () => {
+    // Rozehraná pozice (černý na tahu), ale výsledek je vnucený white-wins –
+    // simuluje vzdanou partii. DTO musí vrátit předaný výsledek, ne 'ongoing'.
+    const dto = gameToDto('xyz', initialGameState(), 'idle', 'white-wins');
+    expect(dto.result).toBe('white-wins');
+    expect(dto.position.turn).toBe('black');
   });
 });
 

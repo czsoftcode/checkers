@@ -7,6 +7,25 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-04
+
+### Added
+
+- Vzdání partie: nový endpoint `POST /games/:id/resign` (člověk = černý se vzdá →
+  vyhrává počítač/bílý). Výsledek vzdání žije mimo pravidla (pozice zůstává
+  rozehraná) a čte se přes jedinou funkci `effectiveResult`, kterou procházejí
+  všechna serverová rozhodnutí „je konec?" - engine tak nemůže zahrát ani znovu
+  archivovat vzdanou partii. Vzdaná partie se zapíše do `.pdn` (token `1-0`).
+- Web klient: tlačítka „Vzdávám hru" (aktivní za běhu, s inline dvoukrokovým
+  potvrzením bez systémového dialogu) a „Nová hra" (aktivní až po skončení
+  partie). Nová hra zakládá další partii přímo v aplikaci a uklidí předchozí
+  (zastaví polling) - restart už nevyžaduje obnovení stránky. Přibyl řádek stavu
+  („Jste na tahu", „Počítač je na tahu…", „Konec: …").
+
+### Changed
+
+- Nová partie po skončení NEstartuje automaticky - jen na tlačítko „Nová hra".
+
 ## [0.21.0] - 2026-07-04
 
 ### Added

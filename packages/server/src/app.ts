@@ -9,13 +9,12 @@
 
 import Fastify from 'fastify';
 import { z } from 'zod';
-import { gameResultFromState } from '@checkers/rules';
 import type { Color } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { formatGamePdn, writeGamePdn } from './archive.js';
 import { findLegalMove, gameToDto, legalMoveDtos } from './dto.js';
 import { ERROR_CODES, sendError } from './errors.js';
-import { GameStore } from './store.js';
+import { GameStore, effectiveResult } from './store.js';
 import type { GameRecord } from './store.js';
 import type { EngineMover } from './engine-client.js';
 
@@ -79,9 +78,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     );
   });
 
+  /** GameDto ze záznamu: `result` je EFEKTIVNÍ výsledek (vzdání > pozice). */
+  function dtoFor(record: GameRecord): ReturnType<typeof gameToDto> {
+    return gameToDto(record.id, record.state, record.engineStatus, effectiveResult(record));
+  }
+
   app.post('/games', (_req, reply) => {
-    const { id, state, engineStatus } = store.create();
-    return reply.code(201).send(gameToDto(id, state, engineStatus));
+    return reply.code(201).send(dtoFor(store.create()));
   });
 
   app.get<{ Params: { id: string } }>('/games/:id', (req, reply) => {
@@ -89,7 +92,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (record === undefined) {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
     }
-    return reply.send(gameToDto(record.id, record.state, record.engineStatus));
+    return reply.send(dtoFor(record));
+  });
+
+  // Vzdání partie: člověk (černý) se vzdává → vyhrává bílý (počítač). Vynucený
+  // výsledek žije MIMO pravidla (pozice zůstává rozehraná), proto ho drží store.
+  // Bez kontroly, kdo je na tahu – vzdát lze kdykoli za běhu, i když engine
+  // zrovna přemýšlí (jeho běžící job po probuzení uvidí terminál a nezahraje).
+  app.post<{ Params: { id: string } }>('/games/:id/resign', async (req, reply) => {
+    const outcome = store.resign(req.params.id);
+    if (outcome === 'not-found') {
+      return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
+    }
+    if (outcome === 'already-over') {
+      return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
+    }
+    // Partie je teď terminální (white-wins) → archivuj právě jednou (markArchived).
+    await maybeArchive(outcome);
+    return reply.send(dtoFor(outcome));
   });
 
   app.post<{ Params: { id: string } }>('/games/:id/moves', async (req, reply) => {
@@ -110,8 +130,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     // Tah do už skončené partie → 409 game_over. Kontroluje se PŘED hledáním
     // legálního tahu: remíza opakováním / 80 půltahů může mít legální tahy, ale
-    // partie je u konce.
-    if (gameResultFromState(record.state) !== 'ongoing') {
+    // partie je u konce. Přes efektivní výsledek → chytí i vzdanou partii.
+    if (effectiveResult(record) !== 'ongoing') {
       return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
     }
 
@@ -154,7 +174,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     // Odpověď nese stav HNED po tahu člověka (engine ještě nedotáhl); jen
     // engineStatus už může být `thinking`, proto se čte čerstvý záznam.
     const fresh = store.get(next.id) ?? next;
-    return reply.send(gameToDto(fresh.id, fresh.state, fresh.engineStatus));
+    return reply.send(dtoFor(fresh));
   });
 
   /** Když je na tahu engine v běžící partii, označ `thinking` a spusť job. */
@@ -162,7 +182,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (engine === undefined) {
       return;
     }
-    if (gameResultFromState(record.state) !== 'ongoing') {
+    if (effectiveResult(record) !== 'ongoing') {
       return;
     }
     if (record.state.position.turn !== ENGINE_COLOR) {
@@ -184,7 +204,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (pdnDir === undefined) {
       return;
     }
-    const result = gameResultFromState(record.state);
+    const result = effectiveResult(record);
     if (result === 'ongoing') {
       return;
     }
@@ -212,7 +232,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         return;
       }
       if (
-        gameResultFromState(record.state) !== 'ongoing' ||
+        effectiveResult(record) !== 'ongoing' ||
         record.state.position.turn !== ENGINE_COLOR
       ) {
         return; // stav se změnil / engine není na tahu – defenzivně nic nedělej
@@ -229,8 +249,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       if (current === undefined) {
         return;
       }
+      // Efektivní výsledek → vzdání (které stav pravidel nemění) tady engine
+      // zastaví: nezahraje tah do vzdané partie ani ji znovu nearchivuje.
       if (
-        gameResultFromState(current.state) !== 'ongoing' ||
+        effectiveResult(current) !== 'ongoing' ||
         current.state.position.turn !== ENGINE_COLOR
       ) {
         store.setEngineStatus(id, 'idle');

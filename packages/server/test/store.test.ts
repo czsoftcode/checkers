@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { legalMoves } from '@checkers/rules';
 import type { Move } from '@checkers/rules';
-import { GameStore } from '../src/index.js';
+import { GameStore, effectiveResult } from '../src/index.js';
 
 /** Odehraje na store první legální tah aktuální pozice a vrátí ho. */
 function playFirstLegal(store: GameStore, id: string): Move {
@@ -62,5 +62,49 @@ describe('GameStore – markArchived (právě jednou)', () => {
   it('neexistující partie → false', () => {
     const store = new GameStore();
     expect(store.markArchived('neexistuje')).toBe(false);
+  });
+});
+
+describe('GameStore – vzdání (forcedResult)', () => {
+  it('nová partie nemá vynucený výsledek a je ongoing', () => {
+    const store = new GameStore();
+    const rec = store.create();
+    expect(rec.forcedResult).toBeNull();
+    expect(effectiveResult(rec)).toBe('ongoing');
+  });
+
+  it('resign nastaví white-wins a efektivní výsledek se překlopí', () => {
+    const store = new GameStore();
+    const { id } = store.create();
+    const rec = store.resign(id);
+    expect(rec).not.toBe('not-found');
+    expect(rec).not.toBe('already-over');
+    if (rec === 'not-found' || rec === 'already-over') {
+      throw new Error('resign měl uspět');
+    }
+    expect(rec.forcedResult).toBe('white-wins');
+    expect(effectiveResult(rec)).toBe('white-wins');
+    // vynucený výsledek nemění stav pravidel – pozice zůstává rozehraná
+    expect(rec.state.position.turn).toBe('black');
+  });
+
+  it('druhé vzdání už vrací "already-over" a výsledek se nemění', () => {
+    const store = new GameStore();
+    const { id } = store.create();
+    store.resign(id);
+    expect(store.resign(id)).toBe('already-over');
+    expect(store.get(id)?.forcedResult).toBe('white-wins');
+  });
+
+  it('vzdání neexistující partie → "not-found"', () => {
+    const store = new GameStore();
+    expect(store.resign('neexistuje')).toBe('not-found');
+  });
+
+  it('effectiveResult bez vynuceného výsledku plyne z pozice (ongoing)', () => {
+    const store = new GameStore();
+    const rec = store.create();
+    // forcedResult === null → efektivní výsledek = gameResultFromState
+    expect(effectiveResult({ forcedResult: null, state: rec.state })).toBe('ongoing');
   });
 });

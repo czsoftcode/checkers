@@ -12,12 +12,12 @@ Silný hráč americké dámy (autorův tchán), hrající na vysoké úrovni.
 - Pravidla jednou: samostatná knihovna rules (čistý TS, nulové I/O), sdílená serverem (validace), klientem (zvýraznění tahů) i TS enginem. Páteří testů je perft 1-6 + fixtures.
 - Engine jako oddělený proces za JSON Lines protokolem (stdin/stdout). Negamax + alfa-beta + iterativní prohlubování. Nejdřív TS (sdílí rules = jeden zdroj); případný pozdější Rust engine má vlastní generátor pravidel přibitý stejným perftem + fixtures (řízená duplicita).
 - Kalibrace síly (i): engine má silnému hráči VZDOROVAT - vynutit remízu v dobrých pozicích a trestat chyby, ne "vždy vyhrát" (americká dáma je při bezchybné hře remíza). Kvůli tomu se do v1 tahá silnější poziční evaluace (mobilita, dvojitý roh, zadní řada) a transpoziční tabulky + Zobrist - v GDD řazené do v2/M6.
-- Archiv partií (klient, M5): dokončené partie se ukládají do LocalStorage v PDN; tlačítko Export je stáhne najednou jako jeden .pdn soubor pro rozbor ve vnějším nástroji. Klientské pohodlí, ne zdroj pravdy - server zůstává autoritou, zpět do hry se nenačítá.
+- Archiv partií (server): dokončené partie server zapíše na disk jako <id>.pdn (adresář přes CHECKERS_PDN_DIR, výchozí .pdn/ v rootu repa). Jednosměrné best-effort pro rozbor ve vnějším nástroji - zpět do hry se nenačítá, server zůstává autoritou. Fáze 23 nahradila původně plánovaný klientský LocalStorage archiv.
 - Milníky v závazném pořadí: M0 kostra repa - M1 knihovna pravidel (těžiště) - M2 CLI hra - M3 TS engine - M4 server - M5 web klient - M6 hardening + případný Rust engine.
 
 ## Non-goals
 - Nepřidávej multiplayer, účty, žebříčky ani matchmaking v této verzi. (Vědomě otevřený směr do budoucna - autoritativní server ho neblokuje, ale teď se nestaví.)
-- Nepřidávej perzistenci do databáze - partie žijí v paměti serveru. Klientský PDN archiv v LocalStorage + export je jediná výjimka (jednosměrná, nenačítá se zpět).
+- Nepřidávej perzistenci stavu partie do databáze - partie žijí v paměti serveru. Jedinou výjimkou je jednosměrný archiv dokončených partií: server je zapíše na disk jako PDN (nenačítá se zpět, není zdroj pravdy).
 - Nepřidávej endgame databázi v této verzi. (Kandidát do v2. Bez ní engine profíka v koncovkách neudrží; vědomé odložení, ne opomenutí.)
 - Nepřidávej opening book, undo ani in-app procházení/analýzu partií (v2). Nápověda tahů od enginu taky ne.
 - Nepřidávej mobilní appku, PWA ani offline režim.

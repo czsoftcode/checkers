@@ -1,15 +1,14 @@
 /**
- * Vstupní bod webového klienta: založí partii na serveru a vykreslí desku z
- * jeho odpovědi.
+ * Vstupní bod webového klienta: postaví skořápku (řádek stavu, tlačítka Vzdávám
+ * hru / Nová hra) a nechá ji založit partii na serveru.
  *
- * Partii zakládá automaticky při načtení (`POST /games`). Do doby, než server
- * odpoví, ukazuje „Načítám partii…" – deska se NESEEDUJE lokálním
- * `initialPosition()`, jediným zdrojem výchozí pozice je server. Restart hry =
- * obnovení stránky (tlačítko Nová hra řeší až pozdější fáze).
+ * Skořápka zakládá partii sama (`POST /games`) a řídí i její restart přes
+ * tlačítko „Nová hra" – deska se NESEEDUJE lokálním `initialPosition()`, jediným
+ * zdrojem výchozí pozice je server. (Do fáze 24 byl restart jen obnovením stránky.)
  */
 
 import { APP_TITLE } from './index.js';
-import { createBoardController } from './controller.js';
+import { createAppShell } from './app-shell.js';
 import { createHttpClient } from './server-client.js';
 import './styles.css';
 
@@ -19,20 +18,6 @@ const app = document.querySelector('#app');
 if (!(app instanceof HTMLElement)) {
   throw new Error('Kořenový prvek #app nebyl ve stránce nalezen.');
 }
-const root = app;
-
-root.textContent = 'Načítám partii…';
 
 const client = createHttpClient();
-
-async function bootstrap(): Promise<void> {
-  try {
-    const game = await client.createGame();
-    root.replaceChildren(createBoardController(client, game).element);
-  } catch (error) {
-    console.error('Nepodařilo se založit partii:', error);
-    root.textContent = 'Partii se nepodařilo načíst. Zkuste stránku obnovit.';
-  }
-}
-
-void bootstrap();
+app.replaceChildren(createAppShell(client).element);

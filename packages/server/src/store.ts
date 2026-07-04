@@ -9,8 +9,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { advanceState, initialGameState } from '@checkers/rules';
-import type { GameState, Move } from '@checkers/rules';
+import { advanceState, gameResultFromState, initialGameState } from '@checkers/rules';
+import type { GameResult, GameState, Move } from '@checkers/rules';
 
 /**
  * Stav tahu enginu na pozadí:
@@ -34,6 +34,13 @@ export interface GameRecord {
   readonly moves: readonly Move[];
   /** Byla partie už archivována na disk? Pojistka proti dvojímu zápisu. */
   readonly archived: boolean;
+  /**
+   * Vynucený výsledek partie MIMO pravidla (fáze 24). `null`, dokud se nikdo
+   * nevzdal – pak výsledek plyne čistě z pozice (`gameResultFromState`). Po
+   * vzdání drží `white-wins` (člověk = černý se vzdal). Efektivní výsledek celé
+   * partie čte {@link effectiveResult} = `forcedResult ?? gameResultFromState`.
+   */
+  readonly forcedResult: GameResult | null;
 }
 
 interface StoredGame {
@@ -41,6 +48,23 @@ interface StoredGame {
   engineStatus: EngineStatus;
   moves: Move[];
   archived: boolean;
+  forcedResult: GameResult | null;
+}
+
+/**
+ * Efektivní výsledek partie: vynucený (vzdání) má přednost, jinak se odvodí z
+ * pozice. JEDINÝ zdroj pravdy o tom, jestli je partie u konce – všechny čtecí
+ * cesty serveru (DTO, archivace, kontrola „je konec?", guardy tahu enginu) musí
+ * jít přes něj, ne přímo přes `gameResultFromState`. Jinak by vzdání (které stav
+ * pravidel NEmění – pozice zůstává `ongoing`) engine přehlédl a zahrál do už
+ * vzdané partie. Typ parametru je strukturální, ať sedne na `GameRecord` i na
+ * interní `StoredGame`.
+ */
+export function effectiveResult(game: {
+  readonly forcedResult: GameResult | null;
+  readonly state: GameState;
+}): GameResult {
+  return game.forcedResult ?? gameResultFromState(game.state);
 }
 
 export class GameStore {
@@ -59,6 +83,7 @@ export class GameStore {
       engineStatus: game.engineStatus,
       moves: [...game.moves],
       archived: game.archived,
+      forcedResult: game.forcedResult,
     };
   }
 
@@ -70,6 +95,7 @@ export class GameStore {
       engineStatus: 'idle',
       moves: [],
       archived: false,
+      forcedResult: null,
     };
     this.games.set(id, game);
     return this.toRecord(id, game);
@@ -95,6 +121,29 @@ export class GameStore {
     // do historie – do `moves` se tak nikdy nedostane tah, který se neaplikoval).
     game.state = advanceState(game.state, move);
     game.moves.push(move);
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Vzdání partie: nastaví vynucený výsledek `white-wins` (člověk = černý se
+   * vzdal → vyhrává bílý / počítač). Provede se JEN když je partie ještě
+   * rozehraná podle efektivního výsledku – vzdát skončenou (přirozeně i už
+   * vzdanou) partii nejde. Node je jednovláknový a mezi kontrolou a zápisem
+   * není `await`, takže je to atomický check-and-set.
+   *
+   * Vrací nový záznam při úspěchu; `'not-found'` když partie neexistuje;
+   * `'already-over'` když už byla terminální. Řetězcové signály (ne `undefined`)
+   * ať volající rozliší 404 od 409, nedostane tichý `undefined` místo stavu.
+   */
+  resign(id: string): GameRecord | 'not-found' | 'already-over' {
+    const game = this.games.get(id);
+    if (game === undefined) {
+      return 'not-found';
+    }
+    if (effectiveResult(game) !== 'ongoing') {
+      return 'already-over';
+    }
+    game.forcedResult = 'white-wins';
     return this.toRecord(id, game);
   }
 

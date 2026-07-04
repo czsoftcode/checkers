@@ -60,6 +60,35 @@ describe('createHttpClient', () => {
     );
   });
 
+  it('resign posílá POST /games/:id/resign s enkódovaným id, bez těla', async () => {
+    const fetchMock = okFetch(sampleDto);
+    const client = createHttpClient(fetchMock);
+
+    const result = await client.resign('a b');
+
+    expect(result).toEqual(sampleDto);
+    const call = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call?.[0]).toBe('/games/a%20b/resign');
+    expect(call?.[1]).toMatchObject({ method: 'POST' });
+    // GET/POST bez těla se skládají bez `body` (exactOptionalPropertyTypes).
+    expect((call?.[1] as RequestInit).body).toBeUndefined();
+  });
+
+  it('resign non-2xx (409 game_over) vyhodí ServerError se status a kódem', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        fakeResponse({
+          ok: false,
+          status: 409,
+          body: { error: { code: 'game_over', message: 'Partie je u konce' } },
+        }),
+      ),
+    ) as unknown as typeof fetch;
+    const client = createHttpClient(fetchMock);
+
+    await expect(client.resign('g1')).rejects.toMatchObject({ status: 409, code: 'game_over' });
+  });
+
   it('non-2xx vyhodí ServerError se status a kódem z obálky', async () => {
     const fetchMock = vi.fn(() =>
       Promise.resolve(

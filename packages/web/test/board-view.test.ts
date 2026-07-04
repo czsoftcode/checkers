@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { applyMove, initialPosition, legalMoves } from '@checkers/rules';
-import type { Cell, Color, Move, Position } from '@checkers/rules';
+import type { Cell, Color, GameResult, Move, Position } from '@checkers/rules';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createBoardController } from '../src/controller.js';
@@ -13,9 +13,13 @@ const HUGE_INTERVAL = 1_000_000;
 
 const disposers: (() => void)[] = [];
 
-/** Serverový stav ve tvaru pro klienta; `result`/`legalMoves` klient nečte. */
-function gameDto(position: Position, engineStatus: GameDto['engineStatus'] = 'idle'): GameDto {
-  return { id: 'g1', position, result: 'ongoing', legalMoves: [], engineStatus };
+/** Serverový stav ve tvaru pro klienta; `legalMoves` klient nečte. */
+function gameDto(
+  position: Position,
+  engineStatus: GameDto['engineStatus'] = 'idle',
+  result: GameResult = 'ongoing',
+): GameDto {
+  return { id: 'g1', position, result, legalMoves: [], engineStatus };
 }
 
 /** Postaví pozici z řídkého zápisu `{ pole: kámen }` (pole 1–32). */
@@ -52,17 +56,23 @@ interface Fake {
  */
 function serverFake(start: Position): Fake {
   let pos = start;
+  let result: GameResult = 'ongoing';
   const posted: { from: number; path: number[] }[] = [];
   return {
     posted,
     current: () => pos,
     client: {
-      createGame: () => Promise.resolve(gameDto(pos)),
-      getGame: () => Promise.resolve(gameDto(pos)),
+      createGame: () => Promise.resolve(gameDto(pos, 'idle', result)),
+      getGame: () => Promise.resolve(gameDto(pos, 'idle', result)),
       postMove: (_id, from, path) => {
         posted.push({ from, path: [...path] });
         pos = applyMove(pos, findMove(pos, from, path));
-        return Promise.resolve(gameDto(pos));
+        return Promise.resolve(gameDto(pos, 'idle', result));
+      },
+      // Vzdání: člověk (černý) → vyhrává bílý. Pozice zůstává, mění se jen výsledek.
+      resign: () => {
+        result = 'white-wins';
+        return Promise.resolve(gameDto(pos, 'idle', result));
       },
     },
   };
@@ -351,6 +361,7 @@ describe('polling tahu enginu', () => {
       createGame: () => Promise.resolve(gameDto(before, 'thinking')),
       getGame: () => Promise.resolve(gameDto(after)),
       postMove: () => Promise.resolve(gameDto(after)),
+      resign: () => Promise.resolve(gameDto(after, 'idle', 'white-wins')),
     };
     const board = mount(before, { client, game: gameDto(before, 'thinking'), pollIntervalMs: 5 });
     expect(hasPiece(board, 22, 'white')).toBe(true); // před pollingem
@@ -374,6 +385,7 @@ describe('polling tahu enginu', () => {
         return Promise.resolve(gameDto(start));
       },
       postMove: () => pending, // tah „visí" → busy zůstává true
+      resign: () => Promise.resolve(gameDto(start, 'idle', 'white-wins')),
     };
     const board = mount(start, { client, pollIntervalMs: 5 });
 
@@ -401,6 +413,7 @@ describe('defenzivní cesty', () => {
         return Promise.resolve(gameDto(resynced));
       },
       postMove: () => Promise.reject(new ServerError(409, 'illegal_move', 'Nelegální tah')),
+      resign: () => Promise.resolve(gameDto(resynced, 'idle', 'white-wins')),
     };
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -428,6 +441,7 @@ describe('defenzivní cesty', () => {
           ? Promise.reject(new ServerError(0, undefined, 'síť'))
           : Promise.resolve(gameDto(start)),
       postMove: () => Promise.reject(new ServerError(0, undefined, 'síť')),
+      resign: () => Promise.reject(new ServerError(0, undefined, 'síť')),
     };
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -448,6 +462,7 @@ describe('defenzivní cesty', () => {
       createGame: () => Promise.resolve(gameDto(start)),
       getGame: () => Promise.resolve(gameDto(start, 'error')),
       postMove: () => Promise.resolve(gameDto(start)),
+      resign: () => Promise.resolve(gameDto(start, 'idle', 'white-wins')),
     };
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 

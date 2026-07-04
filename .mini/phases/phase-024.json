@@ -1,0 +1,44 @@
+{
+  "id": 24,
+  "title": "Vzdání hry a nová hra",
+  "goal": "Přidat do webového klienta tlačítka „Vzdávám hru\" (aktivní za běhu partie) a „Nová hra\" (aktivní jen po skončení partie). Server dostane endpoint pro vzdání, který nastaví vynucený výsledek (vyhrává engine/bílý) uložený v partii mimo pravidla; všechny čtecí cesty (DTO, archivace, kontrola „je konec?\" v tazích člověka i enginu) čtou efektivní výsledek = vynucený jinak gameResultFromState, aby engine nemohl zahrát ani re-archivovat vzdanou partii. Vzdaná partie se atomicky zapíše do .pdn (token 1-0). Nová partie NEstartuje automaticky – jen na klik „Nová hra\", který založí novou partii (POST /games) a před vykreslením dispose() starý controller (zabít polling).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Store: vynucený výsledek + efektivní výsledek",
+      "status": "done",
+      "detail": "GameRecord/StoredGame dostane forcedResult (GameResult|null); metoda resign(id) ho atomicky nastaví na white-wins jen když je partie ještě ongoing, jinak signál už-konec. Jediný exportovaný helper effectiveResult(record)=forcedResult ?? gameResultFromState(state). Unit test: resign nastaví výsledek, druhý resign nese už-konec, helper vrací správně v obou větvích."
+    },
+    {
+      "title": "Endpoint /resign + přepojení všech čtecích cest",
+      "status": "done",
+      "detail": "POST /games/:id/resign (404 game_not_found, 409 game_over když effectiveResult!==ongoing, jinak resign→markArchived→writeGamePdn→GameDto s white-wins). gameToDto začne nést vynucený výsledek. Všechna serverová volání gameResultFromState přepojit na effectiveResult: kontrola konce v POST /moves, maybeArchive, maybeTriggerEngine a OBĚ terminační kontroly v runEngineMove."
+    },
+    {
+      "title": "Serverové testy se zuby",
+      "status": "done",
+      "detail": "Vzdání běžící partie→odpověď white-wins + soubor <id>.pdn s tokenem 1-0. Dvojí vzdání→409 + právě jeden soubor. Po vzdání pokus enginu o tah=no-op (guard přes effectiveResult; dočasné rozbití guardu→test padne). Vzdání bez enginu projde. 404 na neexistující partii."
+    },
+    {
+      "title": "Klient: resign() v server-clientu + controller",
+      "status": "done",
+      "detail": "ServerClient.resign(id)→POST /games/:id/resign. Controller dostane resign() (počká na doběhnutí běžícího requestu dle 1a, pak odešle, mezitím blokuje dvojí odeslání) a callback onState(result) hlásící skořápce pozorovaný výsledek ze serveru (z pollu i z odpovědí)."
+    },
+    {
+      "title": "Skořápka aplikace: stav + tlačítka + Nová hra",
+      "status": "done",
+      "detail": "main.ts postaví layout: řádek stavu (Na tahu / Konec: vyhrál počítač / Remíza), Vzdávám hru (inline dvoukrokové potvrzení Opravdu vzdát? [Ano][Zrušit], bez confirm()) a Nová hra. Enable/disable řídí result z callbacku. Nová hra dispose() starý controller a založí nový (POST /games). Styl přes třídy ve styles.css, žádné inline styly."
+    },
+    {
+      "title": "Klientské testy + nezávislý self-review",
+      "status": "done",
+      "detail": "Testy: resign() volá správný endpoint; controller — resign počká na inflight a odešle, stav tlačítek dle výsledku, Nová hra disposuje starý polling (nezůstane druhý interval). Na závěr nezávislý sub-agent (čerstvý kontext) projede unhappy path serverového kontraktu a životní cyklus controlleru."
+    }
+  ],
+  "startedAt": "2026-07-04T18:26:28.382Z",
+  "completedAt": "2026-07-04T19:13:05.061Z",
+  "autoCommit": {
+    "preSha": "655683db814d77cc1ef71a3fafa5d8a9e3196c18",
+    "subject": "Phase 24: Vzdání hry a nová hra"
+  }
+}

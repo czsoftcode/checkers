@@ -6,7 +6,7 @@
  * na který se navěsí web klient (M5), proto ho fixují testy.
  */
 
-import { gameResultFromState, legalMoves } from '@checkers/rules';
+import { legalMoves } from '@checkers/rules';
 import type { GameResult, GameState, Move, Position, Square } from '@checkers/rules';
 import type { EngineStatus } from './store.js';
 
@@ -41,15 +41,23 @@ export function legalMoveDtos(position: Position): MoveDto[] {
 }
 
 /**
- * Celý stav partie v drátovém tvaru. Výsledek se čte ze STAVU (kvůli remízám).
- * `engineStatus` je POVINNÝ (ne default) – ať kompilátor chytí volání, které
- * ho zapomene předat a tiše by hlásilo `idle` místo skutečného stavu enginu.
+ * Celý stav partie v drátovém tvaru. `result` se PŘEDÁVÁ zvenčí (efektivní
+ * výsledek = vynucený vzdáním, jinak z pozice) – DTO ho už samo neodvozuje,
+ * jinak by nevidělo vzdání (to stav pravidel nemění). Volající si ho spočítá
+ * přes `effectiveResult`. `engineStatus` i `result` jsou POVINNÉ (ne default) –
+ * ať kompilátor chytí volání, které je zapomene předat a tiše hlásí `idle` /
+ * odvozený výsledek místo skutečného.
  */
-export function gameToDto(id: string, state: GameState, engineStatus: EngineStatus): GameDto {
+export function gameToDto(
+  id: string,
+  state: GameState,
+  engineStatus: EngineStatus,
+  result: GameResult,
+): GameDto {
   return {
     id,
     position: state.position,
-    result: gameResultFromState(state),
+    result,
     legalMoves: legalMoveDtos(state.position),
     engineStatus,
   };

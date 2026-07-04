@@ -23,6 +23,73 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+/* Skořápka: deska zůstává vycentrovaná v plné velikosti, panel plave nad ní. */
+.game {
+  display: flex;
+  justify-content: center;
+}
+
+/* Stav + tlačítka v pravém horním rohu, mimo tok – nezmenšují hrací plochu. */
+.panel {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.82);
+}
+
+.status {
+  margin: 0;
+  font-size: 1rem;
+  min-height: 1.3em;
+  text-align: right;
+}
+
+.controls,
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Skryté řady (přepínání tlačítka vs. potvrzení, prázdný stav). */
+.hidden {
+  display: none;
+}
+
+.controls button,
+.confirm button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #666;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
+}
+
+.controls button:hover:not(:disabled),
+.confirm button:hover:not(:disabled) {
+  background: #4a4a4a;
+}
+
+.controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* „Ano, vzdát" odlišíme varovně, ať se neproklikne omylem. */
+.confirm .btn-confirm-yes {
+  background: #7a2b2b;
+  border-color: #a33;
+}
+
 .board {
   display: grid;
   grid-template-columns: repeat(8, var(--square));

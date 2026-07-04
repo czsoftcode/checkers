@@ -38,6 +38,8 @@ export interface ServerClient {
   createGame(): Promise<GameDto>;
   getGame(id: string): Promise<GameDto>;
   postMove(id: string, from: Square, path: readonly Square[]): Promise<GameDto>;
+  /** Vzdání partie (člověk = černý → vyhrává bílý). Vrací stav se skončenou partií. */
+  resign(id: string): Promise<GameDto>;
 }
 
 /**
@@ -100,6 +102,7 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
     getGame: (id) => request('GET', `/games/${encodeURIComponent(id)}`),
     postMove: (id, from, path) =>
       request('POST', `/games/${encodeURIComponent(id)}/moves`, { from, path: [...path] }),
+    resign: (id) => request('POST', `/games/${encodeURIComponent(id)}/resign`),
   };
 }
 

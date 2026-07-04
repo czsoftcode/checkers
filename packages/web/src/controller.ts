@@ -17,11 +17,18 @@
  * requestu se ignoruje.
  */
 
-import type { Color, Square } from '@checkers/rules';
+import type { Color, GameResult, Square } from '@checkers/rules';
 
 import { createBoardView } from './board-view.js';
 import { nextTargets, selectableAt } from './selection.js';
-import type { GameDto, ServerClient } from './server-client.js';
+import type { EngineStatus, GameDto, ServerClient } from './server-client.js';
+
+/** Snímek stavu partie pro skořápku (řídí řádek stavu a stav tlačítek). */
+export interface GameStatus {
+  readonly result: GameResult;
+  readonly turn: Color;
+  readonly engineStatus: EngineStatus;
+}
 
 /** Barva, kterou hraje člověk. Server má engine napevno jako bílého. */
 const HUMAN_COLOR: Color = 'black';
@@ -38,13 +45,24 @@ interface Selection {
 /** Ovládaná deska připravená k vložení do stránky. */
 export interface BoardController {
   readonly element: HTMLElement;
-  /** Zastaví polling (uklidí interval). V SPA se běžně nevolá; slouží testům. */
+  /**
+   * Vzdá partii. Počká na doběhnutí právě běžícího requestu (single-flight),
+   * pak pošle vzdání serveru. Opakované volání během odesílání se ignoruje.
+   */
+  resign(): void;
+  /** Zastaví polling (uklidí interval). Volá se před „Nová hra"; slouží i testům. */
   dispose(): void;
 }
 
 export interface BoardControllerOptions {
   /** Perioda pollingu v ms (výchozí {@link POLL_INTERVAL_MS}). */
   readonly pollIntervalMs?: number;
+  /**
+   * Volá se po každém převzetí stavu ze serveru (z pollu i z odpovědí na tah /
+   * vzdání) a jednou na začátku s výchozím stavem. Skořápka podle něj kreslí
+   * řádek stavu a povoluje/zakazuje tlačítka.
+   */
+  readonly onState?: (status: GameStatus) => void;
 }
 
 /**
@@ -58,10 +76,22 @@ export function createBoardController(
 ): BoardController {
   let position = game.position;
   let selection: Selection | null = null;
-  // `true`, dokud běží nějaký request (POST tahu nebo GET poll). Drží single-flight
-  // i zámek proti klikání během odesílání tahu.
+  // `true`, dokud běží nějaký request (POST tahu / GET poll / vzdání). Drží
+  // single-flight i zámek proti klikání během odesílání tahu.
   let busy = false;
+  // Promise právě běžícího requestu (jinak už splněná). `resign()` na ni počká,
+  // aby vzdání nikdy nekolidovalo s rozběhnutým tahem/pollem (rozhodnutí 1a).
+  let inflight: Promise<void> = Promise.resolve();
+  // Zámek proti dvojímu odeslání vzdání (dvojklik / opakované potvrzení).
+  let resigning = false;
+  // Poslední výsledek viděný ze serveru – aby vzdání zbytečně nešlo do skončené partie.
+  let lastResult: GameResult = game.result;
+  // `true` po dispose(): rozdělaný request (poll/tah) se může dořešit až potom –
+  // nesmí ale překreslit desku ani ohlásit stav (jinak by přepsal stav už
+  // vyměněné partie po „Nová hra").
+  let disposed = false;
 
+  const onState = options.onState;
   const gameId = game.id;
   const view = createBoardView(handleClick);
   const timer = setInterval(() => {
@@ -114,7 +144,24 @@ export function createBoardController(
     // Žádné pokračování → sekvence je úplná. Server dostane výchozí pole a CELOU
     // naklikanou cestu; `path` smí mít duplicity (kruhový skok dámy), proto se
     // posílá tak, jak je – bez redukce přes Set. Legalitu ověří server.
-    void sendMove(selection.from, path);
+    sendMove(selection.from, path);
+  }
+
+  /**
+   * Spustí `op` jako JEDINÝ běžící request: nastaví `busy` a uloží promise do
+   * `inflight`, ať na ni `resign()` může počkat (1a). `op` si řeší vlastní chyby
+   * – runRequest jen garantuje, že se `busy` po dokončení uvolní.
+   */
+  function runRequest(op: () => Promise<void>): Promise<void> {
+    busy = true;
+    inflight = (async () => {
+      try {
+        await op();
+      } finally {
+        busy = false;
+      }
+    })();
+    return inflight;
   }
 
   /**
@@ -123,36 +170,73 @@ export function createBoardController(
    * optimistického předběhnutí. Selhání (odmítnutí, síť) neshodí desku: stav se
    * dorovná z GET a klik se zase povolí.
    */
-  async function sendMove(from: Square, path: readonly Square[]): Promise<void> {
+  function sendMove(from: Square, path: readonly Square[]): void {
     selection = null;
-    busy = true;
     render();
-    try {
-      applyServerState(await client.postMove(gameId, from, path));
-    } catch (error) {
-      console.error('Server tah nepřijal, synchronizuji stav ze serveru:', error);
-      await resync();
-    } finally {
-      busy = false;
-      render();
-    }
+    void runRequest(async () => {
+      try {
+        applyServerState(await client.postMove(gameId, from, path));
+      } catch (error) {
+        console.error('Server tah nepřijal, synchronizuji stav ze serveru:', error);
+        await resync();
+      } finally {
+        render();
+      }
+    });
   }
 
   /**
    * Opakovaný dotaz na stav – takhle klient uvidí tah enginu. Single-flight:
-   * když už request běží (odesílá se tah / běží jiný poll), tik se přeskočí.
+   * když už request běží (odesílá se tah / vzdání / běží jiný poll), tik se přeskočí.
    */
   async function poll(): Promise<void> {
     if (busy) {
       return; // jiný request běží – tenhle tik zahodíme (single-flight)
     }
-    busy = true;
+    await runRequest(async () => {
+      try {
+        applyServerState(await client.getGame(gameId));
+      } catch (error) {
+        console.error('Dotaz na stav partie selhal:', error);
+      }
+    });
+  }
+
+  /**
+   * Vzdá partii. Rozhodnutí 1a: nejdřív POČKÁ, až doběhne případný běžící request
+   * (tah/poll), teprve pak pošle vzdání – klik nesmí tiše propadnout kvůli
+   * single-flightu. `resigning` blokuje dvojí odeslání; skončenou partii nevzdává.
+   */
+  function resign(): void {
+    void resignFlow();
+  }
+
+  async function resignFlow(): Promise<void> {
+    if (resigning || lastResult !== 'ongoing') {
+      return;
+    }
+    resigning = true;
     try {
-      applyServerState(await client.getGame(gameId));
-    } catch (error) {
-      console.error('Dotaz na stav partie selhal:', error);
+      while (busy) {
+        await inflight; // po doběhnutí requestu je busy=false; pak jsme na řadě my
+      }
+      // Během čekání mohl poll dorovnat stav na terminální (engine vyhrál /
+      // přirozený konec) nebo se controller stihl disposnout – pak už nevzdávej.
+      if (disposed || lastResult !== 'ongoing') {
+        return;
+      }
+      await runRequest(async () => {
+        try {
+          applyServerState(await client.resign(gameId));
+        } catch (error) {
+          console.error('Vzdání se nepodařilo odeslat, synchronizuji stav:', error);
+          await resync();
+        } finally {
+          render();
+        }
+      });
     } finally {
-      busy = false;
+      resigning = false;
     }
   }
 
@@ -165,15 +249,20 @@ export function createBoardController(
     }
   }
 
-  /** Přebere plný stav ze serveru a překreslí. Deska nikdy nedopočítává sama. */
+  /** Přebere plný stav ze serveru, překreslí a ohlásí stav skořápce. */
   function applyServerState(dto: GameDto): void {
+    if (disposed) {
+      return; // request doběhl až po dispose – stav vyměněné partie nepřepisuj
+    }
     position = dto.position;
+    lastResult = dto.result;
     if (dto.engineStatus === 'error') {
-      // Engine selhal – partie stojí na tahu člověka nebo čeká; viditelné hlášení
-      // řeší až další fáze. Tady jen nezaseknout a nechat stopu v konzoli.
+      // Engine selhal – partie stojí na tahu člověka nebo čeká; skořápka to podle
+      // engineStatus může zobrazit. Tady jen nezaseknout a nechat stopu v konzoli.
       console.error('Engine hlásí chybu (engineStatus=error).');
     }
     render();
+    onState?.({ result: dto.result, turn: dto.position.turn, engineStatus: dto.engineStatus });
   }
 
   function render(): void {
@@ -190,9 +279,14 @@ export function createBoardController(
   }
 
   render();
+  // Výchozí stav ohlásíme hned, ať skořápka nakreslí řádek stavu a nastaví
+  // tlačítka správně ještě před prvním pollem.
+  onState?.({ result: game.result, turn: game.position.turn, engineStatus: game.engineStatus });
   return {
     element: view.element,
+    resign,
     dispose: () => {
+      disposed = true;
       clearInterval(timer);
     },
   };
