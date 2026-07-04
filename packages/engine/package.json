@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "start": "tsx src/main.ts",
-    "selfplay-gate": "tsx scripts/selfplay-gate.ts"
+    "selfplay-gate": "tsx scripts/selfplay-gate.ts",
+    "tt-gate": "tsx scripts/tt-gate.ts"
   },
   "dependencies": {
     "@checkers/rules": "workspace:*"

@@ -1,0 +1,39 @@
+{
+  "id": 17,
+  "title": "Transpoziční tabulky + Zobrist hash",
+  "goal": "Search dostane Zobrist hash pozice a transpoziční tabulku (exact/lower/upper bound se správnou kontrolou hloubky), integer-safe; brána = měřitelný pokles prohledaných uzlů na fixní hloubce při zachování stejného nejlepšího tahu (TT vs. bez TT souhlasí na sadě pozic).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Zobrist tabulka + hash pozice",
+      "status": "done",
+      "detail": "Modul v enginu: deterministicky nasazené (seed, žádný Math.random) 53-bit hodnoty pro 4 typy kamene × 32 polí + jedna pro stranu na tahu. hashPosition(position) přepočtem z board + turn. Test: shodná pozice → shodný hash, obrat strany i změna pole hash mění, různé pozice různý hash."
+    },
+    {
+      "title": "TT datová struktura",
+      "status": "done",
+      "detail": "Pole pevné velikosti, záznam { key, depth, score, bound: exact|lower|upper, bestMove }. Zápis s náhradou preferuj hlubší, čtení ověří plný 53-bit klíč (kolize kbelíku). clear(). Jednotkový test zápisu/čtení/náhrady/ověření klíče."
+    },
+    {
+      "title": "Napojení TT do negamax + počítání uzlů",
+      "status": "done",
+      "detail": "Probe na vstupu (jen když entry.depth >= zbývající hloubka; exact → návrat, lower/upper → zúžení okna, případný cutoff), uložený nejlepší tah zkusit první. Zápis na výstupu se správným typem meze (fail-high→lower, fail-low→upper, jinak exact); mat-skóre se neukládá. Kořen (rootSearch) beze změny přesnosti. Jedna tabulka na volání searchTimed, čištěná na začátku. Negamax počítá uzly; SearchResult/TimedSearchResult je vrací."
+    },
+    {
+      "title": "Korektnostní testy TT vs. bez TT",
+      "status": "done",
+      "detail": "Sada fixtures × několik fixních hloubek: searchRoot s TT a bez TT vrací identickou množinu bestMoves i score. Padne, když TT poruší přesnost kořene. Zuby: dočasné vypnutí ověření klíče / záměna typu meze test shodí."
+    },
+    {
+      "title": "Brána: skript úbytku uzlů + orientační čas",
+      "status": "done",
+      "detail": "pnpm skript v enginu: na fixtures na fixní hloubce spočítá uzly s TT a bez TT (úbytek musí být prokazatelný) a orientačně změří čas-do-hloubky (neblokující). Report čísel = brána fáze."
+    }
+  ],
+  "startedAt": "2026-07-04T11:49:12.925Z",
+  "completedAt": "2026-07-04T12:27:51.290Z",
+  "autoCommit": {
+    "preSha": "98128b56a0b0389a9797a2ecd9d3e8e6dc59d6f4",
+    "subject": "Phase 17: Transpoziční tabulky + Zobrist hash"
+  }
+}

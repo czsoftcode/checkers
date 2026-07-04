@@ -7,6 +7,30 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-07-04
+
+### Added
+
+- Transpoziční tabulka + Zobrist hash v searchi: engine si přes transpozice
+  (tatáž pozice dosažená jiným pořadím tahů) pamatuje už prohledané pozice a
+  neprohledává je znovu. Úbytek prohledaných uzlů roste s hloubkou (~15 % na
+  hloubce 5, ~48 % na hloubce 8). TT je čistá optimalizace: na dané hloubce
+  vrací IDENTICKÝ výběr tahů i skóre jako bez ní (ověřeno korektnostní bránou
+  `pnpm --filter @checkers/engine tt-gate [hloubka] [pozice]`).
+- 53-bit Zobrist otisk pozice (bezpečné JS celé číslo, bez BigInt).
+
+### Changed
+
+- Výsledek searche nese počet prohledaných uzlů (`nodes`) - podklad pro měření
+  úbytku; výběr tahu ani skóre se nemění.
+
+### Known limitations
+
+- TT je zatím na hodinách přínosná až od hloubky ~7; níž ji přebije režie
+  přepočtu hashe (počítá se z celé desky na každý uzel). Na provozních
+  hloubkách 5-7 je zhruba break-even, na hloubce 6 mírně pomalejší. Odstranilo
+  by to inkrementální hashování (navazující krok, pokud bude potřeba).
+
 ## [0.14.0] - 2026-07-03
 
 ### Added

@@ -3,16 +3,29 @@
  *
  * Determinismus: čas dodávají falešné hodiny (injektovaný `now`), takže
  * dosažená hloubka nezávisí na rychlosti stroje. Klíčová vlastnost napříč
- * testy: výsledek searchTimed je VŽDY identický s netimovaným
- * searchRoot(pozice, vrácená hloubka) – tedy poslední KOMPLETNÍ iterace,
- * nikdy slepenec s částečnými výsledky přerušené iterace.
+ * testy: VÝSLEDEK searchTimed (nejlepší tahy + skóre) je VŽDY identický
+ * s netimovaným searchRoot(pozice, vrácená hloubka) – tedy poslední KOMPLETNÍ
+ * iterace, nikdy slepenec s částečnými výsledky přerušené iterace. Pole
+ * `nodes` se liší (searchTimed sčítá práci všech iterací) → viz expectSameResult.
  */
 
 import { initialPosition, legalMoves } from '@checkers/rules';
 import { describe, expect, it } from 'vitest';
 
 import { MAX_SEARCH_DEPTH, searchRoot, searchTimed } from '../src/search.js';
+import type { SearchResult } from '../src/search.js';
 import { makePosition, randomPlayedPosition } from './support/position.js';
+
+/**
+ * Ověří, že výsledek searchTimed nese TÝŽ VÝSLEDEK jako netimovaný searchRoot
+ * na dané hloubce: shodné nejlepší tahy i skóre. Pole `nodes` se záměrně
+ * neporovnává – searchTimed ho sčítá přes všechny iterace, searchRoot je
+ * jediný běh, takže se legitimně liší.
+ */
+function expectSameResult(result: SearchResult, expected: SearchResult): void {
+  expect(result.bestMoves).toEqual(expected.bestMoves);
+  expect(result.score).toBe(expected.score);
+}
 
 /** Hodiny vracející hodnoty z fronty; po vyčerpání poslední hodnotu. */
 function queueClock(values: number[]): () => number {
@@ -65,7 +78,7 @@ describe('searchTimed – záruky iterativního prohlubování', () => {
     const position = initialPosition();
     const result = searchTimed(position, { timeMs: 1, now: clock });
     expect(result.depth).toBe(1);
-    expect(result).toMatchObject(searchRoot(position, 1));
+    expectSameResult(result, searchRoot(position, 1));
   });
 
   it('stojící hodiny: doběhne až na maxDepth a výsledek sedí s searchRoot', () => {
@@ -73,7 +86,7 @@ describe('searchTimed – záruky iterativního prohlubování', () => {
     const position = initialPosition();
     const result = searchTimed(position, { timeMs: 100, maxDepth: 4, now: () => 0 });
     expect(result.depth).toBe(4);
-    expect(result).toMatchObject(searchRoot(position, 4));
+    expectSameResult(result, searchRoot(position, 4));
   });
 
   it('měkký limit MEZI iteracemi: heuristika další iteraci nezačne', () => {
@@ -86,7 +99,7 @@ describe('searchTimed – záruky iterativního prohlubování', () => {
     const position = initialPosition();
     const result = searchTimed(position, { timeMs: 100, maxDepth: 10, now: clock });
     expect(result.depth).toBe(2);
-    expect(result).toMatchObject(searchRoot(position, 2));
+    expectSameResult(result, searchRoot(position, 2));
   });
 
   it('přerušení UPROSTŘED iterace (SearchAborted): neúplná iterace se zahodí', () => {
@@ -128,7 +141,7 @@ describe('searchTimed – záruky iterativního prohlubování', () => {
     };
     const result = searchTimed(position, { timeMs: 100, maxDepth: TARGET, now: flippingClock });
     expect(result.depth).toBe(TARGET - 1);
-    expect(result).toMatchObject(searchRoot(position, TARGET - 1));
+    expectSameResult(result, searchRoot(position, TARGET - 1));
   });
 
   it.each([

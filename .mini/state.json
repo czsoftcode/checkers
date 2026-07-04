@@ -82,6 +82,11 @@
       "id": 16,
       "title": "Poziční evaluace + self-play harness",
       "status": "done"
+    },
+    {
+      "id": 17,
+      "title": "Transpoziční tabulky + Zobrist hash",
+      "status": "done"
     }
   ]
 }
