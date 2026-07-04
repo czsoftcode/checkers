@@ -102,6 +102,11 @@
       "id": 20,
       "title": "Šachovnice: vykreslení a zvýraznění",
       "status": "done"
+    },
+    {
+      "id": 21,
+      "title": "UI vícenásobného skoku",
+      "status": "done"
     }
   ]
 }

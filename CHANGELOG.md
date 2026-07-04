@@ -7,6 +7,17 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-07-04
+
+### Added
+
+- Web klient: doklikávání vícenásobného skoku. Hráč složí i vícenásobný skok
+  postupným klikáním jednotlivých polí dopadu; při větvení (víc pokračování ze
+  stejného mezidopadu) se nabídnou obě větve. Naklikaná cesta se zvýrazní; po
+  dokončení sekvence se tah lokálně provede přes `rules` a deska se překreslí.
+  Legalitu i dokončení tahu určuje výhradně `rules` - klient sám nerozhoduje.
+  Zatím bez serveru (hraje se hot-seat, po tahu je na tahu druhá barva).
+
 ## [0.18.0] - 2026-07-04
 
 ### Added

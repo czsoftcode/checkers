@@ -7,6 +7,7 @@
   --frame: #4a3418;
   --selected: #f5d442;
   --target: rgba(74, 222, 128, 0.85);
+  --path: rgba(245, 212, 66, 0.5);
 }
 
 body {
@@ -52,6 +53,11 @@ body {
 .square.selected {
   outline: 4px solid var(--selected);
   outline-offset: -4px;
+}
+
+/* Pole už naklikané cesty vícenásobného skoku: plné podbarvení. */
+.square.path {
+  background: var(--path);
 }
 
 /* Cílové pole legálního tahu: terčík uprostřed. */

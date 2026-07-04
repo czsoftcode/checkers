@@ -13,6 +13,8 @@ import type { Cell, Position, Square } from '@checkers/rules';
 export interface RenderState {
   readonly position: Position;
   readonly selected: Square | null;
+  /** Naklikané mezidopady rozpracovaného skoku (bez výchozího pole). */
+  readonly path: readonly Square[];
   readonly targets: readonly Square[];
 }
 
@@ -55,8 +57,10 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
 
   function update(state: RenderState): void {
     const targetSet = new Set(state.targets);
+    const pathSet = new Set(state.path);
     for (const [square, cell] of squareEls) {
       cell.classList.toggle('selected', state.selected === square);
+      cell.classList.toggle('path', pathSet.has(square));
       cell.classList.toggle('target', targetSet.has(square));
       renderPiece(cell, state.position.board[square - 1] ?? null);
     }

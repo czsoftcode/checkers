@@ -1,13 +1,32 @@
 // @vitest-environment jsdom
 import { initialPosition } from '@checkers/rules';
+import type { Cell, Color, Position } from '@checkers/rules';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createBoardController } from '../src/controller.js';
 
-function mount(): HTMLElement {
-  const { element } = createBoardController(initialPosition());
+function mount(position: Position = initialPosition()): HTMLElement {
+  const { element } = createBoardController(position);
   document.body.append(element);
   return element;
+}
+
+/** Postaví pozici z řídkého zápisu `{ pole: kámen }` (pole 1–32). */
+function position(turn: Color, pieces: Record<number, Cell>): Position {
+  const board: Cell[] = Array.from({ length: 32 }, (_, i) => pieces[i + 1] ?? null);
+  return { board, turn };
+}
+
+const blackMan: Cell = { color: 'black', kind: 'man' };
+const whiteMan: Cell = { color: 'white', kind: 'man' };
+const blackKing: Cell = { color: 'black', kind: 'king' };
+
+function hasPiece(root: HTMLElement, square: number, cls: string): boolean {
+  return squareEl(root, square).querySelector(`.piece.${cls}`) !== null;
+}
+
+function isEmpty(root: HTMLElement, square: number): boolean {
+  return squareEl(root, square).querySelector('.piece') === null;
 }
 
 function squareEl(root: HTMLElement, square: number): HTMLElement {
@@ -98,5 +117,98 @@ describe('interakce výběru', () => {
     click(light!);
 
     expect(board.querySelectorAll('.selected')).toHaveLength(0);
+  });
+});
+
+describe('vícenásobný skok a provedení tahu', () => {
+  // Černý muž 6 přeskočí bílé 10 a 18, cesta [15, 22].
+  const doubleJump = (): Position =>
+    position('black', { 6: blackMan, 10: whiteMan, 18: whiteMan });
+
+  it('mezidopad se zvýrazní třídou path a nabídne další dopad', () => {
+    const board = mount(doubleJump());
+    click(squareEl(board, 6)); // vybere kámen, cíl 15
+    expect(squareEl(board, 15).classList.contains('target')).toBe(true);
+
+    click(squareEl(board, 15)); // první dopad
+    expect(squareEl(board, 6).classList.contains('selected')).toBe(true);
+    expect(squareEl(board, 15).classList.contains('path')).toBe(true);
+    expect(squareEl(board, 22).classList.contains('target')).toBe(true);
+    // Tah ještě není proveden – kámen pořád stojí na výchozím poli.
+    expect(hasPiece(board, 6, 'black')).toBe(true);
+  });
+
+  it('dokončení sekvence provede tah přes rules a překreslí desku', () => {
+    const board = mount(doubleJump());
+    click(squareEl(board, 6));
+    click(squareEl(board, 15));
+    click(squareEl(board, 22)); // poslední dopad → provedení
+
+    expect(hasPiece(board, 22, 'black')).toBe(true); // kámen dorazil
+    expect(isEmpty(board, 6)).toBe(true); // opustil výchozí pole
+    expect(isEmpty(board, 10)).toBe(true); // sebráno
+    expect(isEmpty(board, 18)).toBe(true); // sebráno
+    // Po tahu žádné zbytkové zvýraznění.
+    expect(board.querySelectorAll('.selected, .path, .target')).toHaveLength(0);
+  });
+
+  it('u větvení nespadne do prvního směru, ale nabídne obě větve', () => {
+    // Dáma 1 skočí přes 6 na 10, pak buď přes 7 na 3, nebo přes 14 na 17.
+    const board = mount(position('black', { 1: blackKing, 6: whiteMan, 7: whiteMan, 14: whiteMan }));
+    click(squareEl(board, 1));
+    click(squareEl(board, 10)); // společný první dopad
+
+    expect(squareEl(board, 3).classList.contains('target')).toBe(true);
+    expect(squareEl(board, 17).classList.contains('target')).toBe(true);
+
+    click(squareEl(board, 17)); // zvolená větev → provedení
+    expect(hasPiece(board, 17, 'black')).toBe(true);
+    expect(isEmpty(board, 6)).toBe(true);
+    expect(isEmpty(board, 14)).toBe(true);
+    expect(hasPiece(board, 7, 'white')).toBe(true); // druhá větev nesebrána
+  });
+
+  it('výběr zablokovaného vlastního kamene nenabídne cíle a nezpůsobí pád', () => {
+    // Černý muž 1 (horní řada) má pole 5, 6 obsazená vlastními – žádný tah.
+    const board = mount(initialPosition());
+    expect(() => {
+      click(squareEl(board, 1));
+    }).not.toThrow();
+    expect(squareEl(board, 1).classList.contains('selected')).toBe(true);
+    expect(board.querySelectorAll('.target')).toHaveLength(0);
+  });
+
+  it('klik na výchozí kámen uprostřed sekvence zruší rozpracovaný skok', () => {
+    const board = mount(doubleJump());
+    click(squareEl(board, 6));
+    click(squareEl(board, 15)); // rozpracovaná sekvence, mezidopad 15
+    expect(squareEl(board, 15).classList.contains('path')).toBe(true);
+
+    click(squareEl(board, 6)); // klik zpět na výchozí kámen = úplný reset
+    expect(board.querySelectorAll('.selected, .path, .target')).toHaveLength(0);
+    // Nic se neprovedlo – kámen i oběti zůstávají.
+    expect(hasPiece(board, 6, 'black')).toBe(true);
+    expect(hasPiece(board, 10, 'white')).toBe(true);
+  });
+
+  it('klik mimo zvýrazněná pole uprostřed sekvence zruší rozpracovaný skok', () => {
+    const board = mount(doubleJump());
+    click(squareEl(board, 6));
+    click(squareEl(board, 15)); // mezidopad
+    // Pole 22 je jediný další dopad; klik na jiné hrací pole (např. 1) = reset.
+    click(squareEl(board, 1));
+    expect(board.querySelectorAll('.selected, .path, .target')).toHaveLength(0);
+    expect(hasPiece(board, 6, 'black')).toBe(true);
+  });
+
+  it('proměna na dámu při dopadu na poslední řadu se vykreslí jako king', () => {
+    // Černý muž 23 přeskočí bílého 27 a dopadne na 32 (poslední řada) → dáma.
+    const board = mount(position('black', { 23: blackMan, 27: whiteMan }));
+    click(squareEl(board, 23));
+    click(squareEl(board, 32));
+
+    expect(hasPiece(board, 32, 'black')).toBe(true);
+    expect(squareEl(board, 32).querySelector('.piece.king')).not.toBeNull();
+    expect(isEmpty(board, 27)).toBe(true);
   });
 });

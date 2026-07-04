@@ -1,0 +1,38 @@
+{
+  "id": 21,
+  "title": "UI vícenásobného skoku",
+  "goal": "Hráč postupným klikáním dopadů složí i vícenásobný skok včetně volby větve (když z jednoho mezidopadu vede víc pokračování), interakce nikdy nezamrzne a po dokončení sekvence se tah lokálně provede přes applyMove z rules a deska se překreslí. Model výběru drží rozpracovanou předponu path a filtruje legální tahy z legalMoves na ty, jejichž path začíná naklikanou předponou; zvýrazní další možné dopady. Klient nikdy sám nerozhoduje o legalitě – jediným zdrojem je rules. Bez serveru (to řeší todo 20), bez inline stylů/scriptů kvůli CSP. Brána: hráč zadá multi-skok i větvení bez zaseknutí a deska po tahu odpovídá nové pozici.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Prefix-aware model výběru (čistá logika + testy)",
+      "status": "done",
+      "detail": "V selection.ts nahradit/rozšířit targetsFor funkcí, která pro (position, from, předpona dopadů) vrátí další možné dopady = square na indexu path[předpona.length] pro každý legální tah, jehož path začíná předponou. Přidat resolver dokončení: vrátí kompletní Move, právě když se předpona rovná path jednoho matching tahu (jinak null). Prázdná předpona = dnešní chování prvních dopadů. Vitest: prostý tah, jednoduchý skok, multi-skok, větvení se sdíleným prefixem, předpona bez pokračování."
+    },
+    {
+      "title": "Zvýraznění cesty: RenderState + board-view + CSS",
+      "status": "done",
+      "detail": "Rozšířit RenderState o pole cesta skoku (naklikané mezidopady). board-view přidá CSS třídu (např. path) na tato pole vedle stávajících selected/target. Do styles.css přidat vzhled třídy path (bez inline stylů/scriptů kvůli CSP). Aktualizovat board-view.test.ts na novou třídu."
+    },
+    {
+      "title": "Controller: stav předpony + provedení tahu (hot-seat)",
+      "status": "done",
+      "detail": "Přepsat controller z jednoho selected na stav {from, předpona}; position z const na let. Klik: na vlastní kámen zahájí výběr; na zvýrazněný další dopad prodlouží předponu; při dokončení zavolá applyMove, nastaví novou position a resetuje výběr (hot-seat – hraje strana na tahu). Klik mimo zvýraznění / na vybraný kámen / na cizí kámen = úplný reset. Deska se po tahu překreslí do nové pozice."
+    },
+    {
+      "title": "Sebekontrola unhappy path + nezávislý self-review",
+      "status": "done",
+      "detail": "Projít unhappy path změněných modulů: klik mimo pole uprostřed sekvence, opakovaný klik, cizí kámen, větvení, dokončení skoku s proměnou (ověřit render kinga), terminální pozice po tahu (deska nesmí spadnout, jen nepustí výběr). Doplnit/utáhnout testy (selection, controller/DOM smoke). Kvůli zásahu do kontraktů mezi moduly a vstupní interakce pustit nezávislého sub-agenta (čerstvý kontext) jako self-review."
+    }
+  ],
+  "startedAt": "2026-07-04T15:22:18.495Z",
+  "resolvedVerify": [
+    "Ruční proklik vícenásobného skoku a větvení v prohlížeči",
+    "UX kruhového skoku dámy zpět přes výchozí pole"
+  ],
+  "completedAt": "2026-07-04T15:41:26.640Z",
+  "autoCommit": {
+    "preSha": "7c10d9ca2ccb2e9ddb312e8563d8d2ddd0b2f926",
+    "subject": "Phase 21: UI vícenásobného skoku"
+  }
+}
