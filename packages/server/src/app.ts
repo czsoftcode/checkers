@@ -10,10 +10,13 @@
 import Fastify from 'fastify';
 import { z } from 'zod';
 import { gameResultFromState } from '@checkers/rules';
+import type { Color } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { findLegalMove, gameToDto, legalMoveDtos } from './dto.js';
 import { ERROR_CODES, sendError } from './errors.js';
 import { GameStore } from './store.js';
+import type { GameRecord } from './store.js';
+import type { EngineMover } from './engine-client.js';
 
 /** Tělo POST /games/:id/moves: výchozí pole + cesta dopadů (čísla 1–32). */
 const moveBodySchema = z.object({
@@ -21,9 +24,21 @@ const moveBodySchema = z.object({
   path: z.array(z.number().int().min(1).max(32)).min(1),
 });
 
-export function buildApp(): FastifyInstance {
+/** Barvu enginu držíme napevno: člověk je černý (začíná), engine bílý. */
+const ENGINE_COLOR: Color = 'white';
+
+export interface BuildAppOptions {
+  /**
+   * Engine na tahy bílého. Když chybí, server je čistě manuální (obě strany
+   * hraje klient) – zpětně kompatibilní chování z fáze 18.
+   */
+  readonly engine?: EngineMover;
+}
+
+export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
   const store = new GameStore();
+  const engine = options.engine;
 
   // Jednotná obálka i pro chyby z frameworku: rozbité JSON tělo přijde jako 4xx
   // s `statusCode`, přemapuje se na invalid_request. Neočekávaná chyba (např.
@@ -57,8 +72,8 @@ export function buildApp(): FastifyInstance {
   });
 
   app.post('/games', (_req, reply) => {
-    const { id, state } = store.create();
-    return reply.code(201).send(gameToDto(id, state));
+    const { id, state, engineStatus } = store.create();
+    return reply.code(201).send(gameToDto(id, state, engineStatus));
   });
 
   app.get<{ Params: { id: string } }>('/games/:id', (req, reply) => {
@@ -66,7 +81,7 @@ export function buildApp(): FastifyInstance {
     if (record === undefined) {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
     }
-    return reply.send(gameToDto(record.id, record.state));
+    return reply.send(gameToDto(record.id, record.state, record.engineStatus));
   });
 
   app.post<{ Params: { id: string } }>('/games/:id/moves', (req, reply) => {
@@ -92,6 +107,20 @@ export function buildApp(): FastifyInstance {
       return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
     }
 
+    // Autorita barvy: když je zapojený engine, člověk smí táhnout JEN svou
+    // stranou (černou). Bez téhle kontroly by klient mohl zahrát legální BÍLÝ
+    // tah, zatímco engine přemýšlí – a přepsat mu pozici pod rukama (autorita
+    // serveru by se rozjela s tím, co engine počítá). `findLegalMove` sám tuhle
+    // díru nezavře: pro stranu na tahu (bílou) legální tah najde a přijme.
+    if (engine !== undefined && record.state.position.turn === ENGINE_COLOR) {
+      return sendError(
+        reply,
+        409,
+        ERROR_CODES.notYourTurn,
+        'Na tahu je engine (bílý), počkej na jeho tah.',
+      );
+    }
+
     const move = findLegalMove(record.state.position, parsed.data.from, parsed.data.path);
     if (move === undefined) {
       return sendError(reply, 409, ERROR_CODES.illegalMove, 'Nelegální tah', {
@@ -104,8 +133,88 @@ export function buildApp(): FastifyInstance {
       // Partie zmizela mezi get a applyMove – v jednom procesu se nestane.
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
     }
-    return reply.send(gameToDto(next.id, next.state));
+
+    // Je-li zapojený engine a je na tahu (bílý), spusť jeho tah NA POZADÍ –
+    // handler nikdy nečeká na engine. Klient tah uvidí pollingem GET.
+    maybeTriggerEngine(next);
+
+    // Odpověď nese stav HNED po tahu člověka (engine ještě nedotáhl); jen
+    // engineStatus už může být `thinking`, proto se čte čerstvý záznam.
+    const fresh = store.get(next.id) ?? next;
+    return reply.send(gameToDto(fresh.id, fresh.state, fresh.engineStatus));
   });
+
+  /** Když je na tahu engine v běžící partii, označ `thinking` a spusť job. */
+  function maybeTriggerEngine(record: GameRecord): void {
+    if (engine === undefined) {
+      return;
+    }
+    if (gameResultFromState(record.state) !== 'ongoing') {
+      return;
+    }
+    if (record.state.position.turn !== ENGINE_COLOR) {
+      return;
+    }
+    store.setEngineStatus(record.id, 'thinking');
+    void runEngineMove(record.id);
+  }
+
+  /**
+   * Spočítá a zahraje tah enginu. Engine je NEDŮVĚRYHODNÝ: jeho tah se ověří
+   * stejnou cestou (`findLegalMove`) jako tah člověka. Jakékoli selhání
+   * (timeout+retry vyčerpán, pád, nelegální/protokolová chyba) skončí stavem
+   * `error` – partie zůstane stát na tahu člověka, server nespadne. Funkce
+   * nikdy nevyhazuje (volá se jako fire-and-forget).
+   */
+  async function runEngineMove(id: string): Promise<void> {
+    if (engine === undefined) {
+      return;
+    }
+    try {
+      const record = store.get(id);
+      if (record === undefined) {
+        return;
+      }
+      if (
+        gameResultFromState(record.state) !== 'ongoing' ||
+        record.state.position.turn !== ENGINE_COLOR
+      ) {
+        return; // stav se změnil / engine není na tahu – defenzivně nic nedělej
+      }
+
+      const move = await engine.bestmove(record.state.position);
+
+      // Po awaitu se stav znovu načte a ověří: tah enginu se aplikuje VÝHRADNĚ
+      // proti AKTUÁLNÍ pozici, ne proti snímku z doby před přemýšlením. Za
+      // normálního běhu hlídá autorita barvy, že se pozice během `thinking`
+      // nezmění; kdyby se přesto změnila, tah enginu se zahodí (ne aplikuje na
+      // cizí pozici, kde by `advanceState` vyhodil RangeError).
+      const current = store.get(id);
+      if (current === undefined) {
+        return;
+      }
+      if (
+        gameResultFromState(current.state) !== 'ongoing' ||
+        current.state.position.turn !== ENGINE_COLOR
+      ) {
+        store.setEngineStatus(id, 'idle');
+        return;
+      }
+
+      const legal = findLegalMove(current.state.position, move.from, move.path);
+      if (legal === undefined) {
+        console.error(`Engine vrátil nelegální tah pro partii ${id}, odmítám.`);
+        store.setEngineStatus(id, 'error');
+        return;
+      }
+
+      store.applyMove(id, legal);
+      store.setEngineStatus(id, 'idle');
+    } catch (error) {
+      console.error(`Tah enginu selhal pro partii ${id}:`, error);
+      store.setEngineStatus(id, 'error');
+    }
+  }
 
   return app;
 }

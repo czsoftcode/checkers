@@ -25,10 +25,11 @@ const BLACK_KING: Cell = { color: 'black', kind: 'king' };
 
 describe('gameToDto', () => {
   it('výchozí pozice: ongoing, černý na tahu, 7 prostých tahů', () => {
-    const dto = gameToDto('abc', initialGameState());
+    const dto = gameToDto('abc', initialGameState(), 'idle');
     expect(dto.id).toBe('abc');
     expect(dto.position.turn).toBe('black');
     expect(dto.result).toBe('ongoing');
+    expect(dto.engineStatus).toBe('idle');
     expect(dto.legalMoves).toHaveLength(7);
     // Kontrakt tvaru tahu na drátě: { from, path, captures }, prostý tah bez braní.
     for (const move of dto.legalMoves) {

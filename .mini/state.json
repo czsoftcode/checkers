@@ -92,6 +92,11 @@
       "id": 18,
       "title": "Server API (Fastify + zod)",
       "status": "done"
+    },
+    {
+      "id": 19,
+      "title": "Orchestrace enginu: podproces + fronta",
+      "status": "done"
     }
   ]
 }

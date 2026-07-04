@@ -94,6 +94,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@checkers/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@checkers/rules':
         specifier: workspace:*
         version: link:../rules

@@ -7,6 +7,29 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-04
+
+### Added
+
+- Orchestrace enginu: server spouští TS engine jako oddělený podproces za JSON
+  Lines protokolem. Po tahu člověka se tah enginu (bílý) spočítá NA POZADÍ a
+  zahraje do partie; klient ho vidí pollingem `GET /games/:id`. `POST /moves`
+  vrací odpověď hned po tahu člověka a nikdy nečeká na engine.
+- Stav tahu enginu `engineStatus` (`idle` / `thinking` / `error`) v odpovědi
+  serveru - klient podle něj při pollingu pozná, jestli engine přemýšlí nebo
+  selhal.
+- Odolnost proti selhání enginu: tvrdý časový strop (`timeMs + 500 ms`) se
+  zabitím zaseknutého procesu, restart a jedno zopakování na polovičním čase;
+  úklid osiřelých procesů přes pidfile při startu i vypnutí serveru. Pád ani
+  zaseknutí enginu partii neshodí (engine je nedůvěryhodný, jeho tah se ověřuje
+  přes `rules` stejně jako tah člověka).
+
+### Changed
+
+- Když je zapojený engine, člověk smí táhnout jen svou stranou (černou). Pokus
+  o tah, když je na tahu engine, server odmítne novým chybovým kódem
+  `not_your_turn` (409) - server zůstává jedinou autoritou nad pozicí.
+
 ## [0.16.0] - 2026-07-04
 
 ### Added

@@ -1,0 +1,47 @@
+{
+  "id": 19,
+  "title": "Orchestrace enginu: podproces + fronta",
+  "goal": "Modul EngineClient v serveru spustí engine jako podproces za JSON Lines protokolem a žádosti o bestmove řadí do sériové fronty (nikdy synchronně v handleru); hlídá tvrdý timeout timeMs+500 s kill+restart+1 retry na timeMs/2 a uklidí zombie procesy při startu i vypnutí; server napojí endpoint, který engine tah reálně zahraje do partie a ověří ho stejnou cestou přes rules jako tah hráče (server zůstává jedinou autoritou). Brána M4: kill enginu uprostřed přemýšlení — partie přežije, zotaví se a pokračuje přes HTTP.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "EngineClient: spawn + protokol + párování",
+      "status": "done",
+      "detail": "EngineClient spustí engine jako podproces (spawn příkaz injektovatelný kvůli testům), rámuje JSON Lines přes LineBuffer, páruje odpověď k požadavku přes id; umí hello a bestmove. Zatím bez timeoutu. Test proti reálnému enginu: hello vrátí protocol=2, bestmove vrátí tah."
+    },
+    {
+      "title": "Sériová fronta + tvrdý timeout + kill/restart/retry",
+      "status": "done",
+      "detail": "Fronta zpracuje bestmove po jednom. Tvrdý timeout ENGINE_TIME_MS+500 → kill procesu, restart, 1 retry na ENGINE_TIME_MS/2, pak error. Po chybě se fronta nezasekne (další job projde). Test falešným pomalým enginem (fixture, co nereaguje); dočasné vypnutí kill/retry musí shodit test."
+    },
+    {
+      "title": "Pidfile + úklid procesů + close()",
+      "status": "done",
+      "detail": "PID enginu se zapíše do pidfile; při startu se osiřelý PID z minulého běhu zabije; close() zabije engine a smaže pidfile. Test: pidfile na živý proces → start ho zabije; close() uklidí, nezůstane sirotek ani soubor."
+    },
+    {
+      "title": "engineStatus ve stavu partie + GameDto",
+      "status": "done",
+      "detail": "Store nese engineStatus: idle | thinking | error, GameDto ho vystaví. Rozšíření drátového kontraktu → fixuje test (tvar odpovědi GET i POST)."
+    },
+    {
+      "title": "Napojení na server: tah enginu na pozadí z POST /moves",
+      "status": "done",
+      "detail": "EngineClient injektovaný do buildApp. Po tahu člověka (partie ongoing, řada na enginu) se na pozadí zařadí job (POST vrací hned stav po tahu člověka): bestmove → findLegalMove → applyMove, přechody thinking→idle. Nelegální/protokolová odpověď → error, tah se neaplikuje. Shutdown hook v main.ts (SIGTERM/SIGINT → close engine + pidfile → app.close()). Test přes app.inject + falešný engine."
+    },
+    {
+      "title": "Brána M4: kill uprostřed přemýšlení, partie přežije",
+      "status": "done",
+      "detail": "Integrační test přes HTTP: člověk táhne → engine přemýšlí → proces zabit uprostřed → retry zotaví → GET ukáže tah enginu → server žije. Test se zuby (bez retry logiky partie uvázne)."
+    }
+  ],
+  "startedAt": "2026-07-04T13:48:54.218Z",
+  "resolvedVerify": [
+    "Tvrdá pojistka shutdownu při reálně VISÍCÍM app.close()"
+  ],
+  "completedAt": "2026-07-04T14:34:00.386Z",
+  "autoCommit": {
+    "preSha": "112958ba2cc6d343e9dc995db7f07709d875524d",
+    "subject": "Phase 19: Orchestrace enginu: podproces + fronta"
+  }
+}

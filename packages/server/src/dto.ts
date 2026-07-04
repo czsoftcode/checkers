@@ -8,6 +8,7 @@
 
 import { gameResultFromState, legalMoves } from '@checkers/rules';
 import type { GameResult, GameState, Move, Position, Square } from '@checkers/rules';
+import type { EngineStatus } from './store.js';
 
 /** Tah ve tvaru pro drát: prostá, JSON-serializovatelná data (čísla 1–32). */
 export interface MoveDto {
@@ -16,12 +17,17 @@ export interface MoveDto {
   readonly captures: number[];
 }
 
-/** Stav partie ve tvaru pro drát (odpověď GET /games/:id i POST /moves). */
+/**
+ * Stav partie ve tvaru pro drát (odpověď GET /games/:id i POST /moves).
+ * `engineStatus` je serverová informace o tahu enginu na pozadí – klient
+ * (M5) podle ní pozná při pollingu, jestli engine přemýšlí / selhal.
+ */
 export interface GameDto {
   readonly id: string;
   readonly position: Position;
   readonly result: GameResult;
   readonly legalMoves: MoveDto[];
+  readonly engineStatus: EngineStatus;
 }
 
 /** Přepis `Move` z `rules` do drátového tvaru (kopie polí, ne readonly odkaz). */
@@ -34,13 +40,18 @@ export function legalMoveDtos(position: Position): MoveDto[] {
   return legalMoves(position).map(moveToDto);
 }
 
-/** Celý stav partie v drátovém tvaru. Výsledek se čte ze STAVU (kvůli remízám). */
-export function gameToDto(id: string, state: GameState): GameDto {
+/**
+ * Celý stav partie v drátovém tvaru. Výsledek se čte ze STAVU (kvůli remízám).
+ * `engineStatus` je POVINNÝ (ne default) – ať kompilátor chytí volání, které
+ * ho zapomene předat a tiše by hlásilo `idle` místo skutečného stavu enginu.
+ */
+export function gameToDto(id: string, state: GameState, engineStatus: EngineStatus): GameDto {
   return {
     id,
     position: state.position,
     result: gameResultFromState(state),
     legalMoves: legalMoveDtos(state.position),
+    engineStatus,
   };
 }
 

@@ -13,6 +13,7 @@ export const ERROR_CODES = {
   gameNotFound: 'game_not_found',
   illegalMove: 'illegal_move',
   gameOver: 'game_over',
+  notYourTurn: 'not_your_turn',
   internal: 'internal_error',
 } as const;
 

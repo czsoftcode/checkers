@@ -12,6 +12,7 @@
     "start": "tsx src/main.ts"
   },
   "dependencies": {
+    "@checkers/engine": "workspace:*",
     "@checkers/rules": "workspace:*",
     "fastify": "catalog:",
     "zod": "catalog:"
