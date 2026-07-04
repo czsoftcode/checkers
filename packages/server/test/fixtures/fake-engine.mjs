@@ -1,16 +1,21 @@
 /**
  * Falešný engine pro testy orchestrace. Plain ESM (žádné tsx → rychlý,
  * deterministický start), mluví stejným JSON Lines protokolem jako reálný
- * engine, ale chování `bestmove` řídí přepínač `--mode`:
+ * engine. Přepínač `--mode` řídí chování požadavků `bestmove` I `evaluate`
+ * (liší se jen tvar úspěšné odpovědi – tah vs. skóre z `--score`):
  *
- *   ok            → hned vrátí tah (výchozí 23→18, legální bílý po černém 9→13)
- *   hang          → na bestmove NIKDY neodpoví (simuluje zaseknuté přemýšlení)
+ *   ok            → hned úspěšná odpověď (tah 23→18 / skóre z --score)
+ *   hang          → NIKDY neodpoví (simuluje zaseknuté přemýšlení)
  *   slow-then-ok  → když timeMs >= threshold, zasekne se; jinak hned odpoví
  *                   (rozliší první pokus od retry na timeMs/2 → test kill+retry)
- *   crash         → na první bestmove proces spadne (exit 1)
+ *   crash         → na první požadavek proces spadne (exit 1)
  *   illegal       → vrátí nelegální tah (server ho musí odmítnout)
+ *   error         → odpoví protokolovou chybou (no_legal_moves)
+ *   malformed     → vrátí smetí místo tahu/skóre (move: null / score: "NaN")
  *
- * hello se zodpoví VŽDY hned (aby šlo warmup i po nastavení bestmove chování).
+ * Argumenty: --score (skóre pro evaluate), --protocol (verze v hello, výchozí 3),
+ * --move, --threshold. hello se zodpoví VŽDY hned (aby šlo warmup i po nastavení
+ * chování požadavků).
  */
 
 const args = process.argv.slice(2);
@@ -22,9 +27,25 @@ function argValue(name, fallback) {
 const mode = argValue('--mode', 'ok');
 const threshold = Number.parseInt(argValue('--threshold', '300'), 10);
 const move = JSON.parse(argValue('--move', '{"from":23,"path":[18],"captures":[]}'));
+const score = Number.parseInt(argValue('--score', '0'), 10);
+const helloProtocol = Number.parseInt(argValue('--protocol', '3'), 10);
 
 function send(obj) {
   process.stdout.write(`${JSON.stringify(obj)}\n`);
+}
+
+/** Úspěšná odpověď podle typu požadavku (bestmove → tah, evaluate → skóre). */
+function successResponse(type, id) {
+  return type === 'evaluate'
+    ? { type: 'evaluate', id, score }
+    : { type: 'bestmove', id, move };
+}
+
+/** Vadná („malformed") odpověď podle typu – nedůvěryhodný engine posílá smetí. */
+function malformedResponse(type, id) {
+  return type === 'evaluate'
+    ? { type: 'evaluate', id, score: 'NaN' } // score není číslo
+    : { type: 'bestmove', id, move: null };
 }
 
 function handle(line) {
@@ -38,10 +59,12 @@ function handle(line) {
   const id = typeof msg.id === 'string' ? msg.id : null;
 
   if (msg.type === 'hello') {
-    send({ type: 'hello', id, protocol: 2, engine: 'fake-engine' });
+    send({ type: 'hello', id, protocol: helloProtocol, engine: 'fake-engine' });
     return;
   }
-  if (msg.type !== 'bestmove') {
+  // bestmove i evaluate procházejí stejným přepínačem chování; liší se jen tvar
+  // úspěšné odpovědi (successResponse). Ostatní typy jsou neznámé.
+  if (msg.type !== 'bestmove' && msg.type !== 'evaluate') {
     send({ type: 'error', id, code: 'unknown_type', message: `fake: ${String(msg.type)}` });
     return;
   }
@@ -59,18 +82,17 @@ function handle(line) {
       send({ type: 'error', id, code: 'no_legal_moves', message: 'fake: error mode' });
       return;
     case 'malformed':
-      // typ bestmove, ale `move` je nesmysl – nedůvěryhodný engine posílá smetí
-      send({ type: 'bestmove', id, move: null });
+      send(malformedResponse(msg.type, id));
       return;
     case 'slow-then-ok':
       if (typeof msg.timeMs === 'number' && msg.timeMs >= threshold) {
         return; // první (plný) pokus se zasekne; retry na timeMs/2 projde níž
       }
-      send({ type: 'bestmove', id, move });
+      send(successResponse(msg.type, id));
       return;
     case 'ok':
     default:
-      send({ type: 'bestmove', id, move });
+      send(successResponse(msg.type, id));
       return;
   }
 }

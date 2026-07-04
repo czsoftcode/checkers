@@ -30,6 +30,7 @@ import type {
   BestmoveRequest,
   EngineRequest,
   EngineResponse,
+  EvaluateRequest,
   HelloRequest,
   HelloResponse,
 } from '@checkers/engine';
@@ -52,9 +53,19 @@ export interface SpawnCommand {
   readonly env?: NodeJS.ProcessEnv;
 }
 
-/** Minimum, které server potřebuje k tahu enginu (umožní stub v testech). */
+/** Vyhodnocení pozice enginem: skóre z pohledu STRANY NA TAHU (jako search). */
+export interface EngineEvaluation {
+  readonly score: number;
+}
+
+/** Minimum, které server potřebuje od enginu (umožní stub v testech). */
 export interface EngineMover {
   bestmove(position: Position): Promise<Move>;
+  /**
+   * Vyhodnotí pozici (skóre bez výběru tahu) pro rozhodnutí o nabídce remízy.
+   * Skóre je z pohledu strany na tahu – přepočet na barvu je věc volajícího.
+   */
+  evaluate(position: Position): Promise<EngineEvaluation>;
 }
 
 export interface EngineClientOptions {
@@ -193,6 +204,26 @@ export class EngineClient implements EngineMover {
     });
   }
 
+  /**
+   * Vrátí skóre pozice z pohledu strany na tahu. Řadí se do stejné sériové
+   * fronty jako bestmove a má stejnou politiku selhání: timeout/pád jednou
+   * zopakuje na polovičním čase, protokolovou chybu neopakuje.
+   */
+  async evaluate(position: Position): Promise<EngineEvaluation> {
+    return this.enqueue(async () => {
+      try {
+        return await this.requestEvaluate(position, this.timeMs);
+      } catch (error) {
+        if (error instanceof EngineProtocolError || error instanceof EngineClosedError) {
+          throw error; // protokolová chyba / zavřený klient se neopakuje
+        }
+        const half = Math.max(1, Math.floor(this.timeMs / 2));
+        this.log(`Engine selhal (${describeError(error)}), zkouším znovu na ${String(half)} ms.`);
+        return await this.requestEvaluate(position, half);
+      }
+    });
+  }
+
   /** Zabije proces enginu, smaže pidfile a odmítne čekající požadavky. */
   async close(): Promise<void> {
     this.closed = true;
@@ -239,6 +270,24 @@ export class EngineClient implements EngineMover {
       throw new EngineProtocolError(response.code, response.message);
     }
     throw new EngineProtocolError('unexpected', `Na bestmove přišlo "${response.type}".`);
+  }
+
+  private async requestEvaluate(position: Position, timeMs: number): Promise<EngineEvaluation> {
+    const request: EvaluateRequest = { type: 'evaluate', id: this.nextId(), position, timeMs };
+    const response = await this.request(request, timeMs + HARD_TIMEOUT_MARGIN_MS);
+    if (response.type === 'evaluate') {
+      // Nedůvěryhodný engine – tvar `score` se ověří TADY, na hranici procesu.
+      // Bez toho by pokřivené skóre (score: null / "NaN") propadlo do prahové
+      // logiky serveru a rozhodlo o remíze na základě smetí.
+      if (typeof response.score !== 'number' || !Number.isFinite(response.score)) {
+        throw new EngineProtocolError('invalid_score', 'Engine vrátil skóre v neplatném tvaru.');
+      }
+      return { score: response.score };
+    }
+    if (response.type === 'error') {
+      throw new EngineProtocolError(response.code, response.message);
+    }
+    throw new EngineProtocolError('unexpected', `Na evaluate přišlo "${response.type}".`);
   }
 
   /**

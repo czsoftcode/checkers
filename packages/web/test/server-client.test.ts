@@ -155,4 +155,51 @@ describe('createHttpClient', () => {
     const error = await client.createGame().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ServerError);
   });
+
+  it('offerDraw posílá POST /games/:id/offer-draw bez těla a vrací { accepted, game }', async () => {
+    const fetchMock = okFetch({ accepted: true, game: { ...sampleDto, result: 'draw' } });
+    const client = createHttpClient(fetchMock);
+
+    const result = await client.offerDraw('a b');
+
+    expect(result.accepted).toBe(true);
+    expect(result.game.result).toBe('draw');
+    const call = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call?.[0]).toBe('/games/a%20b/offer-draw');
+    expect(call?.[1]).toMatchObject({ method: 'POST' });
+    expect((call?.[1] as RequestInit).body).toBeUndefined();
+  });
+
+  it('offerDraw odmítnutí: accepted false, hra zůstává ongoing', async () => {
+    const fetchMock = okFetch({ accepted: false, game: sampleDto });
+    const client = createHttpClient(fetchMock);
+
+    const result = await client.offerDraw('g1');
+    expect(result.accepted).toBe(false);
+    expect(result.game.result).toBe('ongoing');
+  });
+
+  it('offerDraw non-2xx (409 engine_busy) vyhodí ServerError se status a kódem', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        fakeResponse({
+          ok: false,
+          status: 409,
+          body: { error: { code: 'engine_busy', message: 'Počítač je na tahu' } },
+        }),
+      ),
+    ) as unknown as typeof fetch;
+    const client = createHttpClient(fetchMock);
+
+    await expect(client.offerDraw('g1')).rejects.toMatchObject({ status: 409, code: 'engine_busy' });
+  });
+
+  it('offerDraw se špatným tvarem (chybí accepted / game) vyhodí ServerError', async () => {
+    // Drift kontraktu: bez guardu by se `accepted`/`game` tiše staly undefined.
+    const fetchMock = okFetch({ game: sampleDto }); // chybí accepted
+    const client = createHttpClient(fetchMock);
+
+    const error = await client.offerDraw('g1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ServerError);
+  });
 });

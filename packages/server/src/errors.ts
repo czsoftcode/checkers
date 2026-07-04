@@ -14,6 +14,12 @@ export const ERROR_CODES = {
   illegalMove: 'illegal_move',
   gameOver: 'game_over',
   notYourTurn: 'not_your_turn',
+  /** Nabídka remízy v manuálním režimu (server běží bez enginu → není decidér). */
+  drawOfferUnavailable: 'draw_offer_unavailable',
+  /** Nabídka remízy, když engine zrovna přemýšlí (na tahu je engine). */
+  engineBusy: 'engine_busy',
+  /** Engine selhal při vyhodnocení nabídky (timeout/pád/protokol) – přechodné. */
+  engineUnavailable: 'engine_unavailable',
   internal: 'internal_error',
 } as const;
 

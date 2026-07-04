@@ -7,6 +7,26 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-07-04
+
+### Added
+
+- Nabídka remízy: nový endpoint `POST /games/:id/offer-draw` a webové tlačítko
+  „Nabízím remízu". Člověk (černý) nabídne remízu na svém tahu, o přijetí
+  rozhoduje počítač (bílý) svým vyhodnocením pozice. Přijetí ukončí partii
+  remízou a zapíše ji do `.pdn` (token `1/2-1/2`); odmítnutí nechá hru pokračovat.
+  Tlačítko je aktivní jen na tahu člověka, když počítač nepřemýšlí; po dobu
+  rozhodování je zamčené a výsledek („zvažuje" / „odmítl") se ukáže v hlášce.
+- Protokol enginu rozšířen o zprávu `evaluate` (skóre pozice bez výběru tahu),
+  verze protokolu zvýšena na 3. Práh přijetí drží server: počítač přijme remízu,
+  jen když pozici nehodnotí jako svou výhru.
+
+### Changed
+
+- Rozvržení webu: hlavní tlačítka jsou pod sebou (na úzkém monitoru se vedle sebe
+  nevešla), panel má strop šířky (dlouhé hlášky se zalomí) a hrací deska je
+  zarovnaná k levému okraji.
+
 ## [0.22.0] - 2026-07-04
 
 ### Added

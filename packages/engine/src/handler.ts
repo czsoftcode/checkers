@@ -50,9 +50,66 @@ export function handleLine(rawLine: string, rng: () => number, now?: () => numbe
       return { type: 'hello', id, protocol: PROTOCOL_VERSION, engine: ENGINE_ID };
     case 'bestmove':
       return handleBestmove(id, parsed, rng, now);
+    case 'evaluate':
+      return handleEvaluate(id, parsed, now);
     default:
       return errorResponse(id, 'unknown_type', `Neznámý typ zprávy "${parsed.type}".`);
   }
+}
+
+/**
+ * Vyhodnotí pozici a vrátí skóre z pohledu strany na tahu (bez výběru tahu).
+ * Sdílí validaci obálky (`timeMs`) i pozice s bestmove; na pozici bez legálního
+ * tahu vrací `no_legal_moves` (partie skončila) – volající (server) tenhle stav
+ * hlídá dřív přes efektivní výsledek, tady je to jen pojistka konzistentní s
+ * bestmove. `rng` není potřeba: nevybírá se žádný tah, jen se čte skóre searche.
+ */
+function handleEvaluate(
+  id: MessageId,
+  message: Record<string, unknown>,
+  now: (() => number) | undefined,
+): EngineResponse {
+  const timeMs = validateTimeMs(id, message);
+  if (typeof timeMs !== 'number') {
+    return timeMs; // ErrorResponse
+  }
+
+  const position = parsePosition(message.position);
+  if (position === null) {
+    return errorResponse(
+      id,
+      'invalid_position',
+      'Pole "position" nemá tvar pozice (board s 32 poli, turn black/white).',
+    );
+  }
+
+  if (legalMoves(position).length === 0) {
+    return errorResponse(id, 'no_legal_moves', 'V pozici není žádný legální tah – partie skončila.');
+  }
+
+  const { score } = searchTimed(position, now === undefined ? { timeMs } : { timeMs, now });
+  return { type: 'evaluate', id, score };
+}
+
+/**
+ * Ověří pole `timeMs` obálky zprávy (bestmove i evaluate mají stejný kontrakt):
+ * kladné bezpečné celé číslo. Vrací číslo při úspěchu, jinak hotovou
+ * `ErrorResponse` (invalid_message) – volající ji jen propustí. Sjednoceno, ať
+ * se validace kontraktu neduplikuje ve dvou handlerech a nerozjede se.
+ */
+function validateTimeMs(
+  id: MessageId,
+  message: Record<string, unknown>,
+): number | ErrorResponse {
+  const timeMs = message.timeMs;
+  if (typeof timeMs !== 'number' || !Number.isSafeInteger(timeMs) || timeMs < 1) {
+    return errorResponse(
+      id,
+      'invalid_message',
+      'Zpráva musí mít pole "timeMs" – kladné celé číslo milisekund.',
+    );
+  }
+  return timeMs;
 }
 
 function handleBestmove(
@@ -63,13 +120,9 @@ function handleBestmove(
 ): EngineResponse {
   // timeMs patří k obálce zprávy (tvar požadavku) → invalid_message,
   // kontroluje se před dražším parsováním pozice.
-  const timeMs = message.timeMs;
-  if (typeof timeMs !== 'number' || !Number.isSafeInteger(timeMs) || timeMs < 1) {
-    return errorResponse(
-      id,
-      'invalid_message',
-      'Zpráva bestmove musí mít pole "timeMs" – kladné celé číslo milisekund.',
-    );
+  const timeMs = validateTimeMs(id, message);
+  if (typeof timeMs !== 'number') {
+    return timeMs; // ErrorResponse
   }
 
   const position = parsePosition(message.position);

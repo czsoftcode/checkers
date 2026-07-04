@@ -32,6 +32,7 @@ const lastMoveStub: EngineMover = {
       ? Promise.reject(new Error('stub: pozice bez tahu'))
       : Promise.resolve(move);
   },
+  evaluate: () => Promise.resolve({ score: 0 }), // nevyužito v archivačních testech
 };
 
 const RESULT_TOKEN: Record<string, string> = {

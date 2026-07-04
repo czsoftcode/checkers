@@ -27,6 +27,7 @@ export {
 } from './engine-client.js';
 export type {
   EngineMover,
+  EngineEvaluation,
   EngineClientOptions,
   SpawnCommand,
 } from './engine-client.js';

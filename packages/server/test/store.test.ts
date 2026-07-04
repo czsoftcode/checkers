@@ -108,3 +108,39 @@ describe('GameStore – vzdání (forcedResult)', () => {
     expect(effectiveResult({ forcedResult: null, state: rec.state })).toBe('ongoing');
   });
 });
+
+describe('GameStore – přijetí remízy (acceptDraw)', () => {
+  it('acceptDraw nastaví draw a efektivní výsledek se překlopí', () => {
+    const store = new GameStore();
+    const { id } = store.create();
+    const rec = store.acceptDraw(id);
+    if (rec === 'not-found' || rec === 'already-over') {
+      throw new Error('acceptDraw měl uspět');
+    }
+    expect(rec.forcedResult).toBe('draw');
+    expect(effectiveResult(rec)).toBe('draw');
+    // vynucený výsledek nemění stav pravidel – pozice zůstává rozehraná
+    expect(rec.state.position.turn).toBe('black');
+  });
+
+  it('druhé přijetí už vrací "already-over" a výsledek se nemění', () => {
+    const store = new GameStore();
+    const { id } = store.create();
+    store.acceptDraw(id);
+    expect(store.acceptDraw(id)).toBe('already-over');
+    expect(store.get(id)?.forcedResult).toBe('draw');
+  });
+
+  it('přijetí už vzdané partie → "already-over" (draw nepřepíše white-wins)', () => {
+    const store = new GameStore();
+    const { id } = store.create();
+    store.resign(id);
+    expect(store.acceptDraw(id)).toBe('already-over');
+    expect(store.get(id)?.forcedResult).toBe('white-wins');
+  });
+
+  it('přijetí neexistující partie → "not-found"', () => {
+    const store = new GameStore();
+    expect(store.acceptDraw('neexistuje')).toBe('not-found');
+  });
+});

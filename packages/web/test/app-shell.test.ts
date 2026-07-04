@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 
 import { createAppShell } from '../src/app-shell.js';
-import type { BoardController, BoardControllerOptions, GameStatus } from '../src/controller.js';
+import type {
+  BoardController,
+  BoardControllerOptions,
+  DrawOfferOutcome,
+  GameStatus,
+} from '../src/controller.js';
 import type { GameDto, ServerClient } from '../src/server-client.js';
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -23,6 +28,7 @@ function gameDto(position: Position, result: GameDto['result'] = 'ongoing'): Gam
 interface FakeCtl {
   readonly element: HTMLElement;
   readonly resign: Mock<() => void>;
+  readonly offerDraw: Mock<() => Promise<DrawOfferOutcome>>;
   readonly dispose: Mock<() => void>;
   emit(status: GameStatus): void;
 }
@@ -47,6 +53,7 @@ function fakeFactory(): {
     const ctl: FakeCtl = {
       element,
       resign: vi.fn<() => void>(),
+      offerDraw: vi.fn<() => Promise<DrawOfferOutcome>>().mockResolvedValue('declined'),
       dispose: vi.fn<() => void>(),
       emit: (status: GameStatus) => opts.onState?.(status),
     };
@@ -68,6 +75,7 @@ function fakeClient(dto: GameDto): ServerClient {
     getGame: () => Promise.resolve(dto),
     postMove: () => Promise.resolve(dto),
     resign: () => Promise.resolve({ ...dto, result: 'white-wins' }),
+    offerDraw: () => Promise.resolve({ accepted: false, game: dto }),
   };
 }
 
@@ -139,6 +147,73 @@ describe('app-shell – inline potvrzení vzdání', () => {
   });
 });
 
+describe('app-shell – tlačítko „Nabízím remízu"', () => {
+  const ONGOING: GameStatus = { result: 'ongoing', turn: 'black', engineStatus: 'idle' };
+  const THINKING: GameStatus = { result: 'ongoing', turn: 'white', engineStatus: 'thinking' };
+
+  async function mountShell(): Promise<{ shell: ReturnType<typeof createAppShell>; created: FakeCtl[] }> {
+    const { factory, created } = fakeFactory();
+    const shell = createAppShell(fakeClient(gameDto(initialPosition())), { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+    return { shell, created };
+  }
+
+  it('aktivní na tahu člověka (idle), zamčené po konci / když engine přemýšlí', async () => {
+    const { shell, created } = await mountShell();
+    const offerBtn = q(shell.element, '.btn-offer-draw') as HTMLButtonElement;
+
+    expect(offerBtn.disabled).toBe(false); // výchozí: ongoing, černý na tahu, idle
+
+    created[0]?.emit(THINKING);
+    expect(offerBtn.disabled).toBe(true); // engine přemýšlí (bílý na tahu)
+
+    created[0]?.emit(ONGOING);
+    expect(offerBtn.disabled).toBe(false); // zpátky na tahu člověka
+
+    created[0]?.emit(OVER);
+    expect(offerBtn.disabled).toBe(true); // partie skončila
+  });
+
+  it('klik → controller.offerDraw; odmítnutí ukáže hlášku', async () => {
+    const { shell, created } = await mountShell();
+    created[0]?.offerDraw.mockResolvedValue('declined');
+
+    click(q(shell.element, '.btn-offer-draw'));
+    await tick();
+
+    expect(created[0]?.offerDraw).toHaveBeenCalledTimes(1);
+    const msg = q(shell.element, '.offer-msg');
+    expect(msg.classList.contains('hidden')).toBe(false);
+    expect(msg.textContent).toContain('odmítl');
+  });
+
+  it('přijetí → hláška o nabídce se schová (o konci mluví řádek stavu)', async () => {
+    const { shell, created } = await mountShell();
+    created[0]?.offerDraw.mockResolvedValue('accepted');
+
+    click(q(shell.element, '.btn-offer-draw'));
+    await tick();
+
+    const msg = q(shell.element, '.offer-msg');
+    expect(msg.classList.contains('hidden')).toBe(true);
+    expect(msg.textContent).toBe('');
+  });
+
+  it('po dobu rozhodování je tlačítko zamčené a ukazuje „zvažuje"', async () => {
+    const { shell, created } = await mountShell();
+    // Verdikt nikdy nedorazí → nabídka „visí".
+    created[0]?.offerDraw.mockReturnValue(new Promise(() => undefined));
+
+    click(q(shell.element, '.btn-offer-draw'));
+    await tick();
+
+    const offerBtn = q(shell.element, '.btn-offer-draw') as HTMLButtonElement;
+    expect(offerBtn.disabled).toBe(true);
+    expect(q(shell.element, '.offer-msg').textContent).toContain('zvažuje');
+  });
+});
+
 describe('app-shell – Nová hra uklidí starý controller (polling)', () => {
   it('dispose starého controlleru a vytvoření nového', async () => {
     const { factory, created } = fakeFactory();
@@ -175,6 +250,7 @@ describe('app-shell – selhání při zakládání partie', () => {
       getGame: () => Promise.resolve(gameDto(initialPosition())),
       postMove: () => Promise.resolve(gameDto(initialPosition())),
       resign: () => Promise.resolve(gameDto(initialPosition(), 'white-wins')),
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(initialPosition()) }),
     };
     const shell = createAppShell(client);
     document.body.append(shell.element);

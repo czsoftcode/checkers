@@ -10,7 +10,12 @@
  */
 
 import { createBoardController } from './controller.js';
-import type { BoardController, BoardControllerOptions, GameStatus } from './controller.js';
+import type {
+  BoardController,
+  BoardControllerOptions,
+  DrawOfferOutcome,
+  GameStatus,
+} from './controller.js';
 import type { GameDto, ServerClient } from './server-client.js';
 
 /** Tovární funkce controlleru – injektovatelná kvůli testům (výchozí = reálný). */
@@ -56,9 +61,15 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // Řádek s hlavními tlačítky.
   const controls = document.createElement('div');
   controls.className = 'controls';
+  const offerDrawBtn = button('btn-offer-draw', 'Nabízím remízu');
   const resignBtn = button('btn-resign', 'Vzdávám hru');
   const newGameBtn = button('btn-newgame', 'Nová hra');
-  controls.append(resignBtn, newGameBtn);
+  controls.append(offerDrawBtn, resignBtn, newGameBtn);
+
+  // Samostatný řádek pro verdikt nabídky remízy (řídí ho výhradně skořápka kolem
+  // offerDraw, NE onState) – proud stavů z pollingu ho tak nepřepíše.
+  const offerMsg = document.createElement('p');
+  offerMsg.className = 'offer-msg hidden';
 
   // Inline potvrzení vzdání (bez nativního confirm() kvůli CSP). Přepíná se s
   // `controls`; nikdy se nezobrazují obě řady zároveň.
@@ -70,7 +81,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const noBtn = button('btn-confirm-no', 'Zrušit');
   confirm.append(confirmLabel, yesBtn, noBtn);
 
-  panel.append(status, controls, confirm);
+  panel.append(status, controls, confirm, offerMsg);
 
   const boardSlot = document.createElement('div');
   boardSlot.className = 'board-slot';
@@ -78,11 +89,15 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   element.append(panel, boardSlot);
 
   let controller: BoardController | null = null;
-  // Poslední známý výsledek – řídí stav tlačítek i to, jestli je vzdání aktuální.
-  let lastResult: GameStatus['result'] = 'ongoing';
+  // Poslední známý stav ze serveru – řídí stav tlačítek (result i turn a
+  // engineStatus kvůli tlačítku nabídky remízy) a to, jestli je vzdání aktuální.
+  let lastStatus: GameStatus = { result: 'ongoing', turn: 'black', engineStatus: 'idle' };
   // `true`, dokud běží zakládání nové partie (createGame) – ať se tlačítka a
   // dvojklik na „Nová hra" mezitím zablokují.
   let loading = false;
+  // `true`, dokud čeká verdikt enginu na nabídku remízy (zámek proti dvojkliku +
+  // zamčení tlačítka po dobu rozhodování).
+  let offering = false;
   // `true` po dispose(): kdyby se appka disposla během běžícího createGame,
   // nesmí se pak založit „zombie" controller s vlastním pollingem.
   let disposed = false;
@@ -110,22 +125,67 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     return s.turn === 'black' ? 'Jste na tahu (černé).' : 'Počítač je na tahu…';
   }
 
-  /** Překreslí řádek stavu a nastaví tlačítka podle stavu partie. */
-  function render(s: GameStatus): void {
-    lastResult = s.result;
-    status.textContent = statusText(s);
-    const over = s.result !== 'ongoing';
+  /** Nastaví stav všech tlačítek podle posledního stavu partie + běžících operací. */
+  function refreshControls(): void {
+    const over = lastStatus.result !== 'ongoing';
     // Vzdát jde jen za běhu; novou hru jen po konci. Během zakládání obojí zamčené.
     resignBtn.disabled = over || loading;
     newGameBtn.disabled = !over || loading;
+    // Nabídnout remízu jde jen na tahu člověka (černý) a když engine nepřemýšlí;
+    // ne během zakládání ani když už jedna nabídka čeká na verdikt. Server to i
+    // tak ověří – tohle je jen UI, ne autorita.
+    offerDrawBtn.disabled =
+      over ||
+      loading ||
+      offering ||
+      lastStatus.turn !== 'black' ||
+      lastStatus.engineStatus === 'thinking';
+  }
+
+  /** Překreslí řádek stavu a nastaví tlačítka podle stavu partie. */
+  function render(s: GameStatus): void {
+    lastStatus = s;
+    status.textContent = statusText(s);
+    refreshControls();
     // Po skončení partie nemá potvrzení vzdání smysl – schovej ho.
-    if (over) {
+    if (s.result !== 'ongoing') {
       showConfirm(false);
     }
   }
 
   function onState(s: GameStatus): void {
     render(s);
+  }
+
+  /**
+   * Nabídne enginu remízu přes controller a podle verdiktu ukáže hlášku v
+   * `offerMsg`. Po dobu rozhodování je tlačítko zamčené (`offering`). Hláška v
+   * `offerMsg` žije nezávisle na řádku stavu (ten řídí polling přes onState).
+   */
+  async function offerDraw(): Promise<void> {
+    if (offering || controller === null || lastStatus.result !== 'ongoing') {
+      return;
+    }
+    offering = true;
+    offerMsg.textContent = 'Počítač zvažuje nabídku…';
+    offerMsg.classList.remove('hidden');
+    refreshControls();
+    let outcome: DrawOfferOutcome;
+    try {
+      outcome = await controller.offerDraw();
+    } finally {
+      offering = false;
+    }
+    if (outcome === 'accepted') {
+      // Přijato → onState už ohlásil `draw`; řádek stavu řekne „Konec: remíza".
+      offerMsg.textContent = '';
+      offerMsg.classList.add('hidden');
+    } else if (outcome === 'declined') {
+      offerMsg.textContent = 'Počítač remízu odmítl, hrajete dál.';
+    } else {
+      offerMsg.textContent = 'Nabídku se teď nepodařilo vyřídit, zkuste to znovu.';
+    }
+    refreshControls();
   }
 
   /**
@@ -139,8 +199,12 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     }
     loading = true;
     showConfirm(false);
+    // Zbytek po minulé partii: schovej hlášku nabídky remízy.
+    offerMsg.textContent = '';
+    offerMsg.classList.add('hidden');
     resignBtn.disabled = true;
     newGameBtn.disabled = true;
+    offerDrawBtn.disabled = true;
     if (controller !== null) {
       controller.dispose();
       controller = null;
@@ -165,15 +229,16 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       loading = false;
       console.error('Nepodařilo se založit partii:', error);
       status.textContent = 'Partii se nepodařilo založit. Zkuste to znovu tlačítkem Nová hra.';
-      // Chyba = partie „neběží": povol Novou hru k opakování, vzdání zamkni.
-      lastResult = 'white-wins';
+      // Chyba = partie „neběží": povol Novou hru k opakování, vzdání i nabídku zamkni.
+      lastStatus = { result: 'white-wins', turn: 'white', engineStatus: 'idle' };
       resignBtn.disabled = true;
       newGameBtn.disabled = false;
+      offerDrawBtn.disabled = true;
     }
   }
 
   resignBtn.addEventListener('click', () => {
-    if (lastResult === 'ongoing') {
+    if (lastStatus.result === 'ongoing') {
       showConfirm(true);
     }
   });
@@ -183,6 +248,9 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   yesBtn.addEventListener('click', () => {
     showConfirm(false);
     controller?.resign();
+  });
+  offerDrawBtn.addEventListener('click', () => {
+    void offerDraw();
   });
   newGameBtn.addEventListener('click', () => {
     void startNewGame();

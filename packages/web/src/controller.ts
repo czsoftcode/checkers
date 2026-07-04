@@ -30,6 +30,15 @@ export interface GameStatus {
   readonly engineStatus: EngineStatus;
 }
 
+/**
+ * Výsledek nabídky remízy pro skořápku:
+ * - `accepted` – engine remízu přijal (partie skončila `draw`),
+ * - `declined` – engine odmítl, hra pokračuje,
+ * - `error` – nabídku nešlo vyřídit (bez enginu, engine přemýšlí/selhal, síť);
+ *   stav se dorovná ze serveru, skořápka jen ukáže hlášku.
+ */
+export type DrawOfferOutcome = 'accepted' | 'declined' | 'error';
+
 /** Barva, kterou hraje člověk. Server má engine napevno jako bílého. */
 const HUMAN_COLOR: Color = 'black';
 
@@ -50,6 +59,12 @@ export interface BoardController {
    * pak pošle vzdání serveru. Opakované volání během odesílání se ignoruje.
    */
   resign(): void;
+  /**
+   * Nabídne enginu remízu. Počká na doběhnutí běžícího requestu (single-flight),
+   * pošle nabídku, převezme vrácený stav a vrátí verdikt enginu pro skořápku.
+   * Opakované volání během vyřizování se ignoruje (vrátí `error`).
+   */
+  offerDraw(): Promise<DrawOfferOutcome>;
   /** Zastaví polling (uklidí interval). Volá se před „Nová hra"; slouží i testům. */
   dispose(): void;
 }
@@ -84,6 +99,8 @@ export function createBoardController(
   let inflight: Promise<void> = Promise.resolve();
   // Zámek proti dvojímu odeslání vzdání (dvojklik / opakované potvrzení).
   let resigning = false;
+  // Zámek proti dvojí nabídce remízy (dvojklik / než dorazí verdikt enginu).
+  let offering = false;
   // Poslední výsledek viděný ze serveru – aby vzdání zbytečně nešlo do skončené partie.
   let lastResult: GameResult = game.result;
   // `true` po dispose(): rozdělaný request (poll/tah) se může dořešit až potom –
@@ -240,6 +257,48 @@ export function createBoardController(
     }
   }
 
+  /**
+   * Nabídne enginu remízu. Stejná koordinace jako `resign()` (rozhodnutí 1a):
+   * počká na běžící request, drží zámek proti dvojkliku, jde single-flightem.
+   * Vrací verdikt enginu; `error` když nabídku nešlo vyřídit (guard, síť,
+   * serverová chyba). Stav partie se v každém případě dorovná ze serveru.
+   */
+  function offerDraw(): Promise<DrawOfferOutcome> {
+    return offerDrawFlow();
+  }
+
+  async function offerDrawFlow(): Promise<DrawOfferOutcome> {
+    if (offering || lastResult !== 'ongoing') {
+      return 'error';
+    }
+    offering = true;
+    try {
+      while (busy) {
+        await inflight; // po doběhnutí requestu je busy=false; pak jsme na řadě my
+      }
+      if (disposed || lastResult !== 'ongoing') {
+        return 'error';
+      }
+      let outcome: DrawOfferOutcome = 'error';
+      await runRequest(async () => {
+        try {
+          const offer = await client.offerDraw(gameId);
+          applyServerState(offer.game);
+          outcome = offer.accepted ? 'accepted' : 'declined';
+        } catch (error) {
+          console.error('Nabídka remízy se nepodařila, synchronizuji stav:', error);
+          await resync();
+          outcome = 'error';
+        } finally {
+          render();
+        }
+      });
+      return outcome;
+    } finally {
+      offering = false;
+    }
+  }
+
   /** Dorovnání stavu ze serveru po neúspěšném tahu. Nikdy nevyhazuje. */
   async function resync(): Promise<void> {
     try {
@@ -285,6 +344,7 @@ export function createBoardController(
   return {
     element: view.element,
     resign,
+    offerDraw,
     dispose: () => {
       disposed = true;
       clearInterval(timer);

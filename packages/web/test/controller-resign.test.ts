@@ -77,6 +77,7 @@ describe('controller.resign() – čekání na běžící request (1a)', () => {
         calls.push('resign');
         return Promise.resolve(gameDto(played, 'white-wins'));
       },
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(start) }),
     };
 
     const controller = createBoardController(client, gameDto(start), {
@@ -113,6 +114,7 @@ describe('controller.resign() – čekání na běžící request (1a)', () => {
       getGame: () => Promise.resolve(gameDto(played, 'white-wins')),
       postMove: () => Promise.resolve(gameDto(played, 'white-wins')),
       resign: resignSpy,
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(played, 'white-wins') }),
     };
     // Partie je založená rovnou jako skončená (white-wins).
     const controller = createBoardController(client, gameDto(played, 'white-wins'), {
@@ -136,6 +138,7 @@ describe('controller.resign() – čekání na běžící request (1a)', () => {
       getGame: () => Promise.resolve(gameDto(start)),
       postMove: () => Promise.resolve(gameDto(start)),
       resign: () => Promise.resolve(gameDto(played, 'white-wins')),
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(start) }),
     };
     const controller = createBoardController(client, gameDto(start), {
       pollIntervalMs: HUGE_INTERVAL,
@@ -165,6 +168,7 @@ describe('controller.resign() – čekání na běžící request (1a)', () => {
       getGame: () => getPending, // poll „visí" → doběhne až po dispose
       postMove: () => Promise.resolve(gameDto(start)),
       resign: () => Promise.resolve(gameDto(start, 'white-wins')),
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(start) }),
     };
     const controller = createBoardController(client, gameDto(start), {
       pollIntervalMs: 5,

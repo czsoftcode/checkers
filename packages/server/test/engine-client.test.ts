@@ -59,12 +59,12 @@ afterEach(async () => {
 });
 
 describe('EngineClient proti reálnému enginu', () => {
-  it('warmup vrátí protokol 2 a bestmove vrátí LEGÁLNÍ tah', async () => {
+  it('warmup vrátí protokol 3 a bestmove vrátí LEGÁLNÍ tah', async () => {
     const client = new EngineClient({ spawn: defaultEngineCommand(), timeMs: 300, pidFile: null });
     cleanup.push(() => client.close());
 
     const hello = await client.warmup();
-    expect(hello.protocol).toBe(2);
+    expect(hello.protocol).toBe(3);
 
     const position = initialPosition();
     const move = await client.bestmove(position);
@@ -77,6 +77,30 @@ describe('EngineClient proti reálnému enginu', () => {
     );
     expect(legal).toBe(true);
   }, 20_000);
+
+  it('evaluate vrátí číselné skóre pozice', async () => {
+    const client = new EngineClient({ spawn: defaultEngineCommand(), timeMs: 300, pidFile: null });
+    cleanup.push(() => client.close());
+
+    await client.warmup();
+    const { score } = await client.evaluate(initialPosition());
+    expect(typeof score).toBe('number');
+    expect(Number.isFinite(score)).toBe(true);
+  }, 20_000);
+});
+
+describe('EngineClient – warmup hlídá verzi protokolu', () => {
+  it('nesouhlas verze protokolu z enginu → EngineProtocolError', async () => {
+    // Fake ohlásí starý protokol 2; klient čeká PROTOCOL_VERSION (3) → odmítne.
+    // Zuby: kdyby warmup verzi nekontroloval, tenhle handshake by prošel.
+    const client = new EngineClient({
+      spawn: fakeCmd('ok', ['--protocol', '2']),
+      timeMs: 200,
+      pidFile: null,
+    });
+    cleanup.push(() => client.close());
+    await expect(client.warmup()).rejects.toBeInstanceOf(EngineProtocolError);
+  }, 15_000);
 });
 
 describe('EngineClient – fronta, timeout, kill, retry', () => {
@@ -152,7 +176,52 @@ describe('EngineClient – fronta, timeout, kill, retry', () => {
     await expect(client.bestmove(initialPosition())).rejects.toBeTruthy();
     // Fake na hello vždy odpoví – když by fronta byla zaseklá, tohle by uvázlo.
     const hello = await client.warmup();
-    expect(hello.protocol).toBe(2);
+    expect(hello.protocol).toBe(3);
+  }, 15_000);
+});
+
+describe('EngineClient.evaluate – fronta, retry, protokolové chyby', () => {
+  it('slow-then-ok: první pokus se zasekne → kill + retry na timeMs/2 uspěje', async () => {
+    const logs: string[] = [];
+    const client = new EngineClient({
+      spawn: fakeCmd('slow-then-ok', ['--threshold', '150', '--score', '42']),
+      timeMs: 200,
+      pidFile: null,
+      log: (m) => logs.push(m),
+    });
+    cleanup.push(() => client.close());
+
+    const { score } = await client.evaluate(initialPosition());
+    expect(score).toBe(42); // fake vrátí skóre až na retry (timeMs/2 = 100 < 150)
+    expect(logs.some((l) => l.includes('zkouším znovu'))).toBe(true);
+  }, 15_000);
+
+  it('pokřivené skóre (score: "NaN") → EngineProtocolError na hranici, BEZ retry', async () => {
+    const logs: string[] = [];
+    const client = new EngineClient({
+      spawn: fakeCmd('malformed'),
+      timeMs: 200,
+      pidFile: null,
+      log: (m) => logs.push(m),
+    });
+    cleanup.push(() => client.close());
+
+    await expect(client.evaluate(initialPosition())).rejects.toBeInstanceOf(EngineProtocolError);
+    expect(logs.some((l) => l.includes('zkouším znovu'))).toBe(false);
+  }, 15_000);
+
+  it('error odpověď enginu → EngineProtocolError BEZ retry', async () => {
+    const logs: string[] = [];
+    const client = new EngineClient({
+      spawn: fakeCmd('error'),
+      timeMs: 200,
+      pidFile: null,
+      log: (m) => logs.push(m),
+    });
+    cleanup.push(() => client.close());
+
+    await expect(client.evaluate(initialPosition())).rejects.toBeInstanceOf(EngineProtocolError);
+    expect(logs.some((l) => l.includes('zkouším znovu'))).toBe(false);
   }, 15_000);
 });
 

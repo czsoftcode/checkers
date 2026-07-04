@@ -33,6 +33,16 @@ export interface GameDto {
   readonly engineStatus: EngineStatus;
 }
 
+/**
+ * Výsledek nabídky remízy. `accepted` = zda engine remízu přijal; `game` je
+ * stav partie PO rozhodnutí (při přijetí `result: 'draw'`, při odmítnutí
+ * nezměněný). Jiný tvar než holé `GameDto` – nabídka nese i verdikt.
+ */
+export interface DrawOffer {
+  readonly accepted: boolean;
+  readonly game: GameDto;
+}
+
 /** Klient serveru. Injektuje se do controlleru, ať jde otestovat bez sítě. */
 export interface ServerClient {
   createGame(): Promise<GameDto>;
@@ -40,6 +50,12 @@ export interface ServerClient {
   postMove(id: string, from: Square, path: readonly Square[]): Promise<GameDto>;
   /** Vzdání partie (člověk = černý → vyhrává bílý). Vrací stav se skončenou partií. */
   resign(id: string): Promise<GameDto>;
+  /**
+   * Nabídne enginu remízu; engine rozhodne. Vrací verdikt + stav partie. Chybové
+   * stavy (bez enginu, engine přemýšlí, engine selhal) přijdou jako `ServerError`
+   * se strojovým `code` – volající je odliší od přijetí/odmítnutí.
+   */
+  offerDraw(id: string): Promise<DrawOffer>;
 }
 
 /**
@@ -64,11 +80,8 @@ export class ServerError extends Error {
  * jinak se bere globální `fetch` prohlížeče.
  */
 export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient {
-  async function request(
-    method: 'GET' | 'POST',
-    url: string,
-    body?: unknown,
-  ): Promise<GameDto> {
+  /** Fetch + jednotné ošetření síťové chyby a ne-2xx odpovědi. Vrací syrovou Response. */
+  async function send(method: 'GET' | 'POST', url: string, body?: unknown): Promise<Response> {
     // Init se skládá podmíněně: s exactOptionalPropertyTypes nesmí headers/body
     // dostat undefined, takže se u GET (bez těla) vůbec nenastaví.
     const init: RequestInit =
@@ -93,8 +106,12 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
         `Server odpověděl ${String(response.status)} na ${method} ${url}`,
       );
     }
+    return response;
+  }
 
-    return parseGameDto(response, method, url);
+  /** Pošle požadavek a odpověď přečte jako `GameDto`. */
+  async function request(method: 'GET' | 'POST', url: string, body?: unknown): Promise<GameDto> {
+    return parseGameDto(await send(method, url, body), method, url);
   }
 
   return {
@@ -103,7 +120,34 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
     postMove: (id, from, path) =>
       request('POST', `/games/${encodeURIComponent(id)}/moves`, { from, path: [...path] }),
     resign: (id) => request('POST', `/games/${encodeURIComponent(id)}/resign`),
+    offerDraw: async (id) => {
+      const url = `/games/${encodeURIComponent(id)}/offer-draw`;
+      return parseDrawOffer(await send('POST', url, undefined), url);
+    },
   };
+}
+
+/**
+ * Přečte a ověří odpověď nabídky remízy `{ accepted, game }`. `game` prochází
+ * stejným guardem tvaru jako `GameDto` (jinak by rozbitá odpověď tiše nastavila
+ * desku na undefined); `accepted` musí být boolean. Selhání → `ServerError`,
+ * který volající pozná.
+ */
+async function parseDrawOffer(response: Response, url: string): Promise<DrawOffer> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (cause) {
+    throw new ServerError(response.status, undefined, `Odpověď POST ${url} nešla přečíst jako JSON: ${describe(cause)}`);
+  }
+  if (typeof body !== 'object' || body === null) {
+    throw new ServerError(response.status, undefined, `Odpověď POST ${url} nemá očekávaný tvar nabídky remízy`);
+  }
+  const record = body as Record<string, unknown>;
+  if (typeof record.accepted !== 'boolean' || !isGameDto(record.game)) {
+    throw new ServerError(response.status, undefined, `Odpověď POST ${url} nemá očekávaný tvar nabídky remízy`);
+  }
+  return { accepted: record.accepted, game: record.game };
 }
 
 /**

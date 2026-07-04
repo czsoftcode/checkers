@@ -148,6 +148,29 @@ export class GameStore {
   }
 
   /**
+   * Přijetí nabídky remízy: nastaví vynucený výsledek `draw`. Dvojče
+   * {@link resign} – jediný rozdíl je hodnota výsledku. Provede se JEN když je
+   * partie podle efektivního výsledku ještě rozehraná (přijmout skončenou nebo
+   * už vzdanou partii nejde). Node je jednovláknový a mezi kontrolou a zápisem
+   * není `await` → atomický check-and-set (o tom, KDY se remíza přijme,
+   * rozhoduje volající přes engine; store jen bezpečně zapíše výsledek).
+   *
+   * Vrací nový záznam při úspěchu; `'not-found'` když partie neexistuje;
+   * `'already-over'` když už byla terminální.
+   */
+  acceptDraw(id: string): GameRecord | 'not-found' | 'already-over' {
+    const game = this.games.get(id);
+    if (game === undefined) {
+      return 'not-found';
+    }
+    if (effectiveResult(game) !== 'ongoing') {
+      return 'already-over';
+    }
+    game.forcedResult = 'draw';
+    return this.toRecord(id, game);
+  }
+
+  /**
    * Označí partii za archivovanou. Vrací `true`, jen když se stav PRÁVĚ TEĎ
    * překlopil z false na true; `false` znamená „už archivováno" nebo „partie
    * zmizela". Slouží jako atomický check-and-set (Node je jednovláknový, mezi

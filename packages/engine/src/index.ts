@@ -14,9 +14,11 @@ export {
   type ErrorCode,
   type HelloRequest,
   type BestmoveRequest,
+  type EvaluateRequest,
   type EngineRequest,
   type HelloResponse,
   type BestmoveResponse,
+  type EvaluateResponse,
   type ErrorResponse,
   type EngineResponse,
 } from './protocol.js';

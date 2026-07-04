@@ -27,6 +27,15 @@ const moveBodySchema = z.object({
 /** Barvu enginu držíme napevno: člověk je černý (začíná), engine bílý. */
 const ENGINE_COLOR: Color = 'white';
 
+/**
+ * Práh přijetí nabídky remízy: engine (bílý) remízu přijme, právě když skóre
+ * pozice Z POHLEDU BÍLÉHO není kladné (≤ 0), tj. bílý pozici nehodnotí jako svou
+ * výhru. Když vede, hraje dál a trestá – sedí s cílem kalibrace (silnému hráči
+ * vzdorovat, ne vždy vyhrát). Číslo je vědomě laditelné; skutečné doladění chce
+ * odehrané partie (poziční evaluace dává i v remízových pozicích nenulové skóre).
+ */
+export const DRAW_ACCEPT_MAX_WHITE_SCORE = 0;
+
 export interface BuildAppOptions {
   /**
    * Engine na tahy bílého. Když chybí, server je čistě manuální (obě strany
@@ -110,6 +119,79 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     // Partie je teď terminální (white-wins) → archivuj právě jednou (markArchived).
     await maybeArchive(outcome);
     return reply.send(dtoFor(outcome));
+  });
+
+  // Nabídka remízy: člověk (černý) nabídne remízu, engine (bílý) o ní rozhodne.
+  // Rozhodnutí přichází VÝHRADNĚ z enginu (skóre pozice); práh přijetí drží
+  // server (DRAW_ACCEPT_MAX_WHITE_SCORE). Synchronní: handler počká na engine a
+  // vrátí { accepted, game }. Bez enginu nabídka nedostupná (není decidér).
+  app.post<{ Params: { id: string } }>('/games/:id/offer-draw', async (req, reply) => {
+    if (engine === undefined) {
+      return sendError(
+        reply,
+        409,
+        ERROR_CODES.drawOfferUnavailable,
+        'Nabídka remízy není v tomto režimu dostupná (server běží bez enginu).',
+      );
+    }
+
+    const record = store.get(req.params.id);
+    if (record === undefined) {
+      return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
+    }
+    if (effectiveResult(record) !== 'ongoing') {
+      return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
+    }
+    // Engine přemýšlí (na tahu je bílý) → nabídku teď nepřijímáme: engine by
+    // dostal druhý souběžný požadavek do sériové fronty a člověk by čekal až za
+    // jeho tah. Klient tlačítko v tomhle stavu ani nenabízí; tohle je pojistka.
+    if (record.engineStatus === 'thinking') {
+      return sendError(
+        reply,
+        409,
+        ERROR_CODES.engineBusy,
+        'Počítač je na tahu, remízu nabídni na svém tahu.',
+      );
+    }
+
+    // Rozhodnutí enginu. Skóre je z pohledu STRANY NA TAHU (negamax) → přepočet
+    // na pohled bílého: na tahu bílý = beze změny, na tahu černý = obrácené
+    // znaménko. Selhání enginu (timeout/pád/protokol) NENÍ „engine řekl ne":
+    // nabídka spadne jako 503 a partie zůstane beze změny.
+    let whiteScore: number;
+    try {
+      const { score } = await engine.evaluate(record.state.position);
+      whiteScore = record.state.position.turn === ENGINE_COLOR ? score : -score;
+    } catch (error) {
+      console.error(`Engine selhal při vyhodnocení nabídky remízy pro partii ${req.params.id}:`, error);
+      return sendError(
+        reply,
+        503,
+        ERROR_CODES.engineUnavailable,
+        'Počítač teď nedokáže o nabídce rozhodnout, zkus to prosím znovu.',
+      );
+    }
+
+    const accepted = whiteScore <= DRAW_ACCEPT_MAX_WHITE_SCORE;
+    if (!accepted) {
+      // Odmítnuto: stav se nemění, jen se dorovná čerstvý záznam (engine mohl
+      // mezitím na svém tahu začít – ale to sem přes guard výš nepustíme).
+      const fresh = store.get(record.id) ?? record;
+      return reply.send({ accepted: false, game: dtoFor(fresh) });
+    }
+
+    // Přijato: acceptDraw je atomický check-and-set přes efektivní výsledek –
+    // kdyby partie mezitím skončila jinak, remízu nepřepíše (→ 409 game_over).
+    const outcome = store.acceptDraw(record.id);
+    if (outcome === 'not-found') {
+      return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
+    }
+    if (outcome === 'already-over') {
+      return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
+    }
+    // Partie je teď terminální (draw) → archivuj právě jednou (markArchived).
+    await maybeArchive(outcome);
+    return reply.send({ accepted: true, game: dtoFor(outcome) });
   });
 
   app.post<{ Params: { id: string } }>('/games/:id/moves', async (req, reply) => {

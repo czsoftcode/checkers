@@ -15,7 +15,8 @@ body {
   min-height: 100vh;
   display: flex;
   align-items: center;
-  justify-content: center;
+  /* Deska u levého okraje (vpravo nahoře plave panel – takhle se nekříží). */
+  justify-content: flex-start;
   padding: 2vh 2rem;
   box-sizing: border-box;
   background: #232323;
@@ -23,10 +24,10 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* Skořápka: deska zůstává vycentrovaná v plné velikosti, panel plave nad ní. */
+/* Skořápka: deska u levého okraje ve své plné velikosti, panel plave nad ní. */
 .game {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 /* Stav + tlačítka v pravém horním rohu, mimo tok – nezmenšují hrací plochu. */
@@ -42,6 +43,9 @@ body {
   padding: 0.6rem 0.8rem;
   border-radius: 8px;
   background: rgba(20, 20, 20, 0.82);
+  /* Strop šířky, ať se dlouhé hlášky (stav, verdikt nabídky) zalomí místo aby
+     roztáhly panel přes celou obrazovku na úzkém monitoru. */
+  max-width: min(16rem, 60vw);
 }
 
 .status {
@@ -51,7 +55,15 @@ body {
   text-align: right;
 }
 
-.controls,
+/* Hlavní tlačítka pod sebou (na úzkém monitoru se vedle sebe nevešla) a stejně
+   široká – sloupec se stretchem je srovná na šířku nejširšího popisku. */
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
 .confirm {
   display: flex;
   align-items: center;
@@ -88,6 +100,16 @@ body {
 .confirm .btn-confirm-yes {
   background: #7a2b2b;
   border-color: #a33;
+}
+
+/* Verdikt nabídky remízy (zvažuje / odmítl / chyba). */
+.offer-msg {
+  margin: 0;
+  font-size: 0.95rem;
+  min-height: 1.2em;
+  text-align: right;
+  overflow-wrap: break-word;
+  color: #cdd;
 }
 
 .board {

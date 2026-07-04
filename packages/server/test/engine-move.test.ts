@@ -30,6 +30,7 @@ const legalStub: EngineMover = {
     }
     return Promise.resolve(move);
   },
+  evaluate: () => Promise.resolve({ score: 0 }), // nevyužito v testech tahu enginu
 };
 
 async function createGame(): Promise<GameDto> {
@@ -118,6 +119,7 @@ describe('s enginem – background tah', () => {
     // Stub, který nikdy nedotáhne → partie zůstane na tahu bílého (engine „přemýšlí").
     const hangStub: EngineMover = {
       bestmove: (): Promise<Move> => new Promise<Move>(() => undefined),
+      evaluate: () => Promise.resolve({ score: 0 }),
     };
     app = buildApp({ engine: hangStub });
     const game = await createGame();
@@ -139,6 +141,7 @@ describe('s enginem – background tah', () => {
   it('nelegální tah enginu → engineStatus "error", tah se NEaplikuje', async () => {
     const illegalStub: EngineMover = {
       bestmove: (): Promise<Move> => Promise.resolve({ from: 99, path: [99], captures: [] }),
+      evaluate: () => Promise.resolve({ score: 0 }),
     };
     app = buildApp({ engine: illegalStub });
     const game = await createGame();
@@ -151,6 +154,7 @@ describe('s enginem – background tah', () => {
   it('pád enginu (reject) → engineStatus "error", partie přežije', async () => {
     const rejectStub: EngineMover = {
       bestmove: (): Promise<Move> => Promise.reject(new Error('boom')),
+      evaluate: () => Promise.resolve({ score: 0 }),
     };
     app = buildApp({ engine: rejectStub });
     const game = await createGame();

@@ -122,6 +122,11 @@
       "id": 24,
       "title": "Vzdání hry a nová hra",
       "status": "done"
+    },
+    {
+      "id": 25,
+      "title": "Nabídka remízy: AI rozhodne",
+      "status": "done"
     }
   ]
 }

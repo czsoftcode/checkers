@@ -1,0 +1,48 @@
+{
+  "id": 25,
+  "title": "Nabídka remízy: AI rozhodne",
+  "goal": "Tlačítko „Nabízím remízu\" ve webovém klientovi pošle serveru nabídku; server se zeptá enginu na skóre aktuální pozice (rozšíření protokolu enginu o vyhodnocení pozice/skóre), a když engine (bílý) v pozici nevyhrává — skóre z pohledu bílého ≤ malý práh — remízu přijme a partie skončí vynuceným výsledkem draw (archiv 1/2-1/2), jinak nabídku odmítne a hra pokračuje. Vertikální řez: protokol enginu → handler → engine-client → store → endpoint POST /games/:id/offer-draw → server-client + controller + tlačítko v app-shell. Bez inline stylů/scriptů (CSP); rozhodnutí AI přichází výhradně z enginu (server nesmí importovat evaluate).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Protokol evaluate + handler enginu",
+      "status": "done",
+      "detail": "EvaluateRequest/EvaluateResponse v protocol.ts, PROTOCOL_VERSION 2->3; handler.ts odbaví evaluate (ověří pozici, searchTimed, vrátí score strany na tahu). Engine testy se zuby: platná pozice -> skóre; nevalidní pozice/zpráva -> error; terminální pozice -> no_legal_moves."
+    },
+    {
+      "title": "engine-client: evaluate() + EngineMover",
+      "status": "done",
+      "detail": "EngineClient.evaluate(position): Promise<{score}> (sériová fronta, timeout + jeden retry jako bestmove, protokolová chyba se neopakuje); rozšíření rozhraní EngineMover. Testy přes falešný engine (score, timeout->retry, protokolová chyba, mismatch protokolu ve warmup)."
+    },
+    {
+      "title": "store.acceptDraw (dvojče resign)",
+      "status": "done",
+      "detail": "Nastaví forcedResult='draw' přes atomický check-and-set na efektivním výsledku; skončenou/vzdanou partii odmítne ('already-over'). Testy se zuby: běžící -> draw; už skončená -> odmítnuto."
+    },
+    {
+      "title": "Endpoint POST /games/:id/offer-draw",
+      "status": "done",
+      "detail": "Guard: bez enginu chyba, result==='ongoing' jinak 409, engineStatus!=='thinking' jinak 409. Zavolá engine.evaluate, obrátí znaménko podle strany na tahu na pohled bílého, aplikuje pojmenovanou konstantu prahu (whiteScore<=0 -> přijmi); přijetí -> acceptDraw + maybeArchive, vrátí {accepted, game}. Selhání enginu -> chybová obálka, hra jede dál. Serverové testy se zuby: vyhraná pozice bílého -> odmítnuto (rozbité znaménko -> test padne); vyrovnaná/prohraná -> draw + 1/2-1/2 PDN; dvojí přijetí -> 409 + právě jeden soubor; bez enginu -> chyba; engine selže -> chyba, partie beze změny."
+    },
+    {
+      "title": "server-client + controller: offerDraw()",
+      "status": "done",
+      "detail": "ServerClient.offerDraw(gameId) -> rozhodnutí + GameDto; controller.offerDraw() po vzoru resign() (počká na inflight, zámek proti dvojkliku, single-flight), převezme vrácený stav, ohlásí skořápce zvažuje/odmítl. Klientské testy."
+    },
+    {
+      "title": "app-shell: tlačítko + stav + CSS + self-review",
+      "status": "done",
+      "detail": "Tlačítko Nabízím remízu aktivní jen při ongoing && turn==='black' && engineStatus!=='thinking', zamčené během vyhodnocování; hláška při odmítnutí; třídy v styles.css (bez inline stylů, CSP). Klientské testy + nezávislý sub-agent na self-review (chybové cesty + kontrakt endpointu)."
+    }
+  ],
+  "startedAt": "2026-07-04T19:52:32.030Z",
+  "resolvedVerify": [
+    "Tlačítko „Nabízím remízu\" v reálném prohlížeči",
+    "Kalibrace prahu přijetí (herně)"
+  ],
+  "completedAt": "2026-07-04T21:18:13.979Z",
+  "autoCommit": {
+    "preSha": "e09e856b14bd346d3ff27d4668519af25e04af31",
+    "subject": "Phase 25: Nabídka remízy: AI rozhodne"
+  }
+}

@@ -17,8 +17,10 @@ import type { Move, Position } from '@checkers/rules';
 /**
  * Verze protokolu; engine ji hlásí v odpovědi `hello`.
  * v2: bestmove nese povinné `timeMs` (měkký časový limit searche).
+ * v3: přidán požadavek `evaluate` (skóre pozice bez výběru tahu) – podklad
+ *     pro rozhodnutí o nabídce remízy na straně serveru.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Identifikátor enginu pro protokolovou zprávu hello. */
 export const ENGINE_ID = 'checkers-ts-engine';
@@ -58,8 +60,22 @@ export interface BestmoveRequest {
   readonly timeMs: number;
 }
 
+/**
+ * Požadavek na vyhodnocení pozice BEZ výběru tahu: engine vrátí skóre pozice
+ * z pohledu strany na tahu (stejný search jako bestmove, jen se zahodí tah a
+ * vrátí skóre). Slouží serveru k rozhodnutí o nabídce remízy – engine je jen
+ * „scorer", práh přijetí drží server. `timeMs` má stejnou sémantiku jako u
+ * bestmove (měkký limit iterativního prohlubování).
+ */
+export interface EvaluateRequest {
+  readonly type: 'evaluate';
+  readonly id: MessageId;
+  readonly position: Position;
+  readonly timeMs: number;
+}
+
 /** Všechny požadavky, kterým engine rozumí. */
-export type EngineRequest = HelloRequest | BestmoveRequest;
+export type EngineRequest = HelloRequest | BestmoveRequest | EvaluateRequest;
 
 /** Odpověď na hello: verze protokolu + identifikátor enginu. */
 export interface HelloResponse {
@@ -74,6 +90,17 @@ export interface BestmoveResponse {
   readonly type: 'bestmove';
   readonly id: MessageId;
   readonly move: Move;
+}
+
+/**
+ * Odpověď na evaluate: skóre pozice z pohledu STRANY NA TAHU (kladné = strana
+ * na tahu je na tom lépe), stejná konvence jako `SearchResult.score`. Přepočet
+ * na pohled konkrétní barvy je věc volajícího.
+ */
+export interface EvaluateResponse {
+  readonly type: 'evaluate';
+  readonly id: MessageId;
+  readonly score: number;
 }
 
 /**
@@ -106,4 +133,4 @@ export interface ErrorResponse {
 }
 
 /** Všechny odpovědi, které engine posílá. */
-export type EngineResponse = HelloResponse | BestmoveResponse | ErrorResponse;
+export type EngineResponse = HelloResponse | BestmoveResponse | EvaluateResponse | ErrorResponse;

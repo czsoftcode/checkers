@@ -206,6 +206,7 @@ function gatedEngine(): { engine: EngineMover; release: () => void; called: Prom
         signalCalled();
       });
     },
+    evaluate: () => Promise.resolve({ score: 0 }), // vzdání decidéra nepotřebuje
   };
   return { engine, release: () => doRelease(), called };
 }

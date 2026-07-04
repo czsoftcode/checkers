@@ -74,6 +74,7 @@ function serverFake(start: Position): Fake {
         result = 'white-wins';
         return Promise.resolve(gameDto(pos, 'idle', result));
       },
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(pos, 'idle', result) }),
     },
   };
 }
@@ -362,6 +363,7 @@ describe('polling tahu enginu', () => {
       getGame: () => Promise.resolve(gameDto(after)),
       postMove: () => Promise.resolve(gameDto(after)),
       resign: () => Promise.resolve(gameDto(after, 'idle', 'white-wins')),
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(after) }),
     };
     const board = mount(before, { client, game: gameDto(before, 'thinking'), pollIntervalMs: 5 });
     expect(hasPiece(board, 22, 'white')).toBe(true); // před pollingem
@@ -386,6 +388,7 @@ describe('polling tahu enginu', () => {
       },
       postMove: () => pending, // tah „visí" → busy zůstává true
       resign: () => Promise.resolve(gameDto(start, 'idle', 'white-wins')),
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(start) }),
     };
     const board = mount(start, { client, pollIntervalMs: 5 });
 
@@ -414,6 +417,7 @@ describe('defenzivní cesty', () => {
       },
       postMove: () => Promise.reject(new ServerError(409, 'illegal_move', 'Nelegální tah')),
       resign: () => Promise.resolve(gameDto(resynced, 'idle', 'white-wins')),
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(resynced) }),
     };
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -442,6 +446,7 @@ describe('defenzivní cesty', () => {
           : Promise.resolve(gameDto(start)),
       postMove: () => Promise.reject(new ServerError(0, undefined, 'síť')),
       resign: () => Promise.reject(new ServerError(0, undefined, 'síť')),
+      offerDraw: () => Promise.reject(new ServerError(0, undefined, 'síť')),
     };
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -463,6 +468,7 @@ describe('defenzivní cesty', () => {
       getGame: () => Promise.resolve(gameDto(start, 'error')),
       postMove: () => Promise.resolve(gameDto(start)),
       resign: () => Promise.resolve(gameDto(start, 'idle', 'white-wins')),
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(start) }),
     };
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 

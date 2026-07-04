@@ -44,7 +44,7 @@ describe('handleLine – hello', () => {
   it('verze protokolu je přibitá literálem (zvednutí = vědomá změna kontraktu)', () => {
     // Ostatní testy porovnávají proti importované konstantě – to je vůči
     // omylem změněné verzi tautologie; tady se kontrakt přibíjí natvrdo.
-    expect(PROTOCOL_VERSION).toBe(2);
+    expect(PROTOCOL_VERSION).toBe(3);
   });
 
   it('vrací protocol, engine id a echo id', () => {
@@ -115,6 +115,68 @@ describe('handleLine – bestmove', () => {
   it('vadný timeMs má přednost před vadnou pozicí (kontrola obálky dřív)', () => {
     const raw = JSON.stringify({ type: 'bestmove', id: 't-2', position: 'e4', timeMs: 0 });
     expect(handle(raw)).toMatchObject({ type: 'error', id: 't-2', code: 'invalid_message' });
+  });
+});
+
+describe('handleLine – evaluate', () => {
+  it('vrací skóre pozice s echo id (score je číslo)', () => {
+    const raw = JSON.stringify({ type: 'evaluate', id: 'e-1', position: initialPosition(), timeMs: TIME_MS });
+    const response = handle(raw);
+    expect(response.type).toBe('evaluate');
+    expect(response.id).toBe('e-1');
+    if (response.type !== 'evaluate') {
+      throw new Error('nedosažitelné, zúžení typu');
+    }
+    expect(typeof response.score).toBe('number');
+  });
+
+  it('skóre je z pohledu strany na tahu: strana s vyhranou pozicí má výrazně kladné', () => {
+    // Táž pozice jako u bestmove: černý na tahu vyhrává v 1 (21→25). Skóre z
+    // pohledu STRANY NA TAHU (černý) musí být výrazně kladné (mat-skóre).
+    // Kdyby handler vracel skóre s obráceným znaménkem, tenhle test padne.
+    const position = makePosition('black', { 13: 'bm', 21: 'bm', 22: 'bm', 29: 'wm' });
+    const raw = JSON.stringify({ type: 'evaluate', id: 'e-2', position, timeMs: TIME_MS });
+    const response = handle(raw);
+    if (response.type !== 'evaluate') {
+      throw new Error(`čekal evaluate, přišlo ${response.type}`);
+    }
+    expect(response.score).toBeGreaterThan(1000);
+  });
+
+  it('opačná strana na tahu v materiálně prohrané pozici má výrazně záporné skóre', () => {
+    // Stejné rozestavění, ale na tahu je bílý s jediným mužem proti třem –
+    // materiálně prohrává, skóre z jeho pohledu musí být výrazně záporné.
+    // Dvojice testů přibíjí ZNAMÉNKO: kladné pro vedoucí, záporné pro prohrávající.
+    const position = makePosition('white', { 13: 'bm', 21: 'bm', 22: 'bm', 29: 'wm' });
+    const raw = JSON.stringify({ type: 'evaluate', id: 'e-3', position, timeMs: TIME_MS });
+    const response = handle(raw);
+    if (response.type !== 'evaluate') {
+      throw new Error(`čekal evaluate, přišlo ${response.type}`);
+    }
+    expect(response.score).toBeLessThan(0);
+  });
+
+  it('pozice bez legálních tahů vrací error no_legal_moves', () => {
+    const raw = JSON.stringify({ type: 'evaluate', id: 'e-4', position: positionWithoutMoves(), timeMs: TIME_MS });
+    expect(handle(raw)).toMatchObject({ type: 'error', id: 'e-4', code: 'no_legal_moves' });
+  });
+
+  it.each([
+    ['chybějící timeMs', { type: 'evaluate', id: 'et-1', position: initialPosition() }],
+    ['timeMs není číslo', { type: 'evaluate', id: 'et-1', position: initialPosition(), timeMs: '100' }],
+    ['timeMs nula', { type: 'evaluate', id: 'et-1', position: initialPosition(), timeMs: 0 }],
+    ['timeMs necelé', { type: 'evaluate', id: 'et-1', position: initialPosition(), timeMs: 1.5 }],
+  ])('%s vrací invalid_message s echo id', (_label, message) => {
+    expect(handle(JSON.stringify(message))).toMatchObject({
+      type: 'error',
+      id: 'et-1',
+      code: 'invalid_message',
+    });
+  });
+
+  it('nevalidní pozice vrací invalid_position s echo id', () => {
+    const raw = JSON.stringify({ type: 'evaluate', id: 'ep-1', position: 'e4', timeMs: TIME_MS });
+    expect(handle(raw)).toMatchObject({ type: 'error', id: 'ep-1', code: 'invalid_position' });
   });
 });
 
