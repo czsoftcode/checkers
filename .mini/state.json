@@ -147,6 +147,11 @@
       "id": 29,
       "title": "Zvuk remízy a první tah AI",
       "status": "done"
+    },
+    {
+      "id": 30,
+      "title": "Minimální doba přemýšlení enginu",
+      "status": "done"
     }
   ]
 }

@@ -7,6 +7,20 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-07-05
+
+### Added
+
+- Rozmýšlecí pauza AI: tah počítače (bílý) se v prohlížeči zobrazí až chvíli po
+  tom, co doklouže tvůj tah – od konce jeho animace uplyne aspoň ~600 ms. Dřív
+  tah AI „probliknul" hned, nejvíc u posledního tahu partie (po něm už nenásleduje
+  tah člověka, který by pauzu vyplnil). Je to PODLAHA, ne přičtení: když engine
+  počítal dlouho (soft budget ~1 s), pauza už uplynula a nečeká se znovu, takže
+  se hra celkově nezpomalí. Řešeno na klientovi (`controller.ts`), kde se pauza
+  vnímá; hranice je laditelná (`aiMovePauseMs`, v testech 0). Vědomý kompromis:
+  klik na Vzdát/Nabídnout remízu podaný během té pauzy se neztratí, ale vyřídí se
+  až po ní (≤ délka pauzy).
+
 ## [0.27.0] - 2026-07-05
 
 ### Added

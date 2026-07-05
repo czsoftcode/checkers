@@ -1,0 +1,48 @@
+{
+  "id": 30,
+  "title": "Minimální doba přemýšlení enginu",
+  "goal": "Engine v runEngineMove nikdy nedotáhne dřív než za 300 ms: když výpočet bestmove trval méně, server před aplikací tahu dospí zbytek (min-think), aby i vynucený nebo jediný legální tah měl znatelnou pauzu; hranice jako pojmenovaná konstanta.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Konstanta a volitelný override min-think",
+      "status": "skipped",
+      "detail": "Přidat DEFAULT_MIN_THINK_MS = 300 a minThinkMs?: number do BuildAppOptions (výchozí = konstanta). Jedno místo pro ladění, testy si nastaví malou hodnotu."
+    },
+    {
+      "title": "Změřit bestmove a dospat rozdíl v runEngineMove",
+      "status": "skipped",
+      "detail": "Kolem engine.bestmove změřit monotónní čas (performance.now()); když uplynulo < minThinkMs, await zbytek přes setTimeout. Spánek PŘED stávající re-načtení/validaci stavu, aby ho existující guard pokryl. Aplikace tahu i setEngineStatus('idle') až po dospání."
+    },
+    {
+      "title": "Test: dolní mez u okamžitého tahu",
+      "status": "skipped",
+      "detail": "Instant stub + minThinkMs např. 150 ms; změřit čas od POST tahu po objevení tahu enginu v pollu a ověřit >= ~min (minus tolerance). Bez delaye test padne (zuby)."
+    },
+    {
+      "title": "Test: pomalý engine nedostane extra zpoždění",
+      "status": "skipped",
+      "detail": "Stub spící déle než minThinkMs; ověřit, že celkový čas ~= doba enginu, ne enginu + min. Dokazuje, že se min nepřičítá vždy."
+    },
+    {
+      "title": "Test: spánek nezakryje změnu stavu",
+      "status": "skipped",
+      "detail": "Během min-think přijde resign → po dospání se tah enginu NEaplikuje do vzdané partie (guard drží). Ověří, že spánek je před re-validací."
+    },
+    {
+      "title": "Self-review nezávislým sub-agentem + CHANGELOG",
+      "status": "done",
+      "detail": "Čerstvý kontext projde unhappy path (dispose během spánku, negativní/nulový remaining, monotónní čas); zápis do CHANGELOG."
+    }
+  ],
+  "startedAt": "2026-07-05T01:11:14.820Z",
+  "resolvedVerify": [
+    "Reálný pocit z pauzy v prohlížeči (hlavně poslední tah)",
+    "Krátká nereaktivnost tlačítek během pauzy"
+  ],
+  "completedAt": "2026-07-05T02:15:45.591Z",
+  "autoCommit": {
+    "preSha": "f7ad5751a9c246af5d29e311338c57073ba0d4f2",
+    "subject": "Phase 30: Minimální doba přemýšlení enginu"
+  }
+}

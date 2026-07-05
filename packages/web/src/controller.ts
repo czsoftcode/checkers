@@ -17,7 +17,7 @@
  * requestu se ignoruje.
  */
 
-import type { Color, GameResult, Square } from '@checkers/rules';
+import type { Color, GameResult, Position, Square } from '@checkers/rules';
 
 import { createBoardView } from './board-view.js';
 import { createSoundPlayer } from './sound.js';
@@ -50,6 +50,30 @@ const POLL_INTERVAL_MS = 250;
 /** Prodleva zvuku konce partie po dokončení animace posledního tahu (ms). */
 const END_SOUND_DELAY_MS = 500;
 
+/**
+ * Nejmenší „rozmýšlecí" pauza AI: od dokončení animace tahu člověka do zobrazení
+ * tahu enginu uplyne aspoň tolik ms. Je to PODLAHA, ne přičtení – když engine
+ * počítal dlouho (soft budget serveru je ~1 s), pauza už uplynula a nečeká se
+ * znovu. Bez ní tah AI „problikne" hned po tahu člověka (u posledního tahu partie
+ * nejvíc, protože už nenásleduje tah člověka, který by pauzu vyplnil). Serverová
+ * pauza tenhle problém neřeší: běží souběžně s animací tahu člověka na klientu.
+ */
+const AI_MOVE_PAUSE_MS = 600;
+
+/** Odloží běh o `ms`. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Engine (bílý) právě potáhl: dřív byl na tahu on (`prev.turn !== HUMAN_COLOR`) a
+ * teď je zpět člověk (`next.turn === HUMAN_COLOR`). Vzdání během přemýšlení tohle
+ * nespustí – mění výsledek, ne pozici, takže `prev.turn` zůstane bílý.
+ */
+function engineJustMoved(prev: Position, next: Position): boolean {
+  return prev.turn !== HUMAN_COLOR && next.turn === HUMAN_COLOR;
+}
+
 /** Rozpracovaný výběr: výchozí kámen a už naklikané dopady (bez `from`). */
 interface Selection {
   readonly from: Square;
@@ -77,6 +101,11 @@ export interface BoardController {
 export interface BoardControllerOptions {
   /** Perioda pollingu v ms (výchozí {@link POLL_INTERVAL_MS}). */
   readonly pollIntervalMs?: number;
+  /**
+   * Nejmenší rozmýšlecí pauza AI v ms (viz {@link AI_MOVE_PAUSE_MS}). Injektovatelná
+   * kvůli testům – ty si dávají 0, ať nečekají skoro sekundu na tah enginu.
+   */
+  readonly aiMovePauseMs?: number;
   /**
    * Volá se po každém převzetí stavu ze serveru (z pollu i z odpovědí na tah /
    * vzdání) a jednou na začátku s výchozím stavem. Skořápka podle něj kreslí
@@ -120,7 +149,15 @@ export function createBoardController(
   let disposed = false;
   // Naplánovaný (zpožděný) zvuk konce partie – ruší se při dispose (nová hra).
   let endSoundTimer: ReturnType<typeof setTimeout> | null = null;
+  // Promise animace posledního převzatého tahu (vyřeší se po jejím doběhnutí nebo
+  // přerušení). Poll na ni počká, než pustí tah enginu, ať neusekne animaci tahu
+  // člověka a pauza se měří až od jejího konce.
+  let lastRender: Promise<void> = Promise.resolve();
+  // `performance.now()` okamžiku, kdy doanimoval poslední tah ČLOVĚKA – od něj se
+  // měří rozmýšlecí pauza AI. 0 = ještě žádný tah člověka (pak se nečeká).
+  let humanMoveAnimEndAt = 0;
 
+  const aiMovePauseMs = options.aiMovePauseMs ?? AI_MOVE_PAUSE_MS;
   const onState = options.onState;
   const gameId = game.id;
   const player = options.soundPlayer ?? createSoundPlayer();
@@ -226,7 +263,33 @@ export function createBoardController(
     }
     await runRequest(async () => {
       try {
-        applyServerState(await client.getGame(gameId));
+        const dto = await client.getGame(gameId);
+        // Detekce tahu enginu stojí na kontraktu serveru: `postMove` vrací stav
+        // PO tahu člověka (na tahu bílý = engine), tah enginu dorazí až tímhle
+        // pollem jako přechod bílý→černý. (Serverový test „POST vrátí HNED stav …
+        // thinking" ten kontrakt přibíjí; kdyby server začal balit tah enginu
+        // rovnou do odpovědi na postMove, floor by se tiše přestal aplikovat.)
+        if (engineJustMoved(position, dto.position)) {
+          // Tah enginu je připravený. Ať ale „neproblikne" hned po tvém tahu:
+          // počkej, až doanimuje tvůj tah (`lastRender` – jinak by ho nová animace
+          // usekla), a od jeho konce nech uplynout aspoň `aiMovePauseMs`. Podlaha,
+          // ne přičtení: když engine počítal dlouho, `elapsed` už práh překročil a
+          // nespí se. Během čekání drží `busy` single-flight, další poll se přeskočí.
+          // DŮSLEDEK: klik na Vzdát/Nabídnout remízu podaný během téhle pauzy se
+          // NEZTRATÍ (resignFlow/offerDraw čeká na `inflight`), ale vyřídí se až po
+          // pauze (≤ aiMovePauseMs, u víceskoku + délka animace). Vědomý kompromis
+          // za znatelnou pauzu; tah AI je zrovna „na cestě", takže je to krátké.
+          await lastRender;
+          const elapsed = performance.now() - humanMoveAnimEndAt;
+          const remaining = aiMovePauseMs - elapsed;
+          if (remaining > 0) {
+            await sleep(remaining);
+          }
+          if (disposed) {
+            return; // „Nová hra" během pauzy – stav vyměněné partie nepřepisuj
+          }
+        }
+        applyServerState(dto);
       } catch (error) {
         console.error('Dotaz na stav partie selhal:', error);
       }
@@ -331,6 +394,7 @@ export function createBoardController(
     if (disposed) {
       return; // request doběhl až po dispose – stav vyměněné partie nepřepisuj
     }
+    const prevTurn = position.turn;
     position = dto.position;
     const prevResult = lastResult;
     lastResult = dto.result;
@@ -343,6 +407,17 @@ export function createBoardController(
     // dokončení. Zvuk konce partie na něj navážeme, ať fanfára/prohra zazní až
     // PO posledním dopadu vítězného tahu, ne na jeho začátku.
     const rendered = render();
+    lastRender = rendered;
+    if (prevTurn === HUMAN_COLOR && dto.position.turn !== HUMAN_COLOR) {
+      // Přechod tah ČLOVĚKA → na tahu engine, tj. člověk PRÁVĚ potáhl. Nastav se
+      // JEN tady (ne při opakovaných „thinking" pollech, které vrací tutéž pozici
+      // s bílým na tahu – jinak by se známka pořád posouvala a pauza by se dlouho
+      // počítaným tahům přičítala místo aby byla jen podlaha). Čas bereme po
+      // dokončení animace tahu (`rendered`), od něj se měří rozmýšlecí pauza AI.
+      void rendered.then(() => {
+        humanMoveAnimEndAt = performance.now();
+      });
+    }
     onState?.({ result: dto.result, turn: dto.position.turn, engineStatus: dto.engineStatus });
 
     // Zvuk konce partie zazní JEDNOU, na přechodu ongoing → terminální stav (ne
