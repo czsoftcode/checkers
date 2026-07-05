@@ -1,0 +1,44 @@
+{
+  "id": 29,
+  "title": "Zvuk remízy a první tah AI",
+  "goal": "Přidat do zvukového modulu událost draw napojenou na zvuk_remizy.mp3, přehrát ji jednou na přechodu partie do remízy (stejnou návaznou cestou jako win/loss) a ověřit/zajistit, že i první tah AI zní (audio odemčené včas).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Rozšířit sound.ts o událost draw",
+      "status": "done",
+      "detail": "Přidat draw do typu SoundEvent a do mapy SOURCES import zvuk_remizy.mp3?url; jednotkový test v sound.test.ts ověří, že play('draw') vytvoří audio uzel z její URL (větev neznámé události zůstane bezpečná)."
+    },
+    {
+      "title": "Přehrát zvuk remízy na přechodu do remízy",
+      "status": "done",
+      "detail": "V controller.ts (applyServerState) mapovat terminální draw na událost draw a pustit stejnou cestou jako win/loss přes scheduleEndSound (návaznost na dokončení animace + prodleva). Odstranit/upravit komentář 'Remíza je záměrně beze zvuku'."
+    },
+    {
+      "title": "Otočit test remízy z beze zvuku na zní jednou",
+      "status": "done",
+      "detail": "Přepsat test controller-sound.test.ts:188 tak, aby ověřoval countOf(play,'draw')===1 na přechodu ongoing→draw a žádné opakování dalšími polly; ověřit zuby (vyříznutí přehrání zvuk shodí test)."
+    },
+    {
+      "title": "Ověřit a zajistit zvuk prvního tahu AI",
+      "status": "done",
+      "detail": "jsdom test: odehraje první tah člověka (odemkne audio), nechá dorazit odpověď enginu a asseruje, že animace tahu AI zavolá play (move/land). Projde→potvrdit že chyba není. Padne→lokalizovat příčinu (pozdní/tiché odemčení, první render bez animace) a opravit s testem na zuby."
+    },
+    {
+      "title": "Self-review nezávislým sub-agentem + CHANGELOG",
+      "status": "done",
+      "detail": "Čerstvý kontext projde chybové cesty zvuku konce (dispose během prodlevy, změna výsledku mezi polly, remíza vs. výhra), potvrdí že žádná catch nemaskuje programovou chybu; doplnit CHANGELOG.md."
+    }
+  ],
+  "startedAt": "2026-07-05T00:44:12.957Z",
+  "resolvedVerify": [
+    "Poslechnout zvuk remízy v reálné hře",
+    "Ověřit, že první tah AI je v prohlížeči slyšet",
+    "Binární assety v pracovním stromu (mimo rozsah fáze)"
+  ],
+  "completedAt": "2026-07-05T01:03:11.244Z",
+  "autoCommit": {
+    "preSha": "c48fc675f68463a2ea1b1d7ab58e86f7a1b66b21",
+    "subject": "Phase 29: Zvuk remízy a první tah AI"
+  }
+}

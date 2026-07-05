@@ -7,7 +7,21 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
-## [0.26.0] - 2026-07-05
+## [0.27.0] - 2026-07-05
+
+### Added
+
+- Zvuk remízy: skončí-li partie remízou, zazní vlastní zvuk (`zvuk_remizy.mp3`) –
+  stejně jako u výhry/prohry až po dokončení animace posledního tahu a s krátkou
+  prodlevou, jednou (další polly ho neopakují). Dřív byla remíza záměrně tichá.
+
+### Changed
+
+- Zvuk tahu počítače: přibyl test, který ověřuje, že tah AI doručený pollingem
+  spustí přehrání zvuku (zavolá se `play`) – dřív to nebylo pokryté. Reálné
+  odemčení autoplay v prohlížeči závisí na tom, že člověk (černý) táhne první a
+  jeho kliknutí audio odemkne dřív, než engine potáhne; to už test neověří.
+  Chování se nemění, jde jen o pojistku.
 
 ### Added
 

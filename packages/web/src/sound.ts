@@ -16,15 +16,17 @@ import moveUrl from './assets/pohyb_kamene.mp3?url';
 import landUrl from './assets/dopad_kamene.mp3?url';
 import winUrl from './assets/vitezne_fanfary.mp3?url';
 import lossUrl from './assets/zvuk_prohry.mp3?url';
+import drawUrl from './assets/zvuk_remizy.mp3?url';
 
 /**
  * Události, které umí přehrávač ozvučit.
  * - `move` – rozjezd kamene (jednou na začátku tahu),
  * - `land` – dopad kamene (na každém dopadu, i mezidopadu vícenásobného skoku),
  * - `win` – hráč vyhrál partii,
- * - `loss` – hráč prohrál partii.
+ * - `loss` – hráč prohrál partii,
+ * - `draw` – partie skončila remízou.
  */
-export type SoundEvent = 'move' | 'land' | 'win' | 'loss';
+export type SoundEvent = 'move' | 'land' | 'win' | 'loss' | 'draw';
 
 /**
  * Mapa událost → URL zvuku. Přidání dalšího zvuku je jeden řádek (a rozšíření
@@ -35,6 +37,7 @@ const SOURCES: Record<SoundEvent, string> = {
   land: landUrl,
   win: winUrl,
   loss: lossUrl,
+  draw: drawUrl,
 };
 
 /**

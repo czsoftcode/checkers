@@ -9,7 +9,7 @@ import type { SoundEvent, SoundPlayer } from '../src/sound.js';
 
 /**
  * Testy ZVUKU KONCE PARTIE. Člověk hraje černé (HUMAN_COLOR), takže `black-wins`
- * je výhra (fanfára), `white-wins` prohra, `draw` je záměrně beze zvuku. Zvuk
+ * je výhra (fanfára), `white-wins` prohra a `draw` zvuk remízy. Zvuk
  * zazní JEDNOU na přechodu ongoing → terminální stav, ne při načtení už skončené
  * partie a ne opakovaně dalšími polly. Player injektujeme fake, ať netřeba Audio.
  */
@@ -185,14 +185,20 @@ describe('zvuk konce partie', () => {
     expect(countOf(play, 'win')).toBe(0);
   });
 
-  it('remíza je beze zvuku', async () => {
+  it('remíza přehraje zvuk remízy, jednou', async () => {
     const { player, play } = fakePlayer();
     const start = initialPosition();
+    // Poll à malý interval dorovná stav na draw.
     mount(pollingClient(gameDto(afterOpening(), 'draw')), gameDto(start), player, 5);
 
-    await delay(600); // i po prodlevě zvuku konce zůstává remíza tichá
+    await delay(600); // zvuk remízy přijde až po prodlevě za dokončením tahu
+    expect(countOf(play, 'draw')).toBe(1);
     expect(countOf(play, 'win')).toBe(0);
     expect(countOf(play, 'loss')).toBe(0);
+
+    // Další polly (pořád draw) už zvuk NEopakují.
+    await delay(300);
+    expect(countOf(play, 'draw')).toBe(1);
   });
 
   it('vzdání = zvuk prohry (a odemkne audio)', async () => {
@@ -218,5 +224,58 @@ describe('zvuk konce partie', () => {
     await delay(600); // žádný přechod z ongoing → ticho i po prodlevě
     expect(countOf(play, 'win')).toBe(0);
     expect(countOf(play, 'loss')).toBe(0);
+  });
+});
+
+/**
+ * Zvuk TAHU AI. Člověk (černý) táhne první, engine (bílý) odpovídá; jeho tah
+ * dorazí klientovi až pollem (POST tahu vrací stav hned po tahu člověka). Tady
+ * reprodukujeme render tahu enginu: partie startuje po tahu člověka (na tahu
+ * bílý) a poll doručí pozici po tahu enginu. `board-view` ten rozdíl přehraje
+ * jako zvuk (rozjezd/dopad). Reálné odemčení autoplay (unlock) se dělá na
+ * uživatelské gesto v prohlížeči – to jsdom neověří (viz report, human-verify).
+ */
+
+/** Zvuky vlastního POHYBU kamene (rozjezd + dopady), bez zvuků konce partie. */
+const moveSoundCount = (play: ReturnType<typeof vi.fn>): number =>
+  countOf(play, 'move') + countOf(play, 'land');
+
+/** Pozice po tahu enginu (bílý 22→18); z `afterOpening` (na tahu bílý) → na tahu černý. */
+function afterEngineReply(afterHuman: Position): Position {
+  // Pojistka proti tichému chybnému předpokladu o rozestavění: 22 MUSÍ být bílý
+  // kámen a 18 prázdné, jinak by diff nedával jeden tah bílého.
+  const from = afterHuman.board[22 - 1];
+  if (from === null || from?.color !== 'white') {
+    throw new Error('Test čekal bílý kámen na poli 22 (rozestavění se změnilo).');
+  }
+  if (afterHuman.board[18 - 1] !== null) {
+    throw new Error('Test čekal prázdné pole 18 (rozestavění se změnilo).');
+  }
+  const board = afterHuman.board.slice();
+  board[22 - 1] = null;
+  board[18 - 1] = { color: 'white', kind: 'man' };
+  return { board, turn: 'black' };
+}
+
+describe('zvuk tahu AI (dorazí pollem)', () => {
+  it('tah enginu z pollu spustí zvuk pohybu', async () => {
+    const { player, play } = fakePlayer();
+    const afterHuman = afterOpening(); // člověk odehrál 9→13, na tahu bílý (engine)
+    const afterEngine = afterEngineReply(afterHuman);
+    // Partie stojí po tahu člověka; poll doručí tah enginu (jiná pozice).
+    mount(pollingClient(gameDto(afterEngine)), gameDto(afterHuman), player, 5);
+
+    await delay(50); // poll stihne dorazit a board-view tah enginu přehraje
+    expect(moveSoundCount(play)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shodná pozice z pollu (nic se nezměnilo) žádný zvuk pohybu nespustí', async () => {
+    const { player, play } = fakePlayer();
+    const afterHuman = afterOpening();
+    // Poll vrací TÝŽ stav jako start → diff je prázdný → board-view nic nepřehraje.
+    mount(pollingClient(gameDto(afterHuman)), gameDto(afterHuman), player, 5);
+
+    await delay(50);
+    expect(moveSoundCount(play)).toBe(0);
   });
 });

@@ -346,16 +346,22 @@ export function createBoardController(
     onState?.({ result: dto.result, turn: dto.position.turn, engineStatus: dto.engineStatus });
 
     // Zvuk konce partie zazní JEDNOU, na přechodu ongoing → terminální stav (ne
-    // při načtení už skončené partie a ne opakovaně dalšími polly). Remíza je
-    // záměrně beze zvuku. Člověk hraje černé (HUMAN_COLOR).
+    // při načtení už skončené partie a ne opakovaně dalšími polly). Výhra hraje
+    // fanfáru, prohra zvuk prohry, remíza zvuk remízy. Člověk hraje černé
+    // (HUMAN_COLOR).
     if (prevResult === 'ongoing' && dto.result !== 'ongoing') {
-      const humanWins = HUMAN_COLOR === 'black' ? 'black-wins' : 'white-wins';
-      const humanLoses = HUMAN_COLOR === 'black' ? 'white-wins' : 'black-wins';
-      const event: SoundEvent | null =
-        dto.result === humanWins ? 'win' : dto.result === humanLoses ? 'loss' : null;
-      if (event !== null) {
-        scheduleEndSound(rendered, dto.result, event);
-      }
+      // Mapa terminální výsledek → zvuk. `Record<Exclude<…>>` (stejně jako
+      // server/CLI) je exhaustivní: kdyby do GameResult přibyla další terminální
+      // hodnota, tady se to hlasitě rozbije při kompilaci, ne že by se pro ni
+      // tiše zahrál zvuk remízy. Výhra/prohra závisí na tom, kdo je člověk.
+      const humanWins: SoundEvent = 'win';
+      const humanLoses: SoundEvent = 'loss';
+      const soundByResult: Record<Exclude<GameResult, 'ongoing'>, SoundEvent> = {
+        'black-wins': HUMAN_COLOR === 'black' ? humanWins : humanLoses,
+        'white-wins': HUMAN_COLOR === 'black' ? humanLoses : humanWins,
+        draw: 'draw',
+      };
+      scheduleEndSound(rendered, dto.result, soundByResult[dto.result]);
     }
   }
 

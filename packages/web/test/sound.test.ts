@@ -9,6 +9,7 @@ import moveUrl from '../src/assets/pohyb_kamene.mp3?url';
 import landUrl from '../src/assets/dopad_kamene.mp3?url';
 import winUrl from '../src/assets/vitezne_fanfary.mp3?url';
 import lossUrl from '../src/assets/zvuk_prohry.mp3?url';
+import drawUrl from '../src/assets/zvuk_remizy.mp3?url';
 
 /** Fake audio uzel: zaznamená hlasitost a počet přehrání, `play` je konfigurovatelné. */
 class FakeNode implements SoundNode {
@@ -72,17 +73,30 @@ describe('createSoundPlayer', () => {
     expect(landUrl).not.toBe(moveUrl);
   });
 
-  it('konec partie: win a loss míří na svoje zdroje (a jsou různé)', () => {
+  it('konec partie: win, loss a draw míří na svoje zdroje (a jsou různé)', () => {
     const { factory, created } = recordingFactory();
     const player = createSoundPlayer(factory);
 
     player.play('win');
     player.play('loss');
+    player.play('draw');
 
     expect(created[0]?.src).toBe(winUrl);
     expect(created[1]?.src).toBe(lossUrl);
-    // Čtyři různé zvuky – žádné dva event nesdílejí omylem soubor.
-    expect(new Set([moveUrl, landUrl, winUrl, lossUrl]).size).toBe(4);
+    expect(created[2]?.src).toBe(drawUrl);
+    // Pět různých zvuků – žádné dva event nesdílejí omylem soubor.
+    expect(new Set([moveUrl, landUrl, winUrl, lossUrl, drawUrl]).size).toBe(5);
+  });
+
+  it("play('draw') sáhne na zvuk remízy a přehraje ho", () => {
+    const { factory, created } = recordingFactory();
+    const player = createSoundPlayer(factory);
+
+    player.play('draw');
+
+    expect(created).toHaveLength(1);
+    expect(created[0]?.src).toBe(drawUrl);
+    expect(created[0]?.playCalls).toBe(1);
   });
 
   it('každé přehrání vytvoří NOVÝ uzel (překrývání rychlých dopadů)', () => {

@@ -142,6 +142,11 @@
       "id": 28,
       "title": "Zvuky pohybu a dopadu kamene",
       "status": "done"
+    },
+    {
+      "id": 29,
+      "title": "Zvuk remízy a první tah AI",
+      "status": "done"
     }
   ]
 }
