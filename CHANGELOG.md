@@ -7,6 +7,17 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Changed
+
+- Losování pozadí hry: při nové partii se právě zobrazené pozadí vyloučí z výběru,
+  takže dva obrázky po sobě nikdy nejsou stejné (dřív se mohlo totéž vylosovat
+  vícekrát za sebou). Vyloučení běží v čisté funkci `pickBackground` přes nový
+  volitelný parametr `exclude`; `app-shell` si pamatuje přesně tu URL, kterou
+  funkce vrátila (ne `pageBg.src`, který prohlížeč překlopí na absolutní URL, kde
+  by porovnání selhalo). Fallback: když je v `assets/` jen jeden obrázek, vrátí se
+  on (radši zopakovat než prázdné pozadí); prázdný výčet zůstává na výchozím
+  barevném pozadí z CSS.
+
 ## [0.28.0] - 2026-07-05
 
 ### Added

@@ -1,0 +1,37 @@
+{
+  "id": 31,
+  "title": "Pozadí se neopakuje po sobě",
+  "goal": "pickBackground dostane volitelný parametr s aktuálním pozadím a vyloučí ho z náhodného výběru, takže dvě po sobě jdoucí partie nikdy nedostanou stejný obrázek; app-shell si předchozí URL (přesně tu vrácenou z backgroundUrls) pamatuje a předává. Fallback: při jediném dostupném obrázku se vrátí on (raději opakování než prázdné pozadí), prázdný výčet zůstává undefined → výchozí CSS pozadí.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Rozšířit pickBackground o vyloučení aktuálního pozadí",
+      "status": "done",
+      "detail": "Třetí volitelný parametr exclude: z výběru se odfiltruje a losuje se jen ze zbytku. Fallback při prázdném poolu (jediný obrázek == exclude, nebo prázdné urls) → vrátí se původní urls (index -1 → undefined u prázdného). exclude mimo seznam i undefined nechají výběr beze změny. Distribuce přes pool.length. Zpětně kompatibilní."
+    },
+    {
+      "title": "app-shell pamatuje a předává předchozí URL",
+      "status": "done",
+      "detail": "Closure proměnná lastBg drží přesně hodnotu vrácenou z pickBackground (ne pageBg.src, které prohlížeč překlopí na absolutní URL). Předá se jako exclude při nové partii; lastBg se aktualizuje jen když výběr vrátí URL."
+    },
+    {
+      "title": "Testy vyloučení a fallbacků",
+      "status": "done",
+      "detail": "Vitest: exclude se nikdy nevrátí napříč indexy rng; jediný obrázek == exclude → vrátí se on; zastaralý exclude mimo seznam → normální výběr; prázdný seznam → undefined; exclude undefined → beze změny. Test má zuby: po vypnutí filtru padne."
+    },
+    {
+      "title": "Self-review nezávislým sub-agentem + CHANGELOG",
+      "status": "done",
+      "detail": "Nezávislý sub-agent (čerstvý kontext) projede unhappy path kontraktu backgrounds.ts↔app-shell.ts. Zápis do CHANGELOG."
+    }
+  ],
+  "startedAt": "2026-07-05T02:22:49.584Z",
+  "resolvedVerify": [
+    "Klikni 2× za sebou na „Nová hra\" a sleduj, že se pozadí opravdu vždy přehodí"
+  ],
+  "completedAt": "2026-07-05T02:30:57.472Z",
+  "autoCommit": {
+    "preSha": "d9c2c3c9982903ad9bd01fffd7c42964e9048637",
+    "subject": "Phase 31: Pozadí se neopakuje po sobě"
+  }
+}

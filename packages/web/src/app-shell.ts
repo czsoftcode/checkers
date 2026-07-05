@@ -111,6 +111,11 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // `true` po dispose(): kdyby se appka disposla během běžícího createGame,
   // nesmí se pak založit „zombie" controller s vlastním pollingem.
   let disposed = false;
+  // Právě zobrazené pozadí – přesně ta hodnota vrácená z `pickBackground` (jedna
+  // z `backgroundUrls`), NE `pageBg.src`, který prohlížeč překlopí na absolutní
+  // URL a řetězcové porovnání by pak selhalo. Předává se do `pickBackground` jako
+  // `exclude`, aby se stejné pozadí nevylosovalo dvakrát po sobě.
+  let lastBg: string | undefined;
 
   /** Přepne mezi hlavními tlačítky a inline potvrzením vzdání. */
   function showConfirm(show: boolean): void {
@@ -209,9 +214,15 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     }
     loading = true;
     showConfirm(false);
-    // Nové pozadí HNED (před await createGame), ať se přehodí okamžitě. Prázdný
-    // výčet (`null`) → src='' → zůstane výchozí barevné pozadí z CSS, žádný pád.
-    pageBg.src = pickBackground(backgroundUrls) ?? '';
+    // Nové pozadí HNED (před await createGame), ať se přehodí okamžitě. Předchozí
+    // pozadí se vyloučí (`lastBg`), ať nepadne dvakrát po sobě totéž. Prázdný
+    // výčet → undefined → src='' → zůstane výchozí barevné pozadí z CSS, žádný
+    // pád; `lastBg` v tom případě necháme být (nemáme čím ho přepsat).
+    const nextBg = pickBackground(backgroundUrls, Math.random, lastBg);
+    pageBg.src = nextBg ?? '';
+    if (nextBg !== undefined) {
+      lastBg = nextBg;
+    }
     // Zbytek po minulé partii: schovej hlášku nabídky remízy.
     offerMsg.textContent = '';
     offerMsg.classList.add('hidden');

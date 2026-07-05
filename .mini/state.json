@@ -152,6 +152,11 @@
       "id": 30,
       "title": "Minimální doba přemýšlení enginu",
       "status": "done"
+    },
+    {
+      "id": 31,
+      "title": "Pozadí se neopakuje po sobě",
+      "status": "done"
     }
   ]
 }

@@ -27,7 +27,15 @@ export const backgroundUrls: string[] = Object.values(modules);
  * Vybere náhodně jednu URL ze seznamu. `rng` vrací číslo v [0, 1) (výchozí
  * `Math.random`). Nikdy nevyhazuje výjimku.
  *
- * Prázdný seznam → `undefined`: `Math.min(0, -1) = -1` a `urls[-1]` je `undefined`
+ * `exclude` (obvykle právě zobrazené pozadí) se z výběru vyřadí, aby dvě po sobě
+ * jdoucí losování nevrátila stejný obrázek. Losuje se pak jen ze zbytku a
+ * distribuce jde přes délku ZBYTKU (`pool.length`), ne původního seznamu.
+ * `exclude`, který v seznamu není (zastaralý), nebo `undefined` nechají výběr
+ * beze změny. Když by po vyřazení nezbylo nic (jediný obrázek se rovná
+ * `exclude`), padá se zpět na původní `urls` – radši zopakovat pozadí než vrátit
+ * `undefined` a přijít o obrázek.
+ *
+ * Prázdný seznam → `undefined`: `Math.min(0, -1) = -1` a `pool[-1]` je `undefined`
  * (žádná zvláštní větev – indexace mimo pole to řeší sama). Volající to překlopí
  * na výchozí barevné pozadí z CSS. `Math.min(..., length-1)` navíc chrání proti
  * rng, které vrátí přesně 1 (mimo kontrakt), ať index nepřeteče za konec pole.
@@ -35,7 +43,12 @@ export const backgroundUrls: string[] = Object.values(modules);
 export function pickBackground(
   urls: readonly string[],
   rng: () => number = Math.random,
+  exclude?: string,
 ): string | undefined {
-  const index = Math.min(Math.floor(rng() * urls.length), urls.length - 1);
-  return urls[index];
+  const filtered = urls.filter((url) => url !== exclude);
+  // Prázdný pool (jediný obrázek == exclude) → zpět na plný seznam. Prázdné
+  // `urls` zůstanou prázdná v obou větvích → index -1 → undefined.
+  const pool = filtered.length > 0 ? filtered : urls;
+  const index = Math.min(Math.floor(rng() * pool.length), pool.length - 1);
+  return pool[index];
 }
