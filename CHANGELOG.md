@@ -23,6 +23,8 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
   jeho kliknutí audio odemkne dřív, než engine potáhne; to už test neověří.
   Chování se nemění, jde jen o pojistku.
 
+## [0.26.0] - 2026-07-05
+
 ### Added
 
 - Zvuky hry: animace tahu je ozvučená – na začátku každého skoku zazní zvuk
