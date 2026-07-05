@@ -17,5 +17,10 @@
     "typescript": "catalog:",
     "typescript-eslint": "^8.62.1",
     "vitest": "catalog:"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

@@ -1,0 +1,25 @@
+[Unit]
+Description=Dama (checkers) backend – fastify server + engine (@checkers/server)
+Documentation=https://dama.softcode.cz
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stkremen
+Group=www-data
+WorkingDirectory=/var/www/dama.softcode.cz/packages/server
+# Server i engine běží přes tsx (viz engine-client.ts: node --import tsx).
+# cwd=packages/server, aby `--import tsx` našel tsx z devdep tohoto balíčku.
+ExecStart=/usr/bin/node --import tsx src/main.ts
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# Naslouchá jen na loopbacku (127.0.0.1); ven vede výhradně nginx reverzní proxy.
+Restart=on-failure
+RestartSec=2
+# Po SIGTERM server sám korektně zavře HTTP a zabije engine (viz main.ts).
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
