@@ -13,8 +13,7 @@
 #
 # Skript je idempotentní: jde pustit opakovaně pro restart/redeploy.
 #
-# POZOR na node: package.json chce node >=24, na stroji běží 22 → pnpm to jen
-# WARNuje a vše funguje. Až se node povýší, warning zmizí; nic tu neměň.
+# Node: stroj běží node 24 z NodeSource (/usr/bin/node), splňuje engines >=24.
 
 set -euo pipefail
 
