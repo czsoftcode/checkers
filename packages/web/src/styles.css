@@ -70,6 +70,44 @@ body {
   text-align: right;
 }
 
+/* Skutečná úroveň rozehrané partie (proti čemu se právě hraje). */
+.level-info {
+  margin: 0;
+  font-size: 0.9rem;
+  min-height: 1.1em;
+  text-align: right;
+  color: #cdd;
+}
+
+/* Řádek s výběrem úrovně obtížnosti (popisek + rozbalovací seznam). */
+.level-row {
+  display: flex;
+  align-items: center;
+}
+
+.level-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+  color: #eee;
+}
+
+.level-select {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.95rem;
+  border: 1px solid #666;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
+}
+
+.level-select:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* Hlavní tlačítka pod sebou (na úzkém monitoru se vedle sebe nevešla) a stejně
    široká – sloupec se stretchem je srovná na šířku nejširšího popisku. */
 .controls {

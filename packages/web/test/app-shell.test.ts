@@ -11,7 +11,7 @@ import type {
   DrawOfferOutcome,
   GameStatus,
 } from '../src/controller.js';
-import type { GameDto, ServerClient } from '../src/server-client.js';
+import type { GameDto, GameLevel, ServerClient } from '../src/server-client.js';
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 function gameDto(position: Position, result: GameDto['result'] = 'ongoing'): GameDto {
-  return { id: 'g1', position, result, legalMoves: [], engineStatus: 'idle' };
+  return { id: 'g1', position, result, legalMoves: [], engineStatus: 'idle', level: 'professional' };
 }
 
 /** Fake controller: neřídí desku, jen zaznamenává dispose/resign a umí emitovat stav. */
@@ -91,16 +91,30 @@ function click(el: HTMLElement): void {
   el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
+/**
+ * Připne skořápku a nechá doběhnout automatickou první hru (appka ji zakládá
+ * sama, napoprvé Profesionál). Většina testů potřebuje rozehranou hru.
+ */
+async function mountRunning(
+  client: ServerClient = fakeClient(gameDto(initialPosition())),
+): Promise<{ shell: ReturnType<typeof createAppShell>; created: FakeCtl[] }> {
+  const { factory, created } = fakeFactory();
+  const shell = createAppShell(client, { createController: factory });
+  document.body.append(shell.element);
+  await tick(); // automatická první hra doběhne, controller ohlásí ongoing
+  return { shell, created };
+}
+
+/** Odešle na prvku `change` událost (jako když uživatel vybere jinou volbu). */
+function change(el: HTMLElement): void {
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 const OVER: GameStatus = { result: 'white-wins', turn: 'white', engineStatus: 'idle' };
 
 describe('app-shell – stav tlačítek podle výsledku', () => {
   it('za běhu je aktivní jen Vzdávám hru, po konci jen Nová hra', async () => {
-    const { factory, created } = fakeFactory();
-    const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
-      createController: factory,
-    });
-    document.body.append(shell.element);
-    await tick(); // createGame doběhne, controller ohlásí výchozí ongoing stav
+    const { shell, created } = await mountRunning();
 
     const resignBtn = q(shell.element, '.btn-resign') as HTMLButtonElement;
     const newBtn = q(shell.element, '.btn-newgame') as HTMLButtonElement;
@@ -115,14 +129,77 @@ describe('app-shell – stav tlačítek podle výsledku', () => {
   });
 });
 
-describe('app-shell – inline potvrzení vzdání', () => {
-  it('„Vzdávám hru" ukáže potvrzení; „Ano" vzdá, „Zrušit" ne', async () => {
-    const { factory, created } = fakeFactory();
-    const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
-      createController: factory,
-    });
+describe('app-shell – výběr úrovně', () => {
+  /** Fake createGame, které v odpovědi VRÁTÍ zvolenou úroveň (server = autorita). */
+  function levelEchoClient(): {
+    client: ServerClient;
+    createGame: Mock<(level: GameLevel) => Promise<GameDto>>;
+  } {
+    const createGame = vi.fn<(level: GameLevel) => Promise<GameDto>>((level) =>
+      Promise.resolve({ ...gameDto(initialPosition()), level }),
+    );
+    return { client: { ...fakeClient(gameDto(initialPosition())), createGame }, createGame };
+  }
+
+  it('start: automatická hra na Profesionálovi, panel ho hlásí, přepínač ODEMČENÝ (před tahem)', async () => {
+    const { factory } = fakeFactory();
+    const { client, createGame } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory });
     document.body.append(shell.element);
     await tick();
+
+    expect(createGame).toHaveBeenCalledWith('professional');
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    expect(q(shell.element, '.level-info').textContent).toBe('Soupeř: Profesionál');
+    // Deska je hned (ne prázdná obrazovka) a úroveň jde měnit PŘED prvním tahem.
+    expect(shell.element.querySelectorAll('.fake-board')).toHaveLength(1);
+    expect(select.disabled).toBe(false);
+  });
+
+  it('přepnutí PŘED tahem přehraje partii na novou úroveň a panel to ukáže', async () => {
+    // Zuby: kdyby přepnutí před tahem nepřehrálo partii, createGame by podruhé
+    // nedostalo 'beginner' a levelInfo by zůstal na Profesionálovi.
+    const { factory } = fakeFactory();
+    const { client, createGame } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    select.value = 'beginner';
+    change(select); // uživatel přepnul úroveň PŘED prvním tahem
+    await tick();
+
+    expect(createGame).toHaveBeenLastCalledWith('beginner');
+    expect(q(shell.element, '.level-info').textContent).toBe('Soupeř: Začátečník');
+  });
+
+  it('první tah zamkne přepínač; konec partie ho zas odemkne', async () => {
+    const { factory, created } = fakeFactory();
+    const { client } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    expect(select.disabled).toBe(false); // před tahem volný
+
+    // Tah člověka → stav přestane být výchozí (bílý na tahu / engine přemýšlí).
+    created[0]?.emit({ result: 'ongoing', turn: 'white', engineStatus: 'thinking' });
+    expect(select.disabled).toBe(true); // po prvním tahu zamčený
+
+    // I když se stav vrátí na černý+idle (po tahu enginu), zůstává zamčený.
+    created[0]?.emit({ result: 'ongoing', turn: 'black', engineStatus: 'idle' });
+    expect(select.disabled).toBe(true);
+
+    created[0]?.emit(OVER); // konec partie → zas odemčený
+    expect(select.disabled).toBe(false);
+  });
+});
+
+describe('app-shell – inline potvrzení vzdání', () => {
+  it('„Vzdávám hru" ukáže potvrzení; „Ano" vzdá, „Zrušit" ne', async () => {
+    const { shell, created } = await mountRunning();
 
     const controls = q(shell.element, '.controls');
     const confirm = q(shell.element, '.confirm');
@@ -151,13 +228,7 @@ describe('app-shell – tlačítko „Nabízím remízu"', () => {
   const ONGOING: GameStatus = { result: 'ongoing', turn: 'black', engineStatus: 'idle' };
   const THINKING: GameStatus = { result: 'ongoing', turn: 'white', engineStatus: 'thinking' };
 
-  async function mountShell(): Promise<{ shell: ReturnType<typeof createAppShell>; created: FakeCtl[] }> {
-    const { factory, created } = fakeFactory();
-    const shell = createAppShell(fakeClient(gameDto(initialPosition())), { createController: factory });
-    document.body.append(shell.element);
-    await tick();
-    return { shell, created };
-  }
+  const mountShell = mountRunning; // remíza se nabízí v rozehrané hře → start hry
 
   it('aktivní na tahu člověka (idle), zamčené po konci / když engine přemýšlí', async () => {
     const { shell, created } = await mountShell();
@@ -216,12 +287,7 @@ describe('app-shell – tlačítko „Nabízím remízu"', () => {
 
 describe('app-shell – Nová hra uklidí starý controller (polling)', () => {
   it('dispose starého controlleru a vytvoření nového', async () => {
-    const { factory, created } = fakeFactory();
-    const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
-      createController: factory,
-    });
-    document.body.append(shell.element);
-    await tick();
+    const { shell, created } = await mountRunning();
     expect(created).toHaveLength(1);
 
     // Partie skončí → Nová hra se povolí.
@@ -254,7 +320,7 @@ describe('app-shell – selhání při zakládání partie', () => {
     };
     const shell = createAppShell(client);
     document.body.append(shell.element);
-    await tick();
+    await tick(); // automatická první hra → createGame selže
 
     const resignBtn = q(shell.element, '.btn-resign') as HTMLButtonElement;
     const newBtn = q(shell.element, '.btn-newgame') as HTMLButtonElement;

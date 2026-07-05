@@ -8,6 +8,7 @@
 
 import { legalMoves } from '@checkers/rules';
 import type { GameResult, GameState, Move, Position, Square } from '@checkers/rules';
+import type { GameLevel } from './levels.js';
 import type { EngineStatus } from './store.js';
 
 /** Tah ve tvaru pro drát: prostá, JSON-serializovatelná data (čísla 1–32). */
@@ -28,6 +29,12 @@ export interface GameDto {
   readonly result: GameResult;
   readonly legalMoves: MoveDto[];
   readonly engineStatus: EngineStatus;
+  /**
+   * Úroveň obtížnosti partie (fixní po celou partii). Vrací se, aby klient uměl
+   * ukázat, proti čemu se HRAJE – nezávisle na tom, co je zrovna navolené v
+   * přepínači (ten mění až další „Nová hra"). Autoritou o úrovni je server.
+   */
+  readonly level: GameLevel;
 }
 
 /** Přepis `Move` z `rules` do drátového tvaru (kopie polí, ne readonly odkaz). */
@@ -53,6 +60,7 @@ export function gameToDto(
   state: GameState,
   engineStatus: EngineStatus,
   result: GameResult,
+  level: GameLevel,
 ): GameDto {
   return {
     id,
@@ -60,6 +68,7 @@ export function gameToDto(
     result,
     legalMoves: legalMoveDtos(state.position),
     engineStatus,
+    level,
   };
 }
 

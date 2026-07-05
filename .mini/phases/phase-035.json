@@ -1,0 +1,43 @@
+{
+  "id": 35,
+  "title": "Úroveň Začátečník: server a UI",
+  "goal": "Protáhnout volbu úrovně z UI přes POST /games a EngineClient až do BestmoveRequest (maxDepth + carelessness), aby si člověk mohl založit partii proti úrovni Začátečník a engine na ní hrál měřitelně slaběji než výchozí Profesionál. Rozsah: dvě úrovně (Profesionál = dnešní chování/výchozí, Začátečník = oslabený), mapa úroveň → { maxDepth, carelessness } na serveru, úroveň uložená v GameRecord, volitelný parametr síly na EngineMover.bestmove (zpětně kompatibilní), výběr úrovně v UI při nové hře. Konkrétní čísla jsou první odhad, ne ověřená kalibrace obtížnosti.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Server: modul úrovní a mapa síly",
+      "status": "done",
+      "detail": "Nový packages/server/src/levels.ts: typ GameLevel = 'professional'|'beginner', LEVELS, DEFAULT_LEVEL='professional', mapa STRENGTH_BY_LEVEL (professional → undefined = žádné páky, přesně dnešní zpráva; beginner → { maxDepth: 2, carelessness: 0.4 } jako první odhad). Test čte reálnou mapu (ne kopii čísel): beginner má nenulovou carelessness, professional žádné páky."
+    },
+    {
+      "title": "EngineClient: volitelný parametr síly",
+      "status": "done",
+      "detail": "bestmove(position, strength?) a rozhraní EngineMover.bestmove dostanou volitelný strength { maxDepth?; carelessness? }; requestBestmove vloží pole do BestmoveRequest jen když jsou zadaná. evaluate beze změny (plná síla). Test proti falešnému enginu (fixture echuje přijatý požadavek na stderr → zachytí log): se strength řádek nese maxDepth+carelessness, bez něj je NEobsahuje (zuby na zpětnou kompatibilitu)."
+    },
+    {
+      "title": "Store: úroveň v záznamu partie",
+      "status": "done",
+      "detail": "StoredGame i GameRecord dostanou readonly level: GameLevel; create(level) ji uloží. Test: create('beginner') → record.level==='beginner'; úroveň přežije applyMove/get."
+    },
+    {
+      "title": "App: POST /games přijme úroveň a protáhne ji k enginu",
+      "status": "done",
+      "detail": "Zod tělo { level } s defaultem professional (prázdné/chybějící tělo → professional, zpětně kompatibilní); store.create(level); runEngineMove čte record.level, mapuje přes STRENGTH_BY_LEVEL a předá do engine.bestmove. Test se zuby: stub EngineMover zachytí strength argument – bez těla i professional → undefined páky; beginner → { maxDepth:2, carelessness:0.4 }. Nevalidní level → 400."
+    },
+    {
+      "title": "Web: výběr úrovně při nové hře",
+      "status": "done",
+      "detail": "ServerClient.createGame(level) posílá { level }; server-client.ts dostane typ GameLevel s hodnotami odpovídajícími serveru. V panelu (app-shell.ts) select 'Profesionál'/'Začátečník' (výchozí Profesionál), existuje před prvním automatickým startNewGame(), hodnota se čte při zakládání partie, během loading zamčený. Styl třídou v styles.css (bez inline kvůli CSP)."
+    }
+  ],
+  "startedAt": "2026-07-05T12:38:56.782Z",
+  "resolvedVerify": [
+    "Vizuální podoba panelu (výběr úrovně + „Soupeř: …\") naživo, hlavně mobil",
+    "Reálná obtížnost Začátečníka"
+  ],
+  "completedAt": "2026-07-05T13:59:09.123Z",
+  "autoCommit": {
+    "preSha": "03082150d342d77e3672ef9ae5dc2cdeaaaae427",
+    "subject": "Phase 35: Úroveň Začátečník: server a UI"
+  }
+}

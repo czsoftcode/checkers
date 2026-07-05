@@ -9,6 +9,7 @@ const sampleDto: GameDto = {
   result: 'ongoing',
   legalMoves: [],
   engineStatus: 'idle',
+  level: 'professional',
 };
 
 /** Minimální `Response`-like objekt, ať test nezávisí na globálním `Response`. */
@@ -25,14 +26,21 @@ function okFetch(body: unknown, status = 200): typeof fetch {
 }
 
 describe('createHttpClient', () => {
-  it('createGame posílá POST /games a vrací GameDto', async () => {
+  it('createGame posílá POST /games se zvolenou úrovní v těle a vrací GameDto', async () => {
     const fetchMock = okFetch(sampleDto, 201);
     const client = createHttpClient(fetchMock);
 
-    const result = await client.createGame();
+    const result = await client.createGame('beginner');
 
     expect(result).toEqual(sampleDto);
-    expect(fetchMock).toHaveBeenCalledWith('/games', expect.objectContaining({ method: 'POST' }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/games',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ level: 'beginner' }),
+      }),
+    );
   });
 
   it('getGame posílá GET /games/:id s enkódovaným id', async () => {
@@ -126,7 +134,7 @@ describe('createHttpClient', () => {
     const fetchMock = vi.fn(() => Promise.reject(new Error('boom'))) as unknown as typeof fetch;
     const client = createHttpClient(fetchMock);
 
-    const error = await client.createGame().catch((e: unknown) => e);
+    const error = await client.createGame('professional').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ServerError);
     expect(error).toMatchObject({ status: 0 });
   });
@@ -152,7 +160,7 @@ describe('createHttpClient', () => {
     const fetchMock = okFetch({ id: 'g1', result: 'ongoing', engineStatus: 'idle' });
     const client = createHttpClient(fetchMock);
 
-    const error = await client.createGame().catch((e: unknown) => e);
+    const error = await client.createGame('professional').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ServerError);
   });
 

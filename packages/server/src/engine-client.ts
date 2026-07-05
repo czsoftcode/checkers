@@ -58,9 +58,25 @@ export interface EngineEvaluation {
   readonly score: number;
 }
 
+/**
+ * Volitelné páky síly pro `bestmove` (kalibrace úrovní hry). Tvar sedí na
+ * volitelná pole `BestmoveRequest` z protokolu enginu (fáze 34): oboje chybí →
+ * engine hraje naplno (Profesionál). Mapu úroveň → `Strength` drží `levels.ts`.
+ */
+export interface Strength {
+  /** Strop hloubky iterativního prohlubování; chybí → bez stropu. */
+  readonly maxDepth?: number;
+  /** Míra nepozornosti 0..1 (pravděpodobnost horšího tahu); chybí → 0. */
+  readonly carelessness?: number;
+}
+
 /** Minimum, které server potřebuje od enginu (umožní stub v testech). */
 export interface EngineMover {
-  bestmove(position: Position): Promise<Move>;
+  /**
+   * Vrátí tah pro pozici. `strength` je volitelný: chybí → plná síla
+   * (Profesionál), zpětně kompatibilní se staršími volajícími.
+   */
+  bestmove(position: Position, strength?: Strength): Promise<Move>;
   /**
    * Vyhodnotí pozici (skóre bez výběru tahu) pro rozhodnutí o nabídce remízy.
    * Skóre je z pohledu strany na tahu – přepočet na barvu je věc volajícího.
@@ -189,17 +205,17 @@ export class EngineClient implements EngineMover {
    * timeoutu/pádu jednou zopakuje na polovičním čase; protokolovou chybu
    * neopakuje. Vrácený `move` je NEOVĚŘENÝ – legalitu určuje volající přes rules.
    */
-  async bestmove(position: Position): Promise<Move> {
+  async bestmove(position: Position, strength?: Strength): Promise<Move> {
     return this.enqueue(async () => {
       try {
-        return await this.requestBestmove(position, this.timeMs);
+        return await this.requestBestmove(position, this.timeMs, strength);
       } catch (error) {
         if (error instanceof EngineProtocolError || error instanceof EngineClosedError) {
           throw error; // protokolová chyba / zavřený klient se neopakuje
         }
         const half = Math.max(1, Math.floor(this.timeMs / 2));
         this.log(`Engine selhal (${describeError(error)}), zkouším znovu na ${String(half)} ms.`);
-        return await this.requestBestmove(position, half);
+        return await this.requestBestmove(position, half, strength);
       }
     });
   }
@@ -254,8 +270,23 @@ export class EngineClient implements EngineMover {
     return run;
   }
 
-  private async requestBestmove(position: Position, timeMs: number): Promise<Move> {
-    const request: BestmoveRequest = { type: 'bestmove', id: this.nextId(), position, timeMs };
+  private async requestBestmove(
+    position: Position,
+    timeMs: number,
+    strength?: Strength,
+  ): Promise<Move> {
+    // Páky síly se do požadavku vkládají JEN když jsou zadané: bez nich engine
+    // dostane přesně dnešní zprávu (Profesionál) a chová se bit po bitu jako dřív
+    // (zpětná kompatibilita – kontrolováno testem). exactOptionalPropertyTypes:
+    // absence pole ≠ hodnota undefined, proto podmíněný spread, ne `?:`.
+    const request: BestmoveRequest = {
+      type: 'bestmove',
+      id: this.nextId(),
+      position,
+      timeMs,
+      ...(strength?.maxDepth !== undefined ? { maxDepth: strength.maxDepth } : {}),
+      ...(strength?.carelessness !== undefined ? { carelessness: strength.carelessness } : {}),
+    };
     const response = await this.request(request, timeMs + HARD_TIMEOUT_MARGIN_MS);
     if (response.type === 'bestmove') {
       // Engine je NEDŮVĚRYHODNÝ – tvar `move` se ověří TADY, na hranici procesu.

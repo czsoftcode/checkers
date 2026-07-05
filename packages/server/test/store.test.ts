@@ -24,6 +24,21 @@ function playFirstLegal(store: GameStore, id: string): Move {
   return move;
 }
 
+describe('GameStore – úroveň partie', () => {
+  it('create() bez argumentu → výchozí Profesionál', () => {
+    const store = new GameStore();
+    expect(store.create().level).toBe('professional');
+  });
+
+  it('create("beginner") uloží úroveň a ta přežije applyMove i get', () => {
+    const store = new GameStore();
+    const { id, level } = store.create('beginner');
+    expect(level).toBe('beginner');
+    playFirstLegal(store, id);
+    expect(store.get(id)?.level).toBe('beginner');
+  });
+});
+
 describe('GameStore – historie tahů', () => {
   it('nová partie nemá žádné tahy a není archivovaná', () => {
     const store = new GameStore();

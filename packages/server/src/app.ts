@@ -14,6 +14,7 @@ import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from
 import { formatGamePdn, writeGamePdn } from './archive.js';
 import { findLegalMove, gameToDto, legalMoveDtos } from './dto.js';
 import { ERROR_CODES, sendError } from './errors.js';
+import { LEVELS, STRENGTH_BY_LEVEL } from './levels.js';
 import { GameStore, effectiveResult } from './store.js';
 import type { GameRecord } from './store.js';
 import type { EngineMover } from './engine-client.js';
@@ -22,6 +23,15 @@ import type { EngineMover } from './engine-client.js';
 const moveBodySchema = z.object({
   from: z.number().int().min(1).max(32),
   path: z.array(z.number().int().min(1).max(32)).min(1),
+});
+
+/**
+ * Tělo POST /games: volitelná úroveň obtížnosti. Chybí-li `level` (nebo přijde
+ * prázdné tělo), platí výchozí Profesionál → zpětně kompatibilní se starým
+ * klientem i testy, které tělo neposílají. Neznámá hodnota → chyba (400).
+ */
+const createGameBodySchema = z.object({
+  level: z.enum(LEVELS).default('professional'),
 });
 
 /** Barvu enginu držíme napevno: člověk je černý (začíná), engine bílý. */
@@ -89,11 +99,28 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   /** GameDto ze záznamu: `result` je EFEKTIVNÍ výsledek (vzdání > pozice). */
   function dtoFor(record: GameRecord): ReturnType<typeof gameToDto> {
-    return gameToDto(record.id, record.state, record.engineStatus, effectiveResult(record));
+    return gameToDto(
+      record.id,
+      record.state,
+      record.engineStatus,
+      effectiveResult(record),
+      record.level,
+    );
   }
 
-  app.post('/games', (_req, reply) => {
-    return reply.code(201).send(dtoFor(store.create()));
+  app.post('/games', (req, reply) => {
+    // Prázdné/chybějící tělo → `{}` → zod doplní výchozí úroveň. Neznámá úroveň
+    // je klientská chyba (400), ne tichý default.
+    const parsed = createGameBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return sendError(
+        reply,
+        400,
+        ERROR_CODES.invalidRequest,
+        `Neplatné tělo: očekávám { level: ${LEVELS.join(' | ')} }`,
+      );
+    }
+    return reply.code(201).send(dtoFor(store.create(parsed.data.level)));
   });
 
   app.get<{ Params: { id: string } }>('/games/:id', (req, reply) => {
@@ -320,7 +347,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         return; // stav se změnil / engine není na tahu – defenzivně nic nedělej
       }
 
-      const move = await engine.bestmove(record.state.position);
+      // Síla se řídí úrovní partie (fixní po dobu partie, čte se ZE ZÁZNAMU –
+      // ne z klienta ani globálu, ať souběžné partie s různými úrovněmi hrají
+      // každá svou silou). Profesionál → undefined → engine dostane dnešní
+      // požadavek beze změny.
+      const move = await engine.bestmove(record.state.position, STRENGTH_BY_LEVEL[record.level]);
 
       // Po awaitu se stav znovu načte a ověří: tah enginu se aplikuje VÝHRADNĚ
       // proti AKTUÁLNÍ pozici, ne proti snímku z doby před přemýšlením. Za

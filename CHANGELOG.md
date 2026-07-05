@@ -7,6 +7,34 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-07-05
+
+### Added
+
+- Výběr úrovně obtížnosti při zakládání partie: hráč si v panelu vybere
+  „Profesionál" (výchozí, plná síla jako dosud) nebo „Začátečník" (výrazně
+  oslabený). Volba se protáhne od UI přes `POST /games` až do zprávy pro engine:
+  - server přijímá volitelné pole `level` v těle `POST /games` (zod, výchozí
+    `professional` → prázdné/chybějící tělo je zpětně kompatibilní; neznámá
+    úroveň → 400). Úroveň se drží u partie a je pevná po celou partii;
+  - mapa úroveň → páky enginu (`maxDepth`, `carelessness` z fáze 34) žije na
+    jednom místě (`levels.ts`); Začátečník = `maxDepth 1` + mírná nepozornost.
+    Kalibrace opřená o měření: hloubka je dominantní páka (`maxDepth 2` slabšího
+    hráče pořád poráží, `maxDepth 1` dá vyhratelnou partii); nepozornost při
+    hloubce 1 výsledek skoro nemění. Doladění zůstává věcí reálného hraní;
+  - Profesionál pošle enginu PŘESNĚ dnešní požadavek (bez páek), takže hraje
+    bit po bitu jako dřív.
+  - Panel ukazuje SKUTEČNOU úroveň rozehrané partie („Soupeř: …") ze serveru
+    (`GameDto.level`), nezávisle na přepínači.
+  - Úroveň jde volně přepínat až do PRVNÍHO tahu: appka po startu rovnou založí
+    hru (napoprvé Profesionál, ať uživatele uvítá kompletní deska, ne prázdná
+    obrazovka), ale dokud nepadne první tah, přepnutí úrovně partii jen přehraje
+    na novou úroveň. Po prvním tahu se přepínač zamkne (aby přepnutí nerozbilo
+    rozehranou partii) a po konci partie se zas odemkne. Úroveň se tak nikdy
+    nezamkne bez vědomí hráče.
+  - Rozsah: dvě úrovně; další (žebříček) a doladění konkrétní obtížnosti podle
+    reálného hraní přijdou později.
+
 ## [0.30.0] - 2026-07-05
 
 ### Added

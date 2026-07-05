@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 function gameDto(position: Position, result: GameDto['result'] = 'ongoing'): GameDto {
-  return { id: 'g1', position, result, legalMoves: [], engineStatus: 'idle' };
+  return { id: 'g1', position, result, legalMoves: [], engineStatus: 'idle', level: 'professional' };
 }
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));

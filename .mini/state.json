@@ -172,6 +172,11 @@
       "id": 34,
       "title": "Engine: strop hloubky a nepozornost",
       "status": "done"
+    },
+    {
+      "id": 35,
+      "title": "Úroveň Začátečník: server a UI",
+      "status": "done"
     }
   ]
 }

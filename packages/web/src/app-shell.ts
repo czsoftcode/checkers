@@ -17,7 +17,13 @@ import type {
   DrawOfferOutcome,
   GameStatus,
 } from './controller.js';
-import type { GameDto, ServerClient } from './server-client.js';
+import type { GameDto, GameLevel, ServerClient } from './server-client.js';
+
+/** České popisky úrovní pro UI (interní hodnoty zůstávají anglické na drátě). */
+const LEVEL_LABELS: Record<GameLevel, string> = {
+  professional: 'Profesionál',
+  beginner: 'Začátečník',
+};
 
 /** Tovární funkce controlleru – injektovatelná kvůli testům (výchozí = reálný). */
 type ControllerFactory = (
@@ -68,6 +74,32 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const status = document.createElement('p');
   status.className = 'status';
 
+  // Řádek se SKUTEČNOU úrovní rozehrané partie (autorita = server přes GameDto).
+  // Odděleno od přepínače schválně: přepínač je volba pro PŘÍŠTÍ hru, tohle je,
+  // proti čemu se hraje teď. Nastavuje se z odpovědi serveru, ne z přepínače.
+  const levelInfo = document.createElement('p');
+  levelInfo.className = 'level-info';
+
+  // Výběr úrovně pro DALŠÍ novou hru. Musí vzniknout PŘED prvním `startNewGame()`
+  // (na konci funkce), protože jeho hodnotu čte při zakládání partie. Výchozí je
+  // Profesionál (první `<option>`). Během rozehrané partie je zamčený (mění se jen
+  // když jde založit nová hra) – ať nevzniká dojem, že přepnutí mění běžící partii.
+  const levelRow = document.createElement('div');
+  levelRow.className = 'level-row';
+  const levelLabel = document.createElement('label');
+  levelLabel.className = 'level-label';
+  levelLabel.textContent = 'Nová hra proti:';
+  const levelSelect = document.createElement('select');
+  levelSelect.className = 'level-select';
+  for (const value of ['professional', 'beginner'] satisfies GameLevel[]) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = LEVEL_LABELS[value];
+    levelSelect.append(opt);
+  }
+  levelLabel.append(levelSelect);
+  levelRow.append(levelLabel);
+
   // Řádek s hlavními tlačítky.
   const controls = document.createElement('div');
   controls.className = 'controls';
@@ -91,7 +123,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const noBtn = button('btn-confirm-no', 'Zrušit');
   confirm.append(confirmLabel, yesBtn, noBtn);
 
-  panel.append(status, controls, confirm, offerMsg);
+  panel.append(status, levelInfo, levelRow, controls, confirm, offerMsg);
 
   const boardSlot = document.createElement('div');
   boardSlot.className = 'board-slot';
@@ -105,6 +137,10 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // `true`, dokud běží zakládání nové partie (createGame) – ať se tlačítka a
   // dvojklik na „Nová hra" mezitím zablokují.
   let loading = false;
+  // `true` od okamžiku, kdy v aktuální partii padl první tah (stav přestal být
+  // „výchozí": černý na tahu, engine idle, hra běží). Zamyká výběr úrovně – před
+  // prvním tahem jde volně přepínat, po něm ne. Resetuje se při každé nové hře.
+  let firstMoveMade = false;
   // `true`, dokud čeká verdikt enginu na nabídku remízy (zámek proti dvojkliku +
   // zamčení tlačítka po dobu rozhodování).
   let offering = false;
@@ -146,6 +182,11 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     // Vzdát jde jen za běhu; novou hru jen po konci. Během zakládání obojí zamčené.
     resignBtn.disabled = over || loading;
     newGameBtn.disabled = !over || loading;
+    // Výběr úrovně je volný PŘED prvním tahem (i za rozehrané, ale ještě
+    // neodehrané partie) a po konci partie; zamčený je jen když se hraje
+    // (padl první tah) nebo běží zakládání. Tím se úroveň nezamkne bez vědomí
+    // hráče, ale rozehranou partii přepnutí nerozbije.
+    levelSelect.disabled = loading || (!over && firstMoveMade);
     // Nabídnout remízu jde jen na tahu člověka (černý) a když engine nepřemýšlí;
     // ne během zakládání ani když už jedna nabídka čeká na verdikt. Server to i
     // tak ověří – tohle je jen UI, ne autorita.
@@ -160,6 +201,14 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   /** Překreslí řádek stavu a nastaví tlačítka podle stavu partie. */
   function render(s: GameStatus): void {
     lastStatus = s;
+    // Jakmile stav přestane být „výchozí" (černý na tahu, engine idle, hra běží),
+    // padl první tah → zamkni výběr úrovně. Latch (jen nahoru): i když se stav
+    // po tahu enginu vrátí na černý+idle, přepínač zůstane zamčený až do konce
+    // partie / nové hry. Člověk je černý a táhne první, takže dřív než jeho
+    // prvním tahem se sem nedostane nic než výchozí stav.
+    if (s.result !== 'ongoing' || s.turn !== 'black' || s.engineStatus !== 'idle') {
+      firstMoveMade = true;
+    }
     status.textContent = statusText(s);
     refreshControls();
     // Po skončení partie nemá potvrzení vzdání smysl – schovej ho.
@@ -213,6 +262,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       return;
     }
     loading = true;
+    firstMoveMade = false; // nová partie → úroveň zas volná až do prvního tahu
     showConfirm(false);
     // Nové pozadí HNED (před await createGame), ať se přehodí okamžitě. Předchozí
     // pozadí se vyloučí (`lastBg`), ať nepadne dvakrát po sobě totéž. Prázdný
@@ -229,6 +279,11 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     resignBtn.disabled = true;
     newGameBtn.disabled = true;
     offerDrawBtn.disabled = true;
+    levelSelect.disabled = true;
+    // Úroveň se čte TEĎ, na začátku zakládání – pozdější přepnutí selectu partii
+    // nezmění. `value` je vždy jedna z `<option>` (uživatel nemůže vložit jiné);
+    // přetypování na GameLevel je tím kryté, server navíc neznámou úroveň odmítne.
+    const level = levelSelect.value as GameLevel;
     if (controller !== null) {
       controller.dispose();
       controller = null;
@@ -236,7 +291,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     boardSlot.replaceChildren();
     status.textContent = 'Načítám partii…';
     try {
-      const game = await client.createGame();
+      const game = await client.createGame(level);
       if (disposed) {
         return; // appka se mezitím disposla – nezakládej controller s pollingem
       }
@@ -244,6 +299,8 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       // ohlásí výchozí stav přes onState → render() a to čte `loading` do stavu
       // tlačítek. Kdyby tu bylo pořád true, tlačítka by zůstala zamčená.
       loading = false;
+      // Skutečná úroveň partie ze serveru (ne z přepínače – server je autorita).
+      levelInfo.textContent = `Soupeř: ${LEVEL_LABELS[game.level]}`;
       controller = makeController(client, game, {
         onState,
         ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
@@ -253,16 +310,23 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       loading = false;
       console.error('Nepodařilo se založit partii:', error);
       status.textContent = 'Partii se nepodařilo založit. Zkuste to znovu tlačítkem Nová hra.';
+      levelInfo.textContent = ''; // partie neběží → nemáme co hlásit jako soupeře
       // Chyba = partie „neběží": povol Novou hru k opakování, vzdání i nabídku zamkni.
       lastStatus = { result: 'white-wins', turn: 'white', engineStatus: 'idle' };
       resignBtn.disabled = true;
       newGameBtn.disabled = false;
       offerDrawBtn.disabled = true;
+      // Zakládání selhalo → povol změnu úrovně pro další pokus (refreshControls
+      // se tu nevolá, tak explicitně).
+      levelSelect.disabled = false;
     }
   }
 
   resignBtn.addEventListener('click', () => {
-    if (lastStatus.result === 'ongoing') {
+    // `controller !== null` zavře díru pro pre-game stav (lastStatus je 'ongoing'
+    // jako výchozí, ale žádná partie neběží – bez tohohle by dispatch kliku na
+    // zamčené tlačítko v testu ukázal potvrzení vzdání neexistující hry).
+    if (controller !== null && lastStatus.result === 'ongoing') {
       showConfirm(true);
     }
   });
@@ -280,6 +344,19 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     void startNewGame();
   });
 
+  // Přepnutí úrovně PŘED prvním tahem rovnou přehraje partii na novou úroveň:
+  // žádný tah ještě nepadl, nic se neztrácí. Za běhu partie je select zamčený
+  // (sem se nedostane); po konci partie se úroveň jen zvolí pro příští „Nová hra"
+  // (start řeší tlačítko, ne tahle změna).
+  levelSelect.addEventListener('change', () => {
+    const over = lastStatus.result !== 'ongoing';
+    if (!over && !firstMoveMade && !loading) {
+      void startNewGame();
+    }
+  });
+
+  // Automatická první hra: uživatele uvítá kompletní deska (napoprvé Profesionál),
+  // ne prázdná obrazovka. Úroveň zůstává volná až do prvního tahu.
   void startNewGame();
 
   return {

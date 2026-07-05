@@ -180,6 +180,44 @@ describe('EngineClient – fronta, timeout, kill, retry', () => {
   }, 15_000);
 });
 
+describe('EngineClient – páky síly v bestmove požadavku', () => {
+  it('se strength nese požadavek maxDepth i carelessness', async () => {
+    const logs: string[] = [];
+    const client = new EngineClient({
+      spawn: fakeCmd('echo'),
+      timeMs: 300,
+      pidFile: null,
+      log: (m) => logs.push(m),
+    });
+    cleanup.push(() => client.close());
+
+    await client.bestmove(initialPosition(), { maxDepth: 2, carelessness: 0.4 });
+    const req = logs.find((l) => l.includes('REQ '));
+    expect(req).toBeDefined();
+    expect(req).toContain('"maxDepth":2');
+    expect(req).toContain('"carelessness":0.4');
+  }, 15_000);
+
+  it('bez strength požadavek páky NEobsahuje (zpětná kompatibilita)', async () => {
+    // Zuby: kdyby requestBestmove přidával páky vždy, tenhle test spadne –
+    // Profesionál by pak enginu poslal jinou zprávu než před fází 35.
+    const logs: string[] = [];
+    const client = new EngineClient({
+      spawn: fakeCmd('echo'),
+      timeMs: 300,
+      pidFile: null,
+      log: (m) => logs.push(m),
+    });
+    cleanup.push(() => client.close());
+
+    await client.bestmove(initialPosition());
+    const req = logs.find((l) => l.includes('REQ '));
+    expect(req).toBeDefined();
+    expect(req).not.toContain('maxDepth');
+    expect(req).not.toContain('carelessness');
+  }, 15_000);
+});
+
 describe('EngineClient.evaluate – fronta, retry, protokolové chyby', () => {
   it('slow-then-ok: první pokus se zasekne → kill + retry na timeMs/2 uspěje', async () => {
     const logs: string[] = [];

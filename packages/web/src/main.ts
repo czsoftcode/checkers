@@ -1,10 +1,11 @@
 /**
- * Vstupní bod webového klienta: postaví skořápku (řádek stavu, tlačítka Vzdávám
- * hru / Nová hra) a nechá ji založit partii na serveru.
+ * Vstupní bod webového klienta: postaví skořápku (řádek stavu, výběr úrovně,
+ * tlačítka Vzdávám hru / Nová hra) a nechá ji založit partii na serveru.
  *
- * Skořápka zakládá partii sama (`POST /games`) a řídí i její restart přes
- * tlačítko „Nová hra" – deska se NESEEDUJE lokálním `initialPosition()`, jediným
- * zdrojem výchozí pozice je server. (Do fáze 24 byl restart jen obnovením stránky.)
+ * Skořápka zakládá první partii sama (`POST /games`, napoprvé Profesionál) –
+ * uživatele uvítá kompletní deska, ne prázdná obrazovka. Úroveň jde volně
+ * přepínat až do prvního tahu, pak se zamkne. Deska se NESEEDUJE lokálním
+ * `initialPosition()`, jediným zdrojem výchozí pozice je server.
  */
 
 import { APP_TITLE } from './index.js';

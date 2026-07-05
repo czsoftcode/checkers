@@ -17,6 +17,14 @@ import type { GameResult, Position, Square } from '@checkers/rules';
 /** Stav tahu enginu na pozadí (kontrakt se serverem). */
 export type EngineStatus = 'idle' | 'thinking' | 'error';
 
+/**
+ * Úroveň obtížnosti posílaná do POST /games. Hodnoty MUSÍ sedět na server
+ * (`levels.ts`, zod enum) – web na balíček server nezávisí (nesváže build graf),
+ * takže je to ručně držená kopie kontraktu, stejně jako `GameDto` níž. Neznámou
+ * hodnotu server odmítne (400).
+ */
+export type GameLevel = 'professional' | 'beginner';
+
 /** Tah v drátovém tvaru (čísla polí 1–32). Klient ho zatím nečte, ale je součástí kontraktu. */
 export interface MoveDto {
   readonly from: number;
@@ -31,6 +39,8 @@ export interface GameDto {
   readonly result: GameResult;
   readonly legalMoves: MoveDto[];
   readonly engineStatus: EngineStatus;
+  /** Úroveň, proti které se partie HRAJE (autorita = server, ne přepínač v UI). */
+  readonly level: GameLevel;
 }
 
 /**
@@ -45,7 +55,8 @@ export interface DrawOffer {
 
 /** Klient serveru. Injektuje se do controlleru, ať jde otestovat bez sítě. */
 export interface ServerClient {
-  createGame(): Promise<GameDto>;
+  /** Založí novou partii proti enginu na zvolené úrovni obtížnosti. */
+  createGame(level: GameLevel): Promise<GameDto>;
   getGame(id: string): Promise<GameDto>;
   postMove(id: string, from: Square, path: readonly Square[]): Promise<GameDto>;
   /** Vzdání partie (člověk = černý → vyhrává bílý). Vrací stav se skončenou partií. */
@@ -115,7 +126,7 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
   }
 
   return {
-    createGame: () => request('POST', '/games'),
+    createGame: (level) => request('POST', '/games', { level }),
     getGame: (id) => request('GET', `/games/${encodeURIComponent(id)}`),
     postMove: (id, from, path) =>
       request('POST', `/games/${encodeURIComponent(id)}/moves`, { from, path: [...path] }),
@@ -198,6 +209,9 @@ function isGameDto(value: unknown): value is GameDto {
     record.engineStatus !== 'thinking' &&
     record.engineStatus !== 'error'
   ) {
+    return false;
+  }
+  if (record.level !== 'professional' && record.level !== 'beginner') {
     return false;
   }
   const position = record.position;

@@ -11,6 +11,8 @@
 import { randomUUID } from 'node:crypto';
 import { advanceState, gameResultFromState, initialGameState } from '@checkers/rules';
 import type { GameResult, GameState, Move } from '@checkers/rules';
+import { DEFAULT_LEVEL } from './levels.js';
+import type { GameLevel } from './levels.js';
 
 /**
  * Stav tahu enginu na pozadí:
@@ -41,6 +43,12 @@ export interface GameRecord {
    * partie čte {@link effectiveResult} = `forcedResult ?? gameResultFromState`.
    */
   readonly forcedResult: GameResult | null;
+  /**
+   * Úroveň obtížnosti zvolená při založení partie (fáze 35). Fixní po celou
+   * partii – tah enginu běží na pozadí (`runEngineMove`) a sílu čte odsud, ne z
+   * klienta. Mapa úroveň → páky enginu žije v `levels.ts`.
+   */
+  readonly level: GameLevel;
 }
 
 interface StoredGame {
@@ -49,6 +57,7 @@ interface StoredGame {
   moves: Move[];
   archived: boolean;
   forcedResult: GameResult | null;
+  level: GameLevel;
 }
 
 /**
@@ -84,11 +93,16 @@ export class GameStore {
       moves: [...game.moves],
       archived: game.archived,
       forcedResult: game.forcedResult,
+      level: game.level,
     };
   }
 
-  /** Založí novou partii ve výchozím rozestavění (černý na tahu, engine idle). */
-  create(): GameRecord {
+  /**
+   * Založí novou partii ve výchozím rozestavění (černý na tahu, engine idle).
+   * `level` řídí sílu enginu; výchozí je Profesionál (dnešní chování), takže
+   * volání bez argumentu zůstává zpětně kompatibilní.
+   */
+  create(level: GameLevel = DEFAULT_LEVEL): GameRecord {
     const id = randomUUID();
     const game: StoredGame = {
       state: initialGameState(),
@@ -96,6 +110,7 @@ export class GameStore {
       moves: [],
       archived: false,
       forcedResult: null,
+      level,
     };
     this.games.set(id, game);
     return this.toRecord(id, game);

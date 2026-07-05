@@ -12,6 +12,9 @@
  *   illegal       → vrátí nelegální tah (server ho musí odmítnout)
  *   error         → odpoví protokolovou chybou (no_legal_moves)
  *   malformed     → vrátí smetí místo tahu/skóre (move: null / score: "NaN")
+ *   echo          → přijatý požadavek zopakuje na stderr ("REQ <json>") a pak
+ *                   odpoví úspěšně; test si přes `log` (stderr) ověří, jaká pole
+ *                   (maxDepth/carelessness) server reálně poslal do bestmove
  *
  * Argumenty: --score (skóre pro evaluate), --protocol (verze v hello, výchozí 3),
  * --move, --threshold. hello se zodpoví VŽDY hned (aby šlo warmup i po nastavení
@@ -83,6 +86,12 @@ function handle(line) {
       return;
     case 'malformed':
       send(malformedResponse(msg.type, id));
+      return;
+    case 'echo':
+      // Přijatý řádek zopakuj na stderr, ať ho test uvidí přes `log` klienta,
+      // a pak odpověz úspěšně (bestmove tah / evaluate skóre).
+      process.stderr.write(`REQ ${line}\n`);
+      send(successResponse(msg.type, id));
       return;
     case 'slow-then-ok':
       if (typeof msg.timeMs === 'number' && msg.timeMs >= threshold) {
