@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { initialPosition } from '@checkers/rules';
 import type { Position } from '@checkers/rules';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 
 import { createAppShell } from '../src/app-shell.js';
@@ -15,9 +15,15 @@ import type { GameDto, GameLevel, ServerClient } from '../src/server-client.js';
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+beforeEach(() => {
+  // Úroveň se pamatuje v LocalStorage → čistý start, ať se volba neprolije mezi testy.
+  localStorage.clear();
+});
+
 afterEach(() => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
+  localStorage.clear();
 });
 
 function gameDto(position: Position, result: GameDto['result'] = 'ongoing'): GameDto {
@@ -79,6 +85,17 @@ function fakeClient(dto: GameDto): ServerClient {
   };
 }
 
+/** Fake createGame, které v odpovědi VRÁTÍ zvolenou úroveň (server = autorita). */
+function levelEchoClient(): {
+  client: ServerClient;
+  createGame: Mock<(level: GameLevel) => Promise<GameDto>>;
+} {
+  const createGame = vi.fn<(level: GameLevel) => Promise<GameDto>>((level) =>
+    Promise.resolve({ ...gameDto(initialPosition()), level }),
+  );
+  return { client: { ...fakeClient(gameDto(initialPosition())), createGame }, createGame };
+}
+
 function q(root: HTMLElement, sel: string): HTMLElement {
   const el = root.querySelector<HTMLElement>(sel);
   if (el === null) {
@@ -130,17 +147,6 @@ describe('app-shell – stav tlačítek podle výsledku', () => {
 });
 
 describe('app-shell – výběr úrovně', () => {
-  /** Fake createGame, které v odpovědi VRÁTÍ zvolenou úroveň (server = autorita). */
-  function levelEchoClient(): {
-    client: ServerClient;
-    createGame: Mock<(level: GameLevel) => Promise<GameDto>>;
-  } {
-    const createGame = vi.fn<(level: GameLevel) => Promise<GameDto>>((level) =>
-      Promise.resolve({ ...gameDto(initialPosition()), level }),
-    );
-    return { client: { ...fakeClient(gameDto(initialPosition())), createGame }, createGame };
-  }
-
   it('start: automatická hra na Profesionálovi, panel ho hlásí, přepínač ODEMČENÝ (před tahem)', async () => {
     const { factory } = fakeFactory();
     const { client, createGame } = levelEchoClient();
@@ -194,6 +200,71 @@ describe('app-shell – výběr úrovně', () => {
 
     created[0]?.emit(OVER); // konec partie → zas odemčený
     expect(select.disabled).toBe(false);
+  });
+});
+
+describe('app-shell – úroveň přežije reload (LocalStorage)', () => {
+  it('volba úrovně se uloží do LocalStorage při založení partie', async () => {
+    const { factory } = fakeFactory();
+    const { client } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+
+    // Auto-start uložil výchozí (Profesionál).
+    expect(localStorage.getItem('checkers.level')).toBe('professional');
+
+    // Uživatel přepne PŘED tahem → přehraje partii → uloží se nová volba.
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    select.value = 'intermediate';
+    change(select);
+    await tick();
+    expect(localStorage.getItem('checkers.level')).toBe('intermediate');
+  });
+
+  it('po reloadu se předvyplní uložená úroveň a partie na ní vznikne (zuby)', async () => {
+    // Zuby: kdyby se uložená úroveň při startu nepřečetla, select by zůstal na
+    // Profesionálovi a createGame by dostalo 'professional', ne 'intermediate'.
+    localStorage.setItem('checkers.level', 'intermediate');
+    const { factory } = fakeFactory();
+    const { client, createGame } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    expect(select.value).toBe('intermediate');
+    expect(createGame).toHaveBeenCalledWith('intermediate');
+    expect(q(shell.element, '.level-info').textContent).toBe('Soupeř: Pokročilý');
+  });
+
+  it('neplatná uložená hodnota → fallback na výchozí Profesionál (nepropustí se serveru)', async () => {
+    localStorage.setItem('checkers.level', 'grandmaster'); // stará/cizí/poškozená
+    const { factory } = fakeFactory();
+    const { client, createGame } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    expect(select.value).toBe('professional');
+    expect(createGame).toHaveBeenCalledWith('professional');
+  });
+
+  it('nedostupný LocalStorage (getItem hodí) → start nespadne, jede Profesionál', async () => {
+    // Privátní režim / vypnuté úložiště: getItem vyhodí. Start appky to NESMÍ shodit.
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('LocalStorage blokován');
+    });
+    const { factory } = fakeFactory();
+    const { client, createGame } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+
+    // Deska se vykreslila (appka nespadla), partie běží na výchozí úrovni.
+    expect(shell.element.querySelectorAll('.fake-board')).toHaveLength(1);
+    expect(createGame).toHaveBeenCalledWith('professional');
   });
 });
 

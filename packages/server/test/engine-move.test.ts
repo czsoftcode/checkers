@@ -217,6 +217,23 @@ describe('úroveň partie protéká až do bestmove', () => {
     expect(calls[0]?.carelessness).toBeGreaterThan(0);
   });
 
+  it('level "intermediate" → engine dostane páky z reálné mapy, odlišné od beginner i professional', async () => {
+    // Zuby: kdyby server pro Pokročilého tiše posílal páky Začátečníka (nebo je
+    // zahodil na Profesionála = undefined), test spadne. Porovnává se REÁLNÁ mapa.
+    const { mover, calls } = recordingStub();
+    app = buildApp({ engine: mover });
+    const game = await createGameWithLevel('intermediate');
+    await playFirstHumanMove(game);
+    await pollUntil(game.id, (dto) => dto.engineStatus === 'idle' && dto.position.turn === 'black');
+    expect(calls[0]).toEqual(STRENGTH_BY_LEVEL.intermediate);
+    // Střed: jiné páky než Začátečník i než Profesionál (undefined = plná síla).
+    expect(calls[0]).not.toBeUndefined();
+    expect(calls[0]).not.toEqual(STRENGTH_BY_LEVEL.beginner);
+    // Hloubka mezi Začátečníkem (1) a neomezenou; nepozornost mírnější než Začátečník.
+    expect(calls[0]?.maxDepth).toBeGreaterThan(STRENGTH_BY_LEVEL.beginner?.maxDepth ?? 0);
+    expect(calls[0]?.carelessness).toBeLessThan(STRENGTH_BY_LEVEL.beginner?.carelessness ?? 1);
+  });
+
   it('GameDto vrací úroveň partie (výchozí professional i zvolený beginner)', async () => {
     app = buildApp({ engine: recordingStub().mover });
     const def = await createGame(); // bez těla

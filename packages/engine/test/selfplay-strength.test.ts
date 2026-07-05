@@ -60,3 +60,51 @@ describe('runStrengthMatch – slabší nastavení měřitelně prohrává', () 
     expect(outcome(runStrengthMatch(opts))).toEqual(outcome(runStrengthMatch(opts)));
   });
 });
+
+/**
+ * Pořadí síly tří úrovní obtížnosti (fáze 36). Páky zrcadlí produkční mapu
+ * `STRENGTH_BY_LEVEL` v `packages/server/src/levels.ts` – engine je v grafu
+ * závislostí POD serverem, takže sem konstantu importovat NELZE; je to RUČNÍ
+ * kopie. DŮSLEDEK (vědomé omezení): kdyby někdo změnil produkční čísla
+ * `intermediate` a tento mirror neupravil, testy zůstanou zelené a „důkaz
+ * pořadí" pak validuje čísla, která už v provozu nejsou – nic to nechytí
+ * automaticky. Serverový `levels.test.ts` hlídá jen VLASTNOST pořadí na úrovni
+ * mapy (Pokročilý hlubší a méně nepozorný než Začátečník, s páky vs Profesionál
+ * bez pák), ne konkrétní hodnoty. Tady se dokazuje CHOVÁNÍ: že ty konkrétní páky
+ * vyrobí v self-play očekávané pořadí. Profesionál má v provozu NEomezenou
+ * hloubku (časový limit); self-play umí jen fixní hloubku, proto ho aproximuje
+ * pevná hloubka 4.
+ */
+describe('runStrengthMatch – pořadí úrovní: Pokročilý mezi Začátečníkem a Profesionálem', () => {
+  /** Zrcadlo STRENGTH_BY_LEVEL.beginner. */
+  const BEGINNER: StrengthSide = { maxDepth: 1, carelessness: 0.5 };
+  /** Zrcadlo STRENGTH_BY_LEVEL.intermediate (Pokročilý). */
+  const INTERMEDIATE: StrengthSide = { maxDepth: 3, carelessness: 0.2 };
+  /** Aproximace Profesionála: pevná hloubka nad Pokročilým, bez nepozornosti. */
+  const PRO_LIKE: StrengthSide = { maxDepth: 4, carelessness: 0 };
+
+  const openings = generateOpenings(500, 6, 4);
+
+  it('Pokročilý poráží Začátečníka (scoreRate výrazně > 0,5)', () => {
+    const r = runStrengthMatch({ newSide: INTERMEDIATE, oldSide: BEGINNER, openings, seed: 11 });
+    expect(r.games).toBe(12);
+    expect(r.scoreRate).toBeGreaterThan(0.5);
+    expect(r.wins).toBeGreaterThan(r.losses);
+  });
+
+  it('Pokročilý prohrává s Profesionálem (scoreRate výrazně < 0,5)', () => {
+    const r = runStrengthMatch({ newSide: INTERMEDIATE, oldSide: PRO_LIKE, openings, seed: 13 });
+    expect(r.scoreRate).toBeLessThan(0.5);
+    expect(r.losses).toBeGreaterThan(r.wins);
+  });
+
+  it('má zuby: shodná síla Pokročilého (bez nepozornosti) → vyrovnané ~0,5', () => {
+    // Kontrola falešného poplachu: kdyby harness vždy topil „novou" stranu, ani
+    // shodná síla by nevyšla ~0,5. Deterministické strany (carelessness 0), ať
+    // kontrolu nerozhýbe šum nepozornosti při malém N.
+    const side: StrengthSide = { maxDepth: 3, carelessness: 0 };
+    const r = runStrengthMatch({ newSide: side, oldSide: side, openings, seed: 11 });
+    expect(r.scoreRate).toBeGreaterThan(0.3);
+    expect(r.scoreRate).toBeLessThan(0.7);
+  });
+});

@@ -14,7 +14,7 @@
 import type { Strength } from './engine-client.js';
 
 /** Úroveň obtížnosti. Interní hodnoty (drát/kód); v UI se lokalizují do češtiny. */
-export const LEVELS = ['professional', 'beginner'] as const;
+export const LEVELS = ['professional', 'intermediate', 'beginner'] as const;
 
 /** Typ úrovně odvozený ze seznamu – přidání úrovně = jediná změna v `LEVELS`. */
 export type GameLevel = (typeof LEVELS)[number];
@@ -42,8 +42,21 @@ export const DEFAULT_LEVEL: GameLevel = 'professional';
  * tah"), drží se proto mírná – jen ať engine občas zahraje horší tah k potrestání.
  * Braní je v americké dámě povinné, takže darovaný kámen engine sebere vždy;
  * poražitelnost stojí na tom, že sám nevidí soupeřovy delší hrozby.
+ *
+ * `intermediate` → `maxDepth: 3` + mírná nepozornost (`carelessness: 0.2`).
+ * Střed mezi Začátečníkem (hloubka 1) a Profesionálem (neomezená hloubka).
+ * Kalibrace opřená o self-play (fáze 36, `runStrengthMatch`, seedované): proti
+ * Začátečníkovi {d1, c0.5} vyhrává drtivě (100 %, 12:0 na malém N), proti
+ * pro-like straně jasně prohrává ({d4, c0}: 8 %; {d6, c0}: 4 %) – pořadí síly
+ * sedí. Hloubka 3 vidí bezprostřední rekaptury a jednoduché dvojtahové hrozby,
+ * ne hluboké kombinace; nepozornost 0.2 (méně než začátečníkových 0.5) nechá
+ * engine občas zahrát druhý nejlepší tah, aby ho schopnější člověk mohl
+ * potrestat, ale drží ho výrazně spolehlivějším než Začátečníka. Čísla jsou
+ * první rozumný odhad, ne ověřená obtížnost proti člověku (self-play je šumivý
+ * a Profesionál v provozu má neomezenou hloubku – test ho jen aproximuje).
  */
 export const STRENGTH_BY_LEVEL: Record<GameLevel, Strength | undefined> = {
   professional: undefined,
+  intermediate: { maxDepth: 3, carelessness: 0.2 },
   beginner: { maxDepth: 1, carelessness: 0.5 },
 };

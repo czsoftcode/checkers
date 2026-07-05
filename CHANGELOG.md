@@ -7,6 +7,21 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-07-05
+
+### Added
+
+- Třetí úroveň obtížnosti **Pokročilý** mezi Začátečníkem a Profesionálem.
+  Engine na ní vidí do hloubky 3 (bezprostřední hrozby a jednoduché kombinace,
+  ne hluboké taktiky) a jen mírně chybuje – měřitelně silnější než Začátečník,
+  slabší než Profesionál. Páky (`maxDepth 3`, `carelessness 0.2`) jsou
+  vykalibrované self-play měřením (pořadí síly ověřené testem); konkrétní
+  obtížnost proti člověku je první odhad, doladí se reálným hraním.
+- Zvolená úroveň se **pamatuje mezi návštěvami**: po zavření/obnovení stránky se
+  přepínač předvyplní naposledy zvolenou úrovní (uloženo v prohlížeči). Nedostupné
+  úložiště (privátní režim) ani poškozená hodnota hru neshodí – padá se na
+  Profesionála.
+
 ## [0.31.0] - 2026-07-05
 
 ### Added

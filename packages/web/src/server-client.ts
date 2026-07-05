@@ -18,12 +18,21 @@ import type { GameResult, Position, Square } from '@checkers/rules';
 export type EngineStatus = 'idle' | 'thinking' | 'error';
 
 /**
- * Úroveň obtížnosti posílaná do POST /games. Hodnoty MUSÍ sedět na server
+ * JEDINÝ web-side seznam úrovní obtížnosti. Hodnoty MUSÍ sedět na server
  * (`levels.ts`, zod enum) – web na balíček server nezávisí (nesváže build graf),
  * takže je to ručně držená kopie kontraktu, stejně jako `GameDto` níž. Neznámou
- * hodnotu server odmítne (400).
+ * hodnotu server odmítne (400). Odsud se odvozuje typ `GameLevel`, runtime guard
+ * v `isGameDto` i výběr úrovně v UI – přidání úrovně = jediná změna tady (plus
+ * její český popisek v `app-shell.ts`). POZOR: pořadí tu není jen kosmetika –
+ * `app-shell.ts` z něj plní `<select>` a PRVNÍ prvek je výchozí soupeř nové hry.
+ * `professional` proto musí zůstat první, ať UI default sedí na serverový
+ * `DEFAULT_LEVEL` (jinak by se automatická úvodní partie a serverový default
+ * tiše rozešly).
  */
-export type GameLevel = 'professional' | 'beginner';
+export const GAME_LEVELS = ['professional', 'intermediate', 'beginner'] as const;
+
+/** Úroveň obtížnosti posílaná do POST /games. Odvozeno z `GAME_LEVELS`. */
+export type GameLevel = (typeof GAME_LEVELS)[number];
 
 /** Tah v drátovém tvaru (čísla polí 1–32). Klient ho zatím nečte, ale je součástí kontraktu. */
 export interface MoveDto {
@@ -211,7 +220,10 @@ function isGameDto(value: unknown): value is GameDto {
   ) {
     return false;
   }
-  if (record.level !== 'professional' && record.level !== 'beginner') {
+  if (
+    typeof record.level !== 'string' ||
+    !(GAME_LEVELS as readonly string[]).includes(record.level)
+  ) {
     return false;
   }
   const position = record.position;

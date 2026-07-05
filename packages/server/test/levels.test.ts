@@ -27,6 +27,19 @@ describe('úrovně obtížnosti', () => {
     expect(beginner?.carelessness).toBeLessThanOrEqual(1);
   });
 
+  it('Pokročilý je uprostřed: hlubší a pozornější než Začátečník, ale s páky (ne plná síla)', () => {
+    const intermediate = STRENGTH_BY_LEVEL.intermediate;
+    const beginner = STRENGTH_BY_LEVEL.beginner;
+    expect(intermediate).toBeDefined();
+    // Má páky (na rozdíl od Profesionála = undefined) → není plná síla.
+    expect(intermediate).not.toBeUndefined();
+    // Vidí hlouběji než Začátečník (hloubka je dominantní páka síly).
+    expect(intermediate?.maxDepth).toBeGreaterThan(beginner?.maxDepth ?? 0);
+    // Méně nepozorný než Začátečník (spolehlivější, ale pořád potrestatelný).
+    expect(intermediate?.carelessness).toBeGreaterThan(0);
+    expect(intermediate?.carelessness).toBeLessThan(beginner?.carelessness ?? 1);
+  });
+
   it('každá úroveň v LEVELS má záznam v mapě síly', () => {
     for (const level of LEVELS) {
       expect(level in STRENGTH_BY_LEVEL).toBe(true);

@@ -17,13 +17,51 @@ import type {
   DrawOfferOutcome,
   GameStatus,
 } from './controller.js';
+import { GAME_LEVELS } from './server-client.js';
 import type { GameDto, GameLevel, ServerClient } from './server-client.js';
 
-/** České popisky úrovní pro UI (interní hodnoty zůstávají anglické na drátě). */
+/**
+ * České popisky úrovní pro UI (interní hodnoty zůstávají anglické na drátě).
+ * `Record<GameLevel, …>` vynutí popisek pro KAŽDOU úroveň – přidání úrovně do
+ * `GAME_LEVELS` bez popisku sem shodí typecheck (jediný zdroj = server-client).
+ */
 const LEVEL_LABELS: Record<GameLevel, string> = {
   professional: 'Profesionál',
+  intermediate: 'Pokročilý',
   beginner: 'Začátečník',
 };
+
+/** Klíč v LocalStorage pro zapamatovanou volbu úrovně (přežije reload stránky). */
+const LEVEL_STORAGE_KEY = 'checkers.level';
+
+/**
+ * Načte zapamatovanou úroveň z LocalStorage. Vrací `null`, když nic uloženo není,
+ * uložená hodnota NENÍ platná úroveň (stará/poškozená/cizí zápis), nebo když
+ * LocalStorage vůbec nejde (privátní režim, vypnuté úložiště → `getItem` hodí).
+ * Čtení NESMÍ shodit start appky – proto try/catch a validace proti `GAME_LEVELS`,
+ * ne slepá důvěra uloženému řetězci (jinak by neznámá hodnota protekla jako
+ * `GameLevel` do `createGame` a server ji odmítl 400).
+ */
+function loadSavedLevel(): GameLevel | null {
+  try {
+    const raw = localStorage.getItem(LEVEL_STORAGE_KEY);
+    if (raw !== null && (GAME_LEVELS as readonly string[]).includes(raw)) {
+      return raw as GameLevel;
+    }
+  } catch {
+    // LocalStorage nedostupný → tichý fallback na výchozí úroveň (return null).
+  }
+  return null;
+}
+
+/** Uloží zvolenou úroveň. Selhání zápisu (kvóta/privátní režim) je neškodné → spolknout. */
+function saveLevel(level: GameLevel): void {
+  try {
+    localStorage.setItem(LEVEL_STORAGE_KEY, level);
+  } catch {
+    // Nejde uložit → preference se prostě nezapamatuje, appka běží dál.
+  }
+}
 
 /** Tovární funkce controlleru – injektovatelná kvůli testům (výchozí = reálný). */
 type ControllerFactory = (
@@ -91,11 +129,20 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   levelLabel.textContent = 'Nová hra proti:';
   const levelSelect = document.createElement('select');
   levelSelect.className = 'level-select';
-  for (const value of ['professional', 'beginner'] satisfies GameLevel[]) {
+  // Pořadí = pořadí v `GAME_LEVELS` (Profesionál → Pokročilý → Začátečník);
+  // první je výchozí. Jediný zdroj hodnot i pořadí, žádná druhá kopie seznamu.
+  for (const value of GAME_LEVELS) {
     const opt = document.createElement('option');
     opt.value = value;
     opt.textContent = LEVEL_LABELS[value];
     levelSelect.append(opt);
+  }
+  // Předvyplň naposledy zvolenou úrovní z LocalStorage (přežije reload). Musí být
+  // PŘED prvním `startNewGame()` (na konci funkce), který hodnotu selectu čte.
+  // Neplatná/chybějící → necháme výchozí (první <option> = Profesionál).
+  const savedLevel = loadSavedLevel();
+  if (savedLevel !== null) {
+    levelSelect.value = savedLevel;
   }
   levelLabel.append(levelSelect);
   levelRow.append(levelLabel);
@@ -284,6 +331,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     // nezmění. `value` je vždy jedna z `<option>` (uživatel nemůže vložit jiné);
     // přetypování na GameLevel je tím kryté, server navíc neznámou úroveň odmítne.
     const level = levelSelect.value as GameLevel;
+    saveLevel(level); // zapamatuj volbu na příští reload (přežije zavření stránky)
     if (controller !== null) {
       controller.dispose();
       controller = null;

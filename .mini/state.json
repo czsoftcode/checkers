@@ -177,6 +177,11 @@
       "id": 35,
       "title": "Úroveň Začátečník: server a UI",
       "status": "done"
+    },
+    {
+      "id": 36,
+      "title": "Úroveň Pokročilý: kalibrace a UI",
+      "status": "done"
     }
   ]
 }

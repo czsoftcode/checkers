@@ -1,0 +1,43 @@
+{
+  "id": 36,
+  "title": "Úroveň Pokročilý: kalibrace a UI",
+  "goal": "Přidat třetí úroveň obtížnosti Pokročilý mezi Začátečníka a Profesionála: páky síly { maxDepth, carelessness } opřené o self-play měření (monotónně silnější než Začátečník, slabší než Profesionál), zavedenou do LEVELS / STRENGTH_BY_LEVEL / LEVEL_LABELS / UI selectu, s testem na protažení pák k enginu a na pořadí síly.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Kalibrace pák Pokročilého (self-play experiment)",
+      "status": "done",
+      "detail": "Přes runStrengthMatch proměřit kandidátní { maxDepth, carelessness } mezi Začátečníkem (maxDepth 1) a pro-like stranou; zvolit tak, že Pokročilý poráží Začátečníka a prohrává s pro-like stranou. Výstup: konkrétní vykalibrovaná čísla + doložené poměry (scoreRate) v reportu, ne od oka."
+    },
+    {
+      "title": "levels.ts: přidat úroveň intermediate",
+      "status": "done",
+      "detail": "Do LEVELS a STRENGTH_BY_LEVEL vykalibrovaná čísla + komentář o původu (jako u beginner); DEFAULT_LEVEL beze změny. Interní drát intermediate, český popisek Pokročilý. Výstup: mapa má 3 položky, server kompiluje."
+    },
+    {
+      "title": "Web: jediný zdroj úrovní + Pokročilý",
+      "status": "done",
+      "detail": "Sjednotit 4 duplikáty ve web balíčku (typ GameLevel, guard v isGameDto:214, LEVEL_LABELS, pole v select) do jednoho seznamu; přidat intermediate/Pokročilý; pořadí v selectu Profesionál -> Pokročilý -> Začátečník. Bez inline stylů (CSP). Výstup: select nabízí 3 úrovně, refresh partie Pokročilý pozná."
+    },
+    {
+      "title": "Test protažení pák k enginu (server, se zuby)",
+      "status": "done",
+      "detail": "Server/engine-move test: pro intermediate dorazí k bestmove právě mapová { maxDepth, carelessness }, odlišná od beginner i professional; test čte reálnou STRENGTH_BY_LEVEL, ne svou kopii. Zuby: kdyby server tiše posílal jinou úroveň, padne."
+    },
+    {
+      "title": "Test pořadí síly (self-play, se zuby)",
+      "status": "done",
+      "detail": "Selfplay-strength test: Pokročilý scoreRate > 0,5 proti Začátečníkovi a < 0,5 proti pro-like straně (vysoká fixní hloubka jako náhrada za neomezeného Profesionála); seedované, deterministické. Kontrolní test shodné síly ~0,5 chrání před falešným poplachem."
+    }
+  ],
+  "startedAt": "2026-07-05T14:06:23.883Z",
+  "resolvedVerify": [
+    "Vizuální kontrola výběru úrovně v UI + zapamatování přes reload",
+    "Subjektivní obtížnost Pokročilého proti člověku"
+  ],
+  "completedAt": "2026-07-05T14:50:14.981Z",
+  "autoCommit": {
+    "preSha": "e5708a52e4e0ecb226483dcd8ebdb107131f750f",
+    "subject": "Phase 36: Úroveň Pokročilý: kalibrace a UI"
+  }
+}
