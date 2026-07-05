@@ -7,6 +7,29 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-07-05
+
+### Added
+
+- Engine: dvě páky síly v protokolu `bestmove` (základ pro budoucí úrovně hry
+  Začátečník/Pokročilý vedle stávajícího Profesionála). Obě pole jsou VOLITELNÁ
+  a zpětně kompatibilní (chybí → Profesionál, dnešní chování), proto se NEmění
+  verze protokolu (v3):
+  - `maxDepth` (kladné celé číslo): strop iterativního prohlubování – engine
+    „vidí" méně tahů dopředu a hraje mělčeji. Chybí → `MAX_SEARCH_DEPTH`.
+  - `carelessness` (0..1): pravděpodobnost, že engine v daném tahu místo
+    nejlepšího zahraje „o úroveň horší" tah (nejlepší z tahů mimo top skóre) –
+    slabší, ale ne náhodně zahozený. Chybí → 0 (nikdy). Nutné kvůli povinnému
+    braní: samotná mělká hloubka pořád trestá každou darovanou figuru, takže bez
+    nepozornosti nemá slabší hráč šanci na výhru.
+  - Search umí na požádání (`rankRoot`) vrátit skóre VŠECH kořenových tahů
+    (`rankedMoves`, kořen se nepruuje); mimo ranked režim je chování bit-identické
+    s dřívějškem. Výběr tahu dělá sdílená funkce `chooseMove` (stejný kontrakt pro
+    handler enginu i self-play harness). Self-play harness dostal `runStrengthMatch`
+    (srovnání SÍLY per-strana); seedovaným zápasem je doloženo, že slabší
+    nastavení měřitelně prohrává s Profesionálem. Rozsah: jen engine – napojení
+    na server a přepínač v UI přijdou v dalších fázích.
+
 ## [0.29.0] - 2026-07-05
 
 ### Added

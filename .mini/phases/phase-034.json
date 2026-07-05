@@ -1,0 +1,44 @@
+{
+  "id": 34,
+  "title": "Engine: strop hloubky a nepozornost",
+  "goal": "Do bestmove protokolu přidat dvojici parametrů síly – strop hloubky (maxDepth, plumbing už existuje v searchTimed) a míru nepozornosti (pravděpodobnost, že engine přes rng zvolí horší než nejlepší tah) – a self-play testem doložit, že s nižší hloubkou i vyšší nepozorností engine měřitelně prohrává s profesionálním nastavením. Rozsah: jen engine + protokol + testy, bez serveru a UI (další fáze). Náhoda jde přes stávající rng, aby testy zůstaly deterministické.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Protokol: pole maxDepth a carelessness v BestmoveRequest",
+      "status": "done",
+      "detail": "protocol.ts – volitelné maxDepth?: number a carelessness?: number + dokumentace sémantiky a defaultu (chybí → Profesionál: maxDepth = MAX_SEARCH_DEPTH, carelessness = 0). Bez validace zde (v handleru). Projde buildem, starý server bez polí funguje dál."
+    },
+    {
+      "title": "Search umí skóre všech kořenových tahů (režim bez ořezu)",
+      "status": "done",
+      "detail": "search.ts – rootSearch dostane volitelný režim: zapnutý nepruuje kořen (plné okno na každý tah) a vrací seřazený rankedMoves: {move, score}[] v SearchResult; searchTimed ho propaguje z poslední dokončené iterace. Vypnuto = dnešní chování bit-identicky (žádná perf regrese, stávající testy zelené). Zuby: unit test – v taktické pozici depth-1 dá jiný tah/pořadí než depth-6."
+    },
+    {
+      "title": "Handler: validace parametrů + průchod hloubky do searche",
+      "status": "done",
+      "detail": "handler.ts (handleBestmove) – validovat maxDepth (celé ≥1) a carelessness (číslo 0..1); špatný tvar → invalid_message (před parsováním pozice, jako timeMs). Předat maxDepth do searchTimed. Profi cesta (bez polí) volá search i losuje rng identicky jako dnes. Zuby: unit testy validace (špatný typ/rozsah → invalid_message)."
+    },
+    {
+      "title": "Nepozornost: výběr horšího tahu (sdílená funkce)",
+      "status": "done",
+      "detail": "Čistá exportovaná funkce chooseMove(rankedMoves, bestMoves, carelessness, rng): když carelessness > 0 a rng() < carelessness → nejlepší tah z druhé úrovně (ties přes rng), jinak dnešní tie-break mezi bestMoves. Nepozornostní los jen když carelessness > 0 (nesmí posunout losy v profi cestě). Handler ji volá s rankedMoves (search v režimu z kroku 2, jen když carelessness > 0). Zuby: seed + carelessness=1 → vybraný tah NENÍ z bestMoves; carelessness=0 → shodné s dneškem."
+    },
+    {
+      "title": "Self-play harness: síla per-strana",
+      "status": "done",
+      "detail": "selfplay.ts – MatchOptions/playFixedDepthGame rozšířit o sílu per-strana (maxDepth + carelessness) místo jedné depth. Použít TU SAMOU chooseMove z kroku 4 (ne kopii – cross-module kontrakt). Zachovat párování barev (odečet výhody tahu) a seed přes mulberry32 (determinismus)."
+    },
+    {
+      "title": "Self-play test slabý měřitelně prohrává + CHANGELOG",
+      "status": "done",
+      "detail": "Vitest zápas: slabá konfigurace (mělká hloubka + carelessness) vs Profesionál přes N seedovaných zahájení → scoreRate < 0,5 pro slabou stranu, deterministické. Zuby: dočasné ignorování parametrů → scoreRate ≈ 0,5 → test padne. Zapsat CHANGELOG."
+    }
+  ],
+  "startedAt": "2026-07-05T11:49:42.112Z",
+  "completedAt": "2026-07-05T12:22:03.134Z",
+  "autoCommit": {
+    "preSha": "5acd9c27e701b34db45421401ce7e4be950b1e82",
+    "subject": "Phase 34: Engine: strop hloubky a nepozornost"
+  }
+}

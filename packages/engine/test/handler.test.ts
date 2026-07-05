@@ -116,6 +116,73 @@ describe('handleLine – bestmove', () => {
     const raw = JSON.stringify({ type: 'bestmove', id: 't-2', position: 'e4', timeMs: 0 });
     expect(handle(raw)).toMatchObject({ type: 'error', id: 't-2', code: 'invalid_message' });
   });
+
+  it.each([
+    ['maxDepth nula', { maxDepth: 0 }],
+    ['maxDepth záporné', { maxDepth: -3 }],
+    ['maxDepth necelé', { maxDepth: 2.5 }],
+    ['maxDepth není číslo', { maxDepth: '4' }],
+    ['maxDepth null', { maxDepth: null }],
+    ['carelessness pod rozsahem', { carelessness: -0.1 }],
+    ['carelessness nad rozsahem', { carelessness: 1.5 }],
+    ['carelessness není číslo', { carelessness: '0.5' }],
+    ['carelessness NaN', { carelessness: Number.NaN }],
+  ])('vadná páka síly (%s) vrací invalid_message s echo id', (_label, extra) => {
+    const raw = JSON.stringify({
+      type: 'bestmove',
+      id: 's-1',
+      position: initialPosition(),
+      timeMs: TIME_MS,
+      ...extra,
+    });
+    expect(handle(raw)).toMatchObject({ type: 'error', id: 's-1', code: 'invalid_message' });
+  });
+
+  it('platné páky síly (maxDepth, carelessness) vrací legální tah', () => {
+    const raw = JSON.stringify({
+      type: 'bestmove',
+      id: 's-2',
+      position: initialPosition(),
+      timeMs: TIME_MS,
+      maxDepth: 1,
+      carelessness: 0.5,
+    });
+    const response = handle(raw);
+    if (response.type !== 'bestmove') {
+      throw new Error(`čekal bestmove, přišlo ${response.type}`);
+    }
+    expect(legalMoves(initialPosition())).toContainEqual(response.move);
+  });
+
+  it('carelessness > 0 odkloní výběr: přes handler jiný tah než Profesionál (integrační zub)', () => {
+    // Pozice se dvěma úrovněmi skóre: nejlepší 10×17 (přes 14), o úroveň horší
+    // 10×19 (přes 15, přijde zpětné braní). Profesionál hraje 10×17; s
+    // carelessness 1 MUSÍ handler přes ranked režim searchTimed + chooseMove
+    // vybrat 10×19. Kdyby se carelessness/maxDepth do searche a výběru
+    // nepředaly (spojka handler→search/chooseMove), tahy by byly shodné.
+    const position = makePosition('black', { 1: 'bm', 10: 'bm', 14: 'wm', 15: 'wm', 16: 'wk' });
+    const pro = handleDeterministic(
+      JSON.stringify({ type: 'bestmove', id: 'c', position, timeMs: TIME_MS }),
+      3,
+    );
+    const careless = handleDeterministic(
+      JSON.stringify({ type: 'bestmove', id: 'c', position, timeMs: TIME_MS, carelessness: 1 }),
+      3,
+    );
+    expect(pro).toMatchObject({ move: { from: 10, path: [17], captures: [14] } });
+    expect(careless).toMatchObject({ move: { from: 10, path: [19], captures: [15] } });
+  });
+
+  it('chybějící páky síly = Profesionál: shodné s dnešním chováním (beze změny)', () => {
+    // Bez maxDepth/carelessness musí handler vybrat týž tah jako holá zpráva –
+    // pojistka, že přidání polí neposunulo losování rng ani default hloubky.
+    const position = makePosition('black', { 13: 'bm', 21: 'bm', 22: 'bm', 29: 'wm' });
+    const bare = JSON.stringify({ type: 'bestmove', id: 'p', position, timeMs: TIME_MS });
+    const withZero = JSON.stringify({
+      type: 'bestmove', id: 'p', position, timeMs: TIME_MS, carelessness: 0,
+    });
+    expect(handle(bare, 7)).toEqual(handle(withZero, 7));
+  });
 });
 
 describe('handleLine – evaluate', () => {

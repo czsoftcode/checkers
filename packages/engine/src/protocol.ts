@@ -52,12 +52,26 @@ export interface HelloRequest {
  * - nenese remízový stav partie (čítač půltahů bez pokroku, historii
  *   opakování) – engine hodnotí jen samotnou pozici a o blížící se remíze
  *   neví; remízy autoritativně hlídá server přes GameState.
+ *
+ * `maxDepth` a `carelessness` jsou VOLITELNÉ páky síly (kalibrace úrovní hry).
+ * Chybí-li, engine hraje naplno = Profesionál (žádný strop hloubky, žádná
+ * nepozornost) – shodně se staršími volajícími, kteří pole neposílají. Jsou to
+ * zpětně kompatibilní rozšíření, proto NEmění verzi protokolu (v3):
+ * - `maxDepth` (kladné celé číslo): strop iterativního prohlubování. Nižší =
+ *   engine „vidí" méně tahů dopředu, hraje mělčeji. Chybí → MAX_SEARCH_DEPTH.
+ * - `carelessness` (číslo 0..1): pravděpodobnost, že engine v daném tahu místo
+ *   nejlepšího zahraje „o úroveň horší" tah (nejlepší z tahů mimo top skóre) –
+ *   slabší, ale ne náhodně zahozený. Chybí → 0 (nikdy). Nutné kvůli povinnému
+ *   braní: samotná mělká hloubka pořád trestá každou darovanou figuru, takže
+ *   bez nepozornosti nemá slabší hráč šanci.
  */
 export interface BestmoveRequest {
   readonly type: 'bestmove';
   readonly id: MessageId;
   readonly position: Position;
   readonly timeMs: number;
+  readonly maxDepth?: number;
+  readonly carelessness?: number;
 }
 
 /**

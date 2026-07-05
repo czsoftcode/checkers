@@ -20,7 +20,7 @@ import {
 import type { Color, GameResult, GameState } from '@checkers/rules';
 
 import { mulberry32 } from './prng.js';
-import { searchRoot } from './search.js';
+import { chooseMove, searchRoot } from './search.js';
 import type { EvalFn } from './search.js';
 
 /**
@@ -209,6 +209,123 @@ export function runMatch(options: MatchOptions): MatchResult {
 
     // Partie B: prohození barev – nová hraje bílou, stará černou.
     const b = playFixedDepthGame(opening, oldEval, newEval, depth, mulberry32(seed + 2 * i + 1));
+    tally(b.result, 'white', acc);
+    newMs += b.msByColor.white;
+    newMoves += b.movesByColor.white;
+    oldMs += b.msByColor.black;
+    oldMoves += b.movesByColor.black;
+  });
+
+  const games = openings.length * 2;
+  const score = acc.wins + 0.5 * acc.draws;
+  return {
+    games,
+    wins: acc.wins,
+    draws: acc.draws,
+    losses: acc.losses,
+    score,
+    scoreRate: score / games,
+    newMs,
+    newMoves,
+    oldMs,
+    oldMoves,
+  };
+}
+
+/**
+ * Síla jednoho hráče v self-play: strop hloubky + míra nepozornosti. Na rozdíl
+ * od `runMatch` (srovnává EVALUACE při stejné hloubce) tady jde o srovnání SÍLY –
+ * mělčí a nepozornější hráč má prokazatelně prohrávat s hlubším a pozorným.
+ */
+export interface StrengthSide {
+  /** Fixní hloubka prohledávání (kladné celé číslo). */
+  readonly maxDepth: number;
+  /** Míra nepozornosti 0..1 (0 = vždy nejlepší tah). */
+  readonly carelessness: number;
+  /** Evaluace (výchozí produkční `evaluate` – dosadí ji searchRoot). */
+  readonly evaluate?: EvalFn;
+}
+
+/**
+ * Odehraje jednu partii z daného zahájení, kde každá barva má vlastní SÍLU
+ * (hloubka + nepozornost). Tah vybírá sdílená `chooseMove` (stejný kontrakt jako
+ * handler enginu), ranked režim searche se zapíná jen pro nepozornou stranu.
+ * Konec hry a remízy řeší `GameState` (kontrakt rules).
+ */
+function playStrengthGame(
+  start: GameState,
+  black: StrengthSide,
+  white: StrengthSide,
+  rng: () => number,
+): GameStats {
+  let state = start;
+  const msByColor: Record<Color, number> = { black: 0, white: 0 };
+  const movesByColor: Record<Color, number> = { black: 0, white: 0 };
+
+  for (let ply = 0; ply < MAX_SELFPLAY_PLIES; ply++) {
+    const result = gameResultFromState(state);
+    if (result !== 'ongoing') {
+      return { result, msByColor, movesByColor };
+    }
+    const color = state.position.turn;
+    const side = color === 'black' ? black : white;
+
+    const started = performance.now();
+    const { bestMoves, rankedMoves } = searchRoot(
+      state.position,
+      side.maxDepth,
+      side.evaluate,
+      null,
+      side.carelessness > 0,
+    );
+    msByColor[color] += performance.now() - started;
+    movesByColor[color] += 1;
+
+    const move = chooseMove(bestMoves, rankedMoves, side.carelessness, rng);
+    state = advanceState(state, move);
+  }
+  throw new Error(
+    `Partie nedosáhla konce ani po ${String(MAX_SELFPLAY_PLIES)} půltazích – rozbitá terminace`,
+  );
+}
+
+/** Nastavení zápasu dvou SIL (na rozdíl od `MatchOptions`, který srovnává evaluace). */
+export interface StrengthMatchOptions {
+  /** Zkoumaná („nová") síla – z jejího pohledu je výsledek. */
+  readonly newSide: StrengthSide;
+  /** Referenční („stará") síla. */
+  readonly oldSide: StrengthSide;
+  /** Zahájení; každé se odehraje dvakrát s prohozenými barvami (color swap). */
+  readonly openings: readonly GameState[];
+  /** Seed pro tie-break/nepozornost; každá partie dostane odvozený seed. */
+  readonly seed: number;
+}
+
+/**
+ * Párovaný zápas dvou SIL (color swap kvůli odečtení výhody tahu), z pohledu
+ * NOVÉ síly. Deterministické: stejné vstupy = stejný herní výsledek. Struktura
+ * párování je shodná s `runMatch`; liší se jen tím, že se srovnává síla, ne
+ * evaluace (proto je to samostatná funkce, ne rozšíření eval-harnessu).
+ */
+export function runStrengthMatch(options: StrengthMatchOptions): MatchResult {
+  const { newSide, oldSide, openings, seed } = options;
+  const acc = { wins: 0, draws: 0, losses: 0 };
+  let newMs = 0;
+  let newMoves = 0;
+  let oldMs = 0;
+  let oldMoves = 0;
+
+  openings.forEach((opening, i) => {
+    // Partie A: nová hraje černou, stará bílou.
+    const a = playStrengthGame(opening, newSide, oldSide, mulberry32(seed + 2 * i));
+    tally(a.result, 'black', acc);
+    newMs += a.msByColor.black;
+    newMoves += a.movesByColor.black;
+    oldMs += a.msByColor.white;
+    oldMoves += a.movesByColor.white;
+
+    // Partie B: prohození barev – nová hraje bílou, stará černou.
+    const b = playStrengthGame(opening, oldSide, newSide, mulberry32(seed + 2 * i + 1));
     tally(b.result, 'white', acc);
     newMs += b.msByColor.white;
     newMoves += b.movesByColor.white;

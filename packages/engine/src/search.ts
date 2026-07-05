@@ -177,6 +177,13 @@ function moveEquals(a: Move, b: Move): boolean {
   return true;
 }
 
+/** Jeden kořenový tah s jeho PŘESNÝM skóre; plní se jen v ranked režimu. */
+export interface RankedMove {
+  readonly move: Move;
+  /** Skóre tahu z pohledu strany na tahu (přesné – kořen se v ranked nepruuje). */
+  readonly score: number;
+}
+
 /** Výsledek prohledání kořene. */
 export interface SearchResult {
   /** Všechny tahy se shodným nejlepším skóre (aspoň jeden). */
@@ -185,6 +192,13 @@ export interface SearchResult {
   readonly score: number;
   /** Počet navštívených uzlů (negamax volání) – podklad brány úbytku. */
   readonly nodes: number;
+  /**
+   * Všechny kořenové tahy se skóre, seřazené SESTUPNĚ – jen když search běžel
+   * v ranked režimu (`rankRoot`). Podklad pro výběr slabšího tahu (nepozornost).
+   * Mimo ranked režim je `undefined` (běžný search kořen pruuje, skóre horších
+   * tahů se nepočítá).
+   */
+  readonly rankedMoves?: readonly RankedMove[];
 }
 
 /**
@@ -205,13 +219,27 @@ export function searchRoot(
   depth: number,
   evaluateFn: EvalFn = evaluate,
   tt: TranspositionTable | null = null,
+  rankRoot = false,
 ): SearchResult {
   const ctx: SearchCtx = { clock: null, evaluateFn, tt, nodes: 0 };
-  return rootSearch(position, depth, ctx);
+  return rootSearch(position, depth, ctx, rankRoot);
 }
 
-/** Kořen searche; s hodinami umí vyhodit SearchAborted (chytá searchTimed). */
-function rootSearch(position: Position, depth: number, ctx: SearchCtx): SearchResult {
+/**
+ * Kořen searche; s hodinami umí vyhodit SearchAborted (chytá searchTimed).
+ *
+ * `rankRoot`: v ranked režimu se kořen NEpruuje (plné okno na každý tah), takže
+ * skóre VŠECH kořenových tahů je přesné a vrací se v `rankedMoves` (seřazeno
+ * sestupně). Mimo ranked režim je chování bit-identické s původním (okno
+ * `best - 1`, `rankedMoves` chybí) – ranked režim je dražší (žádné ořezání
+ * kořene), proto se zapíná jen pro slabší hru s nepozorností.
+ */
+function rootSearch(
+  position: Position,
+  depth: number,
+  ctx: SearchCtx,
+  rankRoot: boolean,
+): SearchResult {
   if (!Number.isInteger(depth) || depth < 1) {
     throw new RangeError(`Neplatná hloubka prohledávání: ${String(depth)}`);
   }
@@ -222,9 +250,16 @@ function rootSearch(position: Position, depth: number, ctx: SearchCtx): SearchRe
 
   let best = Number.NEGATIVE_INFINITY;
   let bestMoves: Move[] = [];
+  const ranked: RankedMove[] | null = rankRoot ? [] : null;
   for (const move of moves) {
     // Okno dítěte je (-beta, -alfa) s alfou kořene `best - 1` (viz hlavička).
-    const rootAlpha = bestMoves.length === 0 ? Number.NEGATIVE_INFINITY : best - 1;
+    // V ranked režimu se ale kořen nepruuje (alfa = -∞), aby skóre KAŽDÉHO
+    // tahu vyšlo přesné, ne jen jako fail-soft mez pod nejlepším.
+    const rootAlpha = rankRoot
+      ? Number.NEGATIVE_INFINITY
+      : bestMoves.length === 0
+        ? Number.NEGATIVE_INFINITY
+        : best - 1;
     const value = -negamax(
       applyMove(position, move),
       depth - 1,
@@ -233,6 +268,10 @@ function rootSearch(position: Position, depth: number, ctx: SearchCtx): SearchRe
       -rootAlpha,
       ctx,
     );
+    if (ranked !== null) {
+      // -0 → +0 stejně jako u `score`, ať tie-break i řazení dají stabilní pořadí.
+      ranked.push({ move, score: value === 0 ? 0 : value });
+    }
     if (value > best) {
       best = value;
       bestMoves = [move];
@@ -242,7 +281,13 @@ function rootSearch(position: Position, depth: number, ctx: SearchCtx): SearchRe
   }
   // Negace v rekurzi umí vyrobit -0; navenek vracíme vždy +0, ať budoucí
   // konzument (server, telemetrie) nedostane falešný rozdíl v Object.is.
-  return { bestMoves, score: best === 0 ? 0 : best, nodes: ctx.nodes };
+  const score = best === 0 ? 0 : best;
+  if (ranked !== null) {
+    // Sestupně podle skóre; shodné skóre drží pořadí generátoru (stabilní sort).
+    ranked.sort((a, b) => b.score - a.score);
+    return { bestMoves, score, nodes: ctx.nodes, rankedMoves: ranked };
+  }
+  return { bestMoves, score, nodes: ctx.nodes };
 }
 
 /**
@@ -379,6 +424,12 @@ export interface TimedSearchOptions {
   readonly now?: () => number;
   /** Injektovatelná statická evaluace (výchozí produkční `evaluate`). */
   readonly evaluate?: EvalFn;
+  /**
+   * Ranked režim kořene (výchozí false): vrací `rankedMoves` z poslední
+   * kompletní iterace – skóre všech kořenových tahů. Zapíná se pro slabší hru
+   * s nepozorností; jinak nech vypnuté (kořen se pruuje, search je rychlejší).
+   */
+  readonly rankRoot?: boolean;
 }
 
 /** Výsledek časovaného searche. */
@@ -421,13 +472,14 @@ export function searchTimed(position: Position, options: TimedSearchOptions): Ti
   }
   const now = options.now ?? currentTimeMs;
   const evaluateFn = options.evaluate ?? evaluate;
+  const rankRoot = options.rankRoot ?? false;
   const tt = new TranspositionTable();
 
   const start = now();
   const deadline = start + timeMs;
 
   const firstCtx: SearchCtx = { clock: null, evaluateFn, tt, nodes: 0 };
-  let result: TimedSearchResult = { ...rootSearch(position, 1, firstCtx), depth: 1 };
+  let result: TimedSearchResult = { ...rootSearch(position, 1, firstCtx, rankRoot), depth: 1 };
   let totalNodes = firstCtx.nodes;
   let lastIterationMs = now() - start;
 
@@ -444,7 +496,7 @@ export function searchTimed(position: Position, options: TimedSearchOptions): Ti
     };
     let iteration: SearchResult;
     try {
-      iteration = rootSearch(position, depth, ctx);
+      iteration = rootSearch(position, depth, ctx, rankRoot);
     } catch (error) {
       if (error instanceof SearchAborted) {
         totalNodes += ctx.nodes; // práce přerušené iterace se do součtu počítá
@@ -457,4 +509,74 @@ export function searchTimed(position: Position, options: TimedSearchOptions): Ti
     lastIterationMs = now() - iterationStart;
   }
   return { ...result, nodes: totalNodes };
+}
+
+/**
+ * Vybere tah z výsledku searche podle míry nepozornosti – sdílí ho handler
+ * enginu i self-play harness (jeden kontrakt výběru, ne dvě kopie).
+ *
+ * `carelessness` (0..1) je pravděpodobnost, že se místo nejlepšího tahu zahraje
+ * „o úroveň horší" tah (nejlepší z tahů mimo top skóre) – slabší, ale ne
+ * náhodně zahozený. Mezi tahy shodného skóre láme `rng` (tie-break).
+ *
+ * Losování `rng` (pořadí je součást kontraktu – nesmí posunout seedované testy):
+ * - `carelessness <= 0` (Profesionál): JEDEN los, čistě tie-break mezi
+ *   `bestMoves` – identické s původním chováním handleru,
+ * - `carelessness > 0`: nejdřív los „jsem nepozorný?", teprve pak tie-break.
+ *
+ * `rankedMoves` je POVINNÉ, když `carelessness > 0` (search musí běžet v ranked
+ * režimu). Chybí-li, je to programátorská chyba volajícího → RangeError; žádný
+ * tichý spád na profesionální hru, který by zamaskoval špatné zapojení.
+ */
+export function chooseMove(
+  bestMoves: readonly Move[],
+  rankedMoves: readonly RankedMove[] | undefined,
+  carelessness: number,
+  rng: () => number,
+): Move {
+  if (carelessness > 0 && rankedMoves === undefined) {
+    throw new RangeError('chooseMove: carelessness > 0 vyžaduje rankedMoves (ranked režim searche).');
+  }
+  if (carelessness > 0 && rng() < carelessness && rankedMoves !== undefined) {
+    const worse = secondBestTier(rankedMoves);
+    if (worse.length > 0) {
+      return pickByRng(worse, rng);
+    }
+    // Jediná úroveň skóre → není co pokazit, padá do běžného tie-breaku níž.
+  }
+  return pickByRng(bestMoves, rng);
+}
+
+/**
+ * Tahy s NEJVYŠŠÍM skóre pod nejlepším (druhá úroveň). Prázdné, když mají
+ * všechny tahy shodné skóre (jediná úroveň – nelze zahrát „o úroveň horší").
+ * Očekává `ranked` seřazené sestupně (jak vrací rootSearch).
+ */
+function secondBestTier(ranked: readonly RankedMove[]): Move[] {
+  const first = ranked[0];
+  if (first === undefined) {
+    return [];
+  }
+  const bestScore = first.score;
+  let secondScore: number | undefined;
+  for (const entry of ranked) {
+    if (entry.score < bestScore) {
+      secondScore = entry.score;
+      break;
+    }
+  }
+  if (secondScore === undefined) {
+    return [];
+  }
+  return ranked.filter((entry) => entry.score === secondScore).map((entry) => entry.move);
+}
+
+/** Vybere tah seedovaným tie-breakem; rng mimo [0, 1) je programátorská chyba. */
+function pickByRng(moves: readonly Move[], rng: () => number): Move {
+  const index = Math.floor(rng() * moves.length);
+  const move = moves[index];
+  if (move === undefined) {
+    throw new RangeError(`Výběr tahu: rng vrátil hodnotu mimo [0, 1), index ${String(index)}`);
+  }
+  return move;
 }

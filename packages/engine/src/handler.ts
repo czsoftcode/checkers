@@ -14,7 +14,7 @@ import type { Cell, Position } from '@checkers/rules';
 
 import { ENGINE_ID, PROTOCOL_VERSION } from './protocol.js';
 import type { EngineResponse, ErrorCode, ErrorResponse, MessageId } from './protocol.js';
-import { searchTimed } from './search.js';
+import { chooseMove, searchTimed } from './search.js';
 
 /**
  * Zpracuje jeden řádek protokolu a vrátí odpověď.
@@ -112,6 +112,44 @@ function validateTimeMs(
   return timeMs;
 }
 
+/** Ověřené volitelné páky síly z obálky bestmove (chybí → Profesionál). */
+interface StrengthParams {
+  /** Strop hloubky; `undefined` = bez stropu (searchTimed → MAX_SEARCH_DEPTH). */
+  readonly maxDepth?: number;
+  /** Míra nepozornosti 0..1; 0 = Profesionál. */
+  readonly carelessness: number;
+}
+
+/**
+ * Ověří volitelné parametry síly obálky bestmove (`maxDepth`, `carelessness`).
+ * Chybí-li, platí Profesionál. Špatný tvar → `invalid_message` (kontrakt obálky,
+ * stejně jako `timeMs` – kontroluje se před dražším parsováním pozice).
+ */
+function validateStrength(
+  id: MessageId,
+  message: Record<string, unknown>,
+): StrengthParams | ErrorResponse {
+  let maxDepth: number | undefined;
+  if (message.maxDepth !== undefined) {
+    const raw = message.maxDepth;
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) {
+      return errorResponse(id, 'invalid_message', 'Pole "maxDepth" musí být kladné celé číslo.');
+    }
+    maxDepth = raw;
+  }
+  let carelessness = 0;
+  if (message.carelessness !== undefined) {
+    const raw = message.carelessness;
+    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0 || raw > 1) {
+      return errorResponse(id, 'invalid_message', 'Pole "carelessness" musí být číslo v rozsahu 0..1.');
+    }
+    carelessness = raw;
+  }
+  // maxDepth se vkládá jen když je zadané (exactOptionalPropertyTypes: absence
+  // pole ≠ hodnota undefined).
+  return maxDepth === undefined ? { carelessness } : { maxDepth, carelessness };
+}
+
 function handleBestmove(
   id: MessageId,
   message: Record<string, unknown>,
@@ -123,6 +161,11 @@ function handleBestmove(
   const timeMs = validateTimeMs(id, message);
   if (typeof timeMs !== 'number') {
     return timeMs; // ErrorResponse
+  }
+
+  const strength = validateStrength(id, message);
+  if ('code' in strength) {
+    return strength; // ErrorResponse
   }
 
   const position = parsePosition(message.position);
@@ -139,13 +182,15 @@ function handleBestmove(
     return errorResponse(id, 'no_legal_moves', 'V pozici není žádný legální tah – partie skončila.');
   }
 
-  const { bestMoves } = searchTimed(position, now === undefined ? { timeMs } : { timeMs, now });
-  const index = Math.floor(rng() * bestMoves.length);
-  const move = bestMoves[index];
-  if (move === undefined) {
-    // rng mimo kontrakt [0, 1) – programátorská chyba, zachytí ji respondToLine
-    throw new RangeError(`Engine: rng vrátil hodnotu mimo [0, 1), index ${String(index)}`);
-  }
+  // rankRoot zapínáme jen pro nepozornou hru; Profesionál (carelessness 0) volá
+  // search i losuje rng identicky jako dřív. maxDepth/now undefined → default.
+  const { bestMoves, rankedMoves } = searchTimed(position, {
+    timeMs,
+    rankRoot: strength.carelessness > 0,
+    ...(strength.maxDepth !== undefined ? { maxDepth: strength.maxDepth } : {}),
+    ...(now !== undefined ? { now } : {}),
+  });
+  const move = chooseMove(bestMoves, rankedMoves, strength.carelessness, rng);
   return { type: 'bestmove', id, move };
 }
 
