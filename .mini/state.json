@@ -157,6 +157,11 @@
       "id": 31,
       "title": "Pozadí se neopakuje po sobě",
       "status": "done"
+    },
+    {
+      "id": 32,
+      "title": "Mobilní rozložení panelu",
+      "status": "done"
     }
   ]
 }

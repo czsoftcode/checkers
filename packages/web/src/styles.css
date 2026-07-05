@@ -220,3 +220,84 @@ body {
 .piece.white.king::before {
   color: #7a5a10;
 }
+
+/* --- Malý mobil ---------------------------------------------------------
+   Na úzké obrazovce panel NEplave přes desku (position: fixed by ji na malém
+   displeji zakrýval), ale řadí se do toku NAD desku jako svislý sloupec:
+   nahoře „kdo je na tahu", uprostřed hlavní tlačítka vedle sebe, pod nimi
+   hláška o remíze. Breakpoint 768 px pokrývá telefony i menší tablety – na užších
+   zařízeních plovoucí panel překrýval desku, tak je od téhle šířky v toku. Na
+   landscape s nízkou výškou se sloupec (panel + deska) může svisle srolovat;
+   obsah zůstává dosažitelný, což je lepší než překryv fixed panelem. */
+@media (max-width: 768px) {
+  body {
+    /* Sloupec zarovnaný k hornímu okraji – při column je hlavní osa svislá, tak
+       flex-start = nahoře a nic nepřeteče přes spodní okraj vlivem centrování. */
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 1vh 0.75rem;
+    gap: 0.6rem;
+  }
+
+  /* Strop šířky desky musí počítat i s okraji, jinak deska/panel přetečou vpravo:
+     body má vodorovný padding 2×0.75rem = 1.5rem a deska rám 2×6px = 12px
+     (box-sizing: content-box → border se přičítá k šířce). Proto 100vw - 1.5rem
+     - 12px, ne prosté 94vw. 70vh je svislý strop, ať deska nepřeroste panel na
+     nízkém (landscape) viewportu; na portrétu je width-bound, takže portrétní
+     desku nezmenší. POZOR: konstanta 1.5rem je svázaná s paddingem body výš –
+     když se změní, uprav i tady. */
+  :root {
+    --board-size: min(70vh, calc(100vw - 1.5rem - 12px));
+  }
+
+  .game {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  /* Panel v toku nad deskou, na střed, roztažený na šířku desky. box-sizing:
+     border-box, ať se jeho padding (0.6rem 0.8rem) vejde DOVNITŘ width a panel
+     nevyčnívá za hranu desky ani nepřeteče viewport. */
+  .panel {
+    position: static;
+    box-sizing: border-box;
+    align-items: stretch;
+    max-width: none;
+    width: var(--board-size);
+  }
+
+  .status {
+    text-align: center;
+  }
+
+  /* Tlačítka vedle sebe. Menší padding/font + white-space: nowrap drží každý
+     popisek na jednom řádku (na běžných šířkách ~360 px a víc se tři vejdou;
+     flex: 1 rozdělí zbylé místo, ale kvůli nowrap se tlačítko nezmenší pod svůj
+     text, takže šířky nejsou úplně stejné). Na velmi úzkém displeji (~320 px)
+     se poslední tlačítko přes flex-wrap zalomí pod ostatní – radši 2+1 řádek než
+     přetečení panelu. */
+  .controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .controls button,
+  .confirm button {
+    flex: 1 1 0;
+    padding: 0.45rem 0.35rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  /* Řádek potvrzení vzdání taky na střed, ať sedí do stejného sloupce. */
+  .confirm {
+    justify-content: center;
+  }
+
+  .offer-msg {
+    text-align: center;
+  }
+}

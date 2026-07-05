@@ -9,6 +9,14 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ### Changed
 
+- Mobilní rozložení panelu: na úzké obrazovce (media query `max-width: 768px`,
+  tj. telefony i menší tablety) panel se stavem a tlačítky přestane plavat
+  v pravém horním rohu (kde na malém displeji zakrýval desku) a zařadí se do toku NAD desku jako svislý sloupec:
+  nahoře „kdo je na tahu", uprostřed hlavní tlačítka **vedle sebe**, pod nimi
+  hláška o remíze. Tlačítka mají na mobilu menší padding/font a `flex: 1`, aby se
+  tři popisky vešly na jeden řádek (s `flex-wrap` jako pojistkou). Deska se na
+  mobilu drží stropem `--board-size: min(70vh, 94vw)`, aby panel + deska
+  nepřetekly viewport. Řešeno čistě v `styles.css` (žádná změna DOM ani JS).
 - Losování pozadí hry: při nové partii se právě zobrazené pozadí vyloučí z výběru,
   takže dva obrázky po sobě nikdy nejsou stejné (dřív se mohlo totéž vylosovat
   vícekrát za sebou). Vyloučení běží v čisté funkci `pickBackground` přes nový

@@ -1,0 +1,43 @@
+{
+  "id": 32,
+  "title": "Mobilní rozložení panelu",
+  "goal": "Na úzké obrazovce (media query) panel přestane plavat přes desku a uspořádá se do sloupce: nahoře kdo je na tahu, uprostřed hlavní tlačítka vedle sebe, pod nimi hláška o remíze – aby na malém mobilu nepřekážel.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Mobilní breakpoint: panel v toku, ne fixed",
+      "status": "done",
+      "detail": "media query (max-width ~640 px); .panel na position static, skořápka/body přepnout na sloupec, panel nad deskou v normálním toku – přestane překrývat desku."
+    },
+    {
+      "title": "Hlavní tlačítka vedle sebe",
+      "status": "done",
+      "detail": ".controls na mobilu flex-direction row s flex-wrap; zmenšit padding/font tlačítek, ať se tři popisky vejdou bez přetečení panelu."
+    },
+    {
+      "title": "Zarovnání: stav nahoře, hláška o remíze dole",
+      "status": "done",
+      "detail": "na mobilu status i offer-msg na střed místo right; zachovat pořadí stav → tlačítka → hláška."
+    },
+    {
+      "title": "Deska + panel se vejdou do výšky",
+      "status": "done",
+      "detail": "ověřit/doladit --board-size na mobilu, aby panel + deska nepřetekly viewport; ověřit i řádek potvrzení vzdání."
+    },
+    {
+      "title": "Vizuální ověření + CHANGELOG",
+      "status": "done",
+      "detail": "ověřit v mobilním viewportu (DevTools), zápis do CHANGELOG, self-review nezávislým sub-agentem."
+    }
+  ],
+  "startedAt": "2026-07-05T09:37:48.298Z",
+  "resolvedVerify": [
+    "Chování na reálném telefonu v landscape",
+    "Subjektivní dojem rozložení na tvém telefonu"
+  ],
+  "completedAt": "2026-07-05T10:06:39.923Z",
+  "autoCommit": {
+    "preSha": "3ff77e08d10a001c8f8082133bcfdb0bf1efea03",
+    "subject": "Phase 32: Mobilní rozložení panelu"
+  }
+}
