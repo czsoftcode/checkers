@@ -1,0 +1,43 @@
+{
+  "id": 28,
+  "title": "Zvuky pohybu a dopadu kamene",
+  "goal": "Vytvořit samostatný, rozšiřitelný modul přehrávání zvuků (mapa událost→soubor, dnes jen 'move' = pohyb_kamene.mp3) s guardem na dostupnost Audio a odemčením na první uživatelský gest (kvůli autoplay policy prohlížeče), a napojit ho do animace tahu v board-view tak, že se zvuk přehraje na každém dopadu skoku (mezidopady i finální dopad, zarovnané na hopArrivalMs) s krátkým re-triggerem (klonování audio uzlu) pro překrývající se zvuky u vícenásobného skoku; přehrávání je injektovatelné, aby ho šlo v jsdom testu ověřit bez reálného zvuku.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Modul sound.ts: přehrávač s mapou událostí",
+      "status": "done",
+      "detail": "Export createSoundPlayer(audioFactory?) → { unlock(), play(event) }. Mapa událost→URL (dnes jen 'move' = pohyb_kamene.mp3 přes Vite ?url). Guard: bez dostupného Audio je no-op, nespadne. play() klonuje/vytváří nový audio uzel kvůli překrývání. audioFactory injektovatelná kvůli testu."
+    },
+    {
+      "title": "Odemčení na první uživatelský gest",
+      "status": "done",
+      "detail": "unlock() na prvním gestu (existující click listener na desce) jednou probudí audio (přehraje ztlumeně / load()), aby zvuk fungoval i po tazích AI navzdory autoplay policy. Idempotentní."
+    },
+    {
+      "title": "Test sound.ts v jsdom",
+      "status": "done",
+      "detail": "Bez Audio je play/unlock bezpečný no-op; s fake audioFactory play('move') sáhne na správný zdroj a vytvoří nový uzel pro re-trigger; unlock probudí právě jednou. Test má zuby."
+    },
+    {
+      "title": "Napojení do board-view na každý dopad",
+      "status": "done",
+      "detail": "createBoardView přijme volitelný player (default reálný). Ve startAnimation pro i=0..numHops-1 setTimeout(play('move'), hopArrivalMs(i)) do stávajícího pole timers (ruší se přes clearTimers při cancel/dispose). Prostý tah = 1 dopad = 1 zvuk."
+    },
+    {
+      "title": "Test animace + nezávislý self-review",
+      "status": "done",
+      "detail": "Fake player + fake timers: play('move') se zavolá právě numHops×; při přerušení tahu (cancel před doběhem) žádné další zvuky. Závěrem nezávislý sub-agent na chybové cesty (autoplay, dispose během animace, jsdom)."
+    }
+  ],
+  "startedAt": "2026-07-04T23:15:40.509Z",
+  "resolvedVerify": [
+    "Reálný zvuk v prohlížeči: pohyb/dopad při tahu, střídání u víceskoku, a fanfára/zvuk prohry na konci partie?",
+    "První tah AI před prvním klikem na desku je záměrně tichý (autoplay policy)"
+  ],
+  "completedAt": "2026-07-05T00:33:19.848Z",
+  "autoCommit": {
+    "preSha": "21407b2bdb1620e947073c7ef6b0ac6827418243",
+    "subject": "Phase 28: Zvuky pohybu a dopadu kamene"
+  }
+}

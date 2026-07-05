@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 /**
  * Konfigurace webového klienta.
@@ -18,5 +18,10 @@ export default defineConfig({
     proxy: {
       '/games': { target: 'http://127.0.0.1:3000' },
     },
+  },
+  test: {
+    // jsdom shim (viz test/setup.ts): tichý `HTMLMediaElement.play`, ať přehrávání
+    // zvuku v testech nezaplevelí výstup „Not implemented".
+    setupFiles: ['./test/setup.ts'],
   },
 });

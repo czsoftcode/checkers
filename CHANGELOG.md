@@ -7,6 +7,19 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-07-05
+
+### Added
+
+- Zvuky hry: animace tahu je ozvučená – na začátku každého skoku zazní zvuk
+  rozjezdu, na každém dopadu (i mezidopadu vícenásobného skoku) zvuk dopadu
+  kamene, takže u víceskoku se střídá rozjezd→dopad→rozjezd→dopad. Na konci
+  partie zazní podle výsledku vítězná fanfára (výhra hráče) nebo zvuk prohry;
+  remíza je bez zvuku. Koncový zvuk se přehraje až po dokončení animace
+  posledního tahu (s krátkou prodlevou), ne během něj. Zvukové soubory jsou v
+  `packages/web/src/assets/`; prostředí bez podpory přehrávání zůstává tiché a
+  hru to nijak neomezí.
+
 ## [0.25.0] - 2026-07-05
 
 ### Added

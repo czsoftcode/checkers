@@ -15,11 +15,17 @@ import { BOARD_SIZE, coordsToSquare, isDarkSquare } from '@checkers/rules';
 import type { Cell, Position, Square } from '@checkers/rules';
 
 import { diffMove } from './move-diff.js';
+import { createSoundPlayer } from './sound.js';
+import type { SoundPlayer } from './sound.js';
 
 /** Doba jednoho skoku v ms (trojskok ≈ 3× tolik + prodlevy na mezidopadech). */
 const HOP_MS = 300;
-/** Prodleva na mezidopadu vícenásobného skoku (kámen se na chvíli zastaví). */
-const DWELL_MS = 150;
+/**
+ * Prodleva na mezidopadu vícenásobného skoku (kámen čeká na další skok). Záměrně
+ * shodná s délkou skoku – čekání i skok jsou u víceskoku stejně dlouhé, ať zvuky
+ * rozjezd/dopad drží rytmus.
+ */
+const DWELL_MS = HOP_MS;
 /** Doba plynulého zmizení sebraného kamene v ms. */
 const CAPTURE_FADE_MS = 200;
 
@@ -36,8 +42,13 @@ export interface RenderState {
 export interface BoardView {
   /** Kořenový prvek `.board` k vložení do stránky. */
   readonly element: HTMLElement;
-  /** Překreslí kameny a zvýraznění podle stavu (případně s animací tahu). */
-  update(state: RenderState): void;
+  /**
+   * Překreslí kameny a zvýraznění podle stavu (případně s animací tahu). Vrátí
+   * příslib, který se vyřeší, AŽ animace tohoto tahu doběhne (nebo hned, když se
+   * neanimuje / animace se přeruší). Volající tak může navázat akci na konec
+   * pohybu (např. zvuk konce partie až po posledním dopadu vítězného tahu).
+   */
+  update(state: RenderState): Promise<void>;
   /**
    * Ukončí případnou běžící animaci (zruší WAAPI i časovače). Volá controller
    * při `dispose()` / „Nová hra", ať doběhlá animace nemutuje zahozenou desku a
@@ -50,15 +61,21 @@ export interface BoardView {
 interface RunningAnimation {
   /** Pozice, na kterou animace míří (na ni se při přerušení „skočí"). */
   readonly target: Position;
+  /** Vyřeší se, až animace doběhne nebo se přeruší (viz `update` → `done`). */
+  readonly done: Promise<void>;
   /** Přeruší animaci a dorovná desku na `target`. */
   cancel(): void;
 }
 
 /**
  * Vytvoří desku. `onSquareClick` dostane číslo klilknutého hracího pole (1–32),
- * nebo `null` při kliknutí mimo hrací pole.
+ * nebo `null` při kliknutí mimo hrací pole. `player` ozvučuje animaci tahu a
+ * jde injektovat kvůli testu; výchozí je reálný přehrávač (no-op bez `Audio`).
  */
-export function createBoardView(onSquareClick: (square: Square | null) => void): BoardView {
+export function createBoardView(
+  onSquareClick: (square: Square | null) => void,
+  player: SoundPlayer = createSoundPlayer(),
+): BoardView {
   const element = document.createElement('div');
   element.className = 'board';
 
@@ -78,6 +95,9 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
   }
 
   element.addEventListener('click', (event) => {
+    // První klik na desku je uživatelský gest → odemkni audio (autoplay policy),
+    // ať zvuk tahu funguje i po tazích AI, kterým žádné kliknutí nepředchází.
+    player.unlock();
     const target = event.target instanceof Element ? event.target.closest('.square') : null;
     const raw = target instanceof HTMLElement ? target.dataset.square : undefined;
     onSquareClick(raw === undefined ? null : Number(raw));
@@ -88,12 +108,15 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
   // Právě běžící animace tahu, nebo null.
   let running: RunningAnimation | null = null;
 
-  function update(state: RenderState): void {
+  function update(state: RenderState): Promise<void> {
     // Opakovaný poll během animace vrací tutéž pozici → animaci nepřerušuj, jen
     // srovnej zvýraznění a nech ji doběhnout (jinak by 250ms poll usekl trojskok).
+    // Vrať promise BĚŽÍCÍ animace (ne hned vyřešený): kdyby stejná pozice dorazila
+    // podruhé už jako terminální (zvuk konce partie), navěsí se správně na konec
+    // animace, ne do jejího průběhu.
     if (running !== null && positionsEqual(state.position, running.target)) {
       applyHighlights(state);
-      return;
+      return running.done;
     }
     // Jiná pozice během animace → dorovnej běžící na její cíl a pokračuj s novou.
     if (running !== null) {
@@ -107,10 +130,17 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
 
     const move = prev === null ? null : diffMove(prev, state.position);
     if (move === null || !canAnimate()) {
+      // Reálný tah bez animace (reduced-motion / prostředí bez WAAPI): kámen se
+      // jen překreslí (rovnou „dopadne" v cíli), ať hráč neztratí zvukovou
+      // zpětnou vazbu, přehraj zvuk dopadu. `move === null` (první render,
+      // ne-jeden-tah) zůstává tichý.
+      if (move !== null) {
+        player.play('land');
+      }
       instant(state);
-      return;
+      return Promise.resolve();
     }
-    startAnimation(state, move);
+    return startAnimation(state, move);
   }
 
   /** Okamžité překreslení bez animace (dnešní chování). */
@@ -145,17 +175,26 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
    * tentýž element – neshodí klikání) a vizuálně ho po diagonále „provede" přes
    * mezidopady pomocí WAAPI. Sebrané kameny mizí postupně, jak je kámen míjí.
    */
-  function startAnimation(state: RenderState, move: ReturnType<typeof diffMove>): void {
+  function startAnimation(state: RenderState, move: ReturnType<typeof diffMove>): Promise<void> {
+    // `done` se vyřeší, až animace skončí (finalize) NEBO se přeruší (cancel) –
+    // volající (controller) na něj věší zvuk konce partie až po posledním dopadu.
+    let resolveDone: () => void = () => undefined;
+    const done = new Promise<void>((resolve) => {
+      resolveDone = resolve;
+    });
+
     if (move === null) {
       instant(state);
-      return;
+      resolveDone();
+      return done;
     }
     const fromCell = squareEls.get(move.from);
     const toCell = squareEls.get(move.to);
     const mover = fromCell?.querySelector<HTMLElement>('.piece') ?? null;
     if (fromCell === undefined || toCell === undefined || mover === null) {
       instant(state); // obranná cesta: chybí očekávaný element → jen překresli
-      return;
+      resolveDone();
+      return done;
     }
 
     applyHighlights(state);
@@ -200,6 +239,10 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
     const skip = new Set<Square>([move.to, ...move.captured]);
     applyPieces(state.position, skip);
 
+    // Zvuk ROZJEZDU prvního skoku: hned na začátku tahu. Rozjezdy dalších skoků
+    // (po mezidopadu) doplní timery níže, ať u víceskoku zní pohyb→dopad→pohyb→…
+    player.play('move');
+
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
     const clearTimers = (): void => {
@@ -207,6 +250,21 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
         clearTimeout(t);
       }
     };
+
+    // Zvuk ROZJEZDU dalších skoků (i ≥ 1): kámen se po mezidopadu znovu rozjede až
+    // po prodlevě, tj. v čase `hopArrivalMs(i-1) + DWELL_MS = i*(HOP_MS+DWELL_MS)`.
+    // Bez toho by mezi dopadem a dalším dopadem bylo hluché místo.
+    for (let i = 1; i < numHops; i++) {
+      const at = i * (HOP_MS + DWELL_MS);
+      timers.push(
+        setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+          player.play('move');
+        }, at),
+      );
+    }
 
     // Sebrané zarovnané k mezidopadům (i-tý skok bere captured[i]); u fallbacku
     // (rovný posun, hops kratší než captured) je odebereme všechny na konci.
@@ -217,6 +275,14 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
         setTimeout(() => {
           if (cancelled) {
             return;
+          }
+          // Zvuk MEZIdopadů (i < poslední) zní zde, zarovnaný na `hopArrivalMs`.
+          // Finální dopad NEplánujeme sem: jeho čas = totalMs se kryje s koncem
+          // animace, a `finalize`→`clearTimers` by ten timer mohl uklidit dřív,
+          // než stihne zaznít (závod). Finální dopad proto hraje `finalize`.
+          // Cancel/dispose mezidopady přes `clearTimers` zruší (přerušený skok).
+          if (i < numHops - 1) {
+            player.play('land');
           }
           const capturedAtHop = move.captured[i];
           if (aligned && capturedAtHop !== undefined) {
@@ -234,6 +300,11 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
 
     const finalize = (): void => {
       clearTimers();
+      // Zvuk FINÁLNÍHO dopadu: hraje se tady, na garantovaném konci animace, ne
+      // přes timer na `totalMs` (ten by `clearTimers` výše mohl uklidit dřív, než
+      // zazní). Běží jen na úspěšné dokončení – při cancel/dispose finalize
+      // neproběhne, takže přerušený tah finální dopad (správně) nezahraje.
+      player.play('land');
       // Bezpečně dorovnej cílové pole (proměna man→king, sundá třídu moving)
       // a případné nedomizelé sebrané kameny.
       for (const c of move.captured) {
@@ -244,6 +315,7 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
 
     running = {
       target: state.position,
+      done,
       cancel: () => {
         cancelled = true;
         clearTimers();
@@ -251,21 +323,24 @@ export function createBoardView(onSquareClick: (square: Square | null) => void):
         // Snap: srovnej VŠECHNA pole na cílovou pozici (odebere zbylé sebrané,
         // kámen dostane finální třídu bez `moving`).
         applyPieces(state.position, null);
+        resolveDone(); // přerušení = konec animace pro volajícího
       },
     };
 
     anim.finished.then(
       () => {
         if (cancelled) {
-          return;
+          return; // cancel() už `done` vyřešil
         }
         finalize();
         running = null;
+        resolveDone();
       },
       () => {
-        // anim.cancel() zamítne finished promise – úklid řeší cancel() sám.
+        // anim.cancel() zamítne finished promise – úklid i `resolveDone` řeší cancel().
       },
     );
+    return done;
   }
 
   /** Plynule schová a odebere sebraný kámen; bez WAAPI ho odebere hned. */

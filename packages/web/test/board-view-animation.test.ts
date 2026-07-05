@@ -4,6 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createBoardView } from '../src/board-view.js';
 import type { BoardView } from '../src/board-view.js';
+import type { SoundPlayer } from '../src/sound.js';
+
+/**
+ * Tyto testy ověřují pohyb kamenů, ne zvuk. Injektujeme tichý přehrávač, ať se
+ * v jsdom nevolá reálné `Audio.play()` (nepodporované → hlásí „Not implemented").
+ * Ozvučení má vlastní testy v `board-view-sound.test.ts`.
+ */
+const SILENT: SoundPlayer = { unlock: () => undefined, play: () => undefined };
 
 /**
  * Testy ANIMAČNÍ vrstvy. jsdom sám Web Animations API nemá, takže by animace
@@ -104,10 +112,10 @@ describe('animace tahu (mockované WAAPI)', () => {
   const next = (): Position => position('white', { 15: blackMan });
 
   it('rozjede skok: kámen je vyzdvižený v cíli, sebraný ještě drží', () => {
-    const view = createBoardView(() => undefined);
+    const view = createBoardView(() => undefined, SILENT);
     document.body.append(view.element);
-    view.update({ position: prev(), selected: null, path: [], targets: [] });
-    view.update({ position: next(), selected: null, path: [], targets: [] });
+    void view.update({ position: prev(), selected: null, path: [], targets: [] });
+    void view.update({ position: next(), selected: null, path: [], targets: [] });
 
     // Kámen je v cílovém poli a označený jako pohybující se.
     expect(hasPiece(view, 15)).toBe(true);
@@ -120,10 +128,10 @@ describe('animace tahu (mockované WAAPI)', () => {
   });
 
   it('po doběhnutí: sebraný zmizí, kámen v cíli bez třídy moving', async () => {
-    const view = createBoardView(() => undefined);
+    const view = createBoardView(() => undefined, SILENT);
     document.body.append(view.element);
-    view.update({ position: prev(), selected: null, path: [], targets: [] });
-    view.update({ position: next(), selected: null, path: [], targets: [] });
+    void view.update({ position: prev(), selected: null, path: [], targets: [] });
+    void view.update({ position: next(), selected: null, path: [], targets: [] });
 
     await resolveAll();
 
@@ -134,16 +142,16 @@ describe('animace tahu (mockované WAAPI)', () => {
   });
 
   it('jiná pozice během animace ji přeruší (snap na cíl) a zpracuje novou', () => {
-    const view = createBoardView(() => undefined);
+    const view = createBoardView(() => undefined, SILENT);
     document.body.append(view.element);
-    view.update({ position: prev(), selected: null, path: [], targets: [] });
-    view.update({ position: next(), selected: null, path: [], targets: [] });
+    void view.update({ position: prev(), selected: null, path: [], targets: [] });
+    void view.update({ position: next(), selected: null, path: [], targets: [] });
     const moverAnim = animations[0];
 
     // Přijde JINÁ pozice (nejde o jeden tah z `next` → instant): 15 zůstává,
     // navíc „přibude" bílý na 22 → diffMove vrátí null.
     const other = position('black', { 15: blackMan, 22: whiteMan });
-    view.update({ position: other, selected: null, path: [], targets: [] });
+    void view.update({ position: other, selected: null, path: [], targets: [] });
 
     // Běžící animace byla zrušena (snap).
     expect(moverAnim?.cancel).toHaveBeenCalled();
@@ -155,24 +163,24 @@ describe('animace tahu (mockované WAAPI)', () => {
   });
 
   it('stejná pozice (opakovaný poll) animaci NEPŘERUŠÍ', () => {
-    const view = createBoardView(() => undefined);
+    const view = createBoardView(() => undefined, SILENT);
     document.body.append(view.element);
-    view.update({ position: prev(), selected: null, path: [], targets: [] });
-    view.update({ position: next(), selected: null, path: [], targets: [] });
+    void view.update({ position: prev(), selected: null, path: [], targets: [] });
+    void view.update({ position: next(), selected: null, path: [], targets: [] });
     const moverAnim = animations[0];
 
     // Tentýž stav (poll à 250 ms vrací stejnou pozici) – animace běží dál.
-    view.update({ position: next(), selected: null, path: [], targets: [] });
+    void view.update({ position: next(), selected: null, path: [], targets: [] });
 
     expect(moverAnim?.cancel).not.toHaveBeenCalled();
     expect(isMoving(view, 15)).toBe(true);
   });
 
   it('dispose() uprostřed animace ji zruší a dorovná desku', () => {
-    const view = createBoardView(() => undefined);
+    const view = createBoardView(() => undefined, SILENT);
     document.body.append(view.element);
-    view.update({ position: prev(), selected: null, path: [], targets: [] });
-    view.update({ position: next(), selected: null, path: [], targets: [] });
+    void view.update({ position: prev(), selected: null, path: [], targets: [] });
+    void view.update({ position: next(), selected: null, path: [], targets: [] });
     const moverAnim = animations[0];
 
     view.dispose();

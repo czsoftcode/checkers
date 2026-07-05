@@ -20,6 +20,8 @@
 import type { Color, GameResult, Square } from '@checkers/rules';
 
 import { createBoardView } from './board-view.js';
+import { createSoundPlayer } from './sound.js';
+import type { SoundEvent, SoundPlayer } from './sound.js';
 import { nextTargets, selectableAt } from './selection.js';
 import type { EngineStatus, GameDto, ServerClient } from './server-client.js';
 
@@ -44,6 +46,9 @@ const HUMAN_COLOR: Color = 'black';
 
 /** Interval opakovaného dotazu na stav (kvůli tahu enginu na pozadí). */
 const POLL_INTERVAL_MS = 250;
+
+/** Prodleva zvuku konce partie po dokončení animace posledního tahu (ms). */
+const END_SOUND_DELAY_MS = 500;
 
 /** Rozpracovaný výběr: výchozí kámen a už naklikané dopady (bez `from`). */
 interface Selection {
@@ -78,6 +83,12 @@ export interface BoardControllerOptions {
    * řádek stavu a povoluje/zakazuje tlačítka.
    */
   readonly onState?: (status: GameStatus) => void;
+  /**
+   * Přehrávač zvuků (rozjezd/dopad kamene v animaci a fanfára/zvuk prohry na
+   * konci partie). Injektovatelný kvůli testu; výchozí je reálný přehrávač
+   * (no-op v prostředí bez `Audio`).
+   */
+  readonly soundPlayer?: SoundPlayer;
 }
 
 /**
@@ -107,10 +118,13 @@ export function createBoardController(
   // nesmí ale překreslit desku ani ohlásit stav (jinak by přepsal stav už
   // vyměněné partie po „Nová hra").
   let disposed = false;
+  // Naplánovaný (zpožděný) zvuk konce partie – ruší se při dispose (nová hra).
+  let endSoundTimer: ReturnType<typeof setTimeout> | null = null;
 
   const onState = options.onState;
   const gameId = game.id;
-  const view = createBoardView(handleClick);
+  const player = options.soundPlayer ?? createSoundPlayer();
+  const view = createBoardView(handleClick, player);
   const timer = setInterval(() => {
     void poll();
   }, options.pollIntervalMs ?? POLL_INTERVAL_MS);
@@ -135,7 +149,7 @@ export function createBoardController(
     } else {
       selection = null;
     }
-    render();
+    void render();
   }
 
   /** `true`, pokud `square` je jedním z aktuálně nabízených dalších dopadů. */
@@ -155,7 +169,7 @@ export function createBoardController(
     const path = [...selection.path, square];
     if (nextTargets(position, selection.from, path).length > 0) {
       selection = { from: selection.from, path }; // ještě pokračuje (další dopad/větvení)
-      render();
+      void render();
       return;
     }
     // Žádné pokračování → sekvence je úplná. Server dostane výchozí pole a CELOU
@@ -189,7 +203,7 @@ export function createBoardController(
    */
   function sendMove(from: Square, path: readonly Square[]): void {
     selection = null;
-    render();
+    void render();
     void runRequest(async () => {
       try {
         applyServerState(await client.postMove(gameId, from, path));
@@ -197,7 +211,7 @@ export function createBoardController(
         console.error('Server tah nepřijal, synchronizuji stav ze serveru:', error);
         await resync();
       } finally {
-        render();
+        void render();
       }
     });
   }
@@ -225,6 +239,9 @@ export function createBoardController(
    * single-flightu. `resigning` blokuje dvojí odeslání; skončenou partii nevzdává.
    */
   function resign(): void {
+    // Vzdání je uživatelský gest – odemkni audio, ať zvuk prohry zazní i když
+    // hráč do desky předtím nikdy neklikl (autoplay policy).
+    player.unlock();
     void resignFlow();
   }
 
@@ -249,7 +266,7 @@ export function createBoardController(
           console.error('Vzdání se nepodařilo odeslat, synchronizuji stav:', error);
           await resync();
         } finally {
-          render();
+          void render();
         }
       });
     } finally {
@@ -264,6 +281,7 @@ export function createBoardController(
    * serverová chyba). Stav partie se v každém případě dorovná ze serveru.
    */
   function offerDraw(): Promise<DrawOfferOutcome> {
+    player.unlock(); // uživatelský gest – viz resign()
     return offerDrawFlow();
   }
 
@@ -290,7 +308,7 @@ export function createBoardController(
           await resync();
           outcome = 'error';
         } finally {
-          render();
+          void render();
         }
       });
       return outcome;
@@ -314,18 +332,61 @@ export function createBoardController(
       return; // request doběhl až po dispose – stav vyměněné partie nepřepisuj
     }
     position = dto.position;
+    const prevResult = lastResult;
     lastResult = dto.result;
     if (dto.engineStatus === 'error') {
       // Engine selhal – partie stojí na tahu člověka nebo čeká; skořápka to podle
       // engineStatus může zobrazit. Tady jen nezaseknout a nechat stopu v konzoli.
       console.error('Engine hlásí chybu (engineStatus=error).');
     }
-    render();
+    // `render()` spustí animaci tohoto tahu; jeho příslib se vyřeší až po jejím
+    // dokončení. Zvuk konce partie na něj navážeme, ať fanfára/prohra zazní až
+    // PO posledním dopadu vítězného tahu, ne na jeho začátku.
+    const rendered = render();
     onState?.({ result: dto.result, turn: dto.position.turn, engineStatus: dto.engineStatus });
+
+    // Zvuk konce partie zazní JEDNOU, na přechodu ongoing → terminální stav (ne
+    // při načtení už skončené partie a ne opakovaně dalšími polly). Remíza je
+    // záměrně beze zvuku. Člověk hraje černé (HUMAN_COLOR).
+    if (prevResult === 'ongoing' && dto.result !== 'ongoing') {
+      const humanWins = HUMAN_COLOR === 'black' ? 'black-wins' : 'white-wins';
+      const humanLoses = HUMAN_COLOR === 'black' ? 'white-wins' : 'black-wins';
+      const event: SoundEvent | null =
+        dto.result === humanWins ? 'win' : dto.result === humanLoses ? 'loss' : null;
+      if (event !== null) {
+        scheduleEndSound(rendered, dto.result, event);
+      }
+    }
   }
 
-  function render(): void {
-    view.update(
+  /**
+   * Přehraje zvuk konce partie AŽ po dokončení animace vítězného/prohrávajícího
+   * tahu (`rendered`) a ještě po prodlevě {@link END_SOUND_DELAY_MS}, ať nespadne
+   * na poslední dopad. Nezahraje, pokud se mezitím controller disposnul (nová
+   * hra) nebo se výsledek změnil.
+   */
+  function scheduleEndSound(rendered: Promise<void>, result: GameResult, event: SoundEvent): void {
+    void rendered.then(() => {
+      if (disposed || lastResult !== result) {
+        return;
+      }
+      endSoundTimer = setTimeout(() => {
+        endSoundTimer = null;
+        if (disposed || lastResult !== result) {
+          return;
+        }
+        player.play(event);
+      }, END_SOUND_DELAY_MS);
+    });
+  }
+
+  /**
+   * Překreslí desku. Vrací příslib od `view.update`, který se vyřeší po dokončení
+   * (nebo přerušení) animace tahu – využívá ho jen `applyServerState` pro zvuk
+   * konce partie; ostatní volající ho ignorují (`void render()`).
+   */
+  function render(): Promise<void> {
+    return view.update(
       selection === null
         ? { position, selected: null, path: [], targets: [] }
         : {
@@ -337,7 +398,7 @@ export function createBoardController(
     );
   }
 
-  render();
+  void render();
   // Výchozí stav ohlásíme hned, ať skořápka nakreslí řádek stavu a nastaví
   // tlačítka správně ještě před prvním pollem.
   onState?.({ result: game.result, turn: game.position.turn, engineStatus: game.engineStatus });
@@ -348,6 +409,10 @@ export function createBoardController(
     dispose: () => {
       disposed = true;
       clearInterval(timer);
+      if (endSoundTimer !== null) {
+        clearTimeout(endSoundTimer); // zahoď naplánovaný zvuk konce (nová hra)
+        endSoundTimer = null;
+      }
       view.dispose(); // ukonči případnou běžící animaci tahu (WAAPI + časovače)
     },
   };

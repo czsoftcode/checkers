@@ -323,22 +323,22 @@ describe('stabilita kamenů při překreslení (nález 22-1)', () => {
     // by spolkl klik, který na kámen právě padá. Element musí zůstat tentýž.
     const view = createBoardView(() => undefined);
     const pos = initialPosition();
-    view.update({ position: pos, selected: null, path: [], targets: [] });
+    void view.update({ position: pos, selected: null, path: [], targets: [] });
     const before = view.element.querySelector('[data-square="9"] .piece');
     expect(before).not.toBeNull();
 
-    view.update({ position: pos, selected: null, path: [], targets: [] });
+    void view.update({ position: pos, selected: null, path: [], targets: [] });
     const after = view.element.querySelector('[data-square="9"] .piece');
     expect(after).toBe(before); // stejná instance – žádná recyklace
   });
 
   it('proměna man→king upraví třídu beze změny elementu', () => {
     const view = createBoardView(() => undefined);
-    view.update({ position: position('black', { 9: blackMan }), selected: null, path: [], targets: [] });
+    void view.update({ position: position('black', { 9: blackMan }), selected: null, path: [], targets: [] });
     const man = view.element.querySelector('[data-square="9"] .piece');
     expect(man?.classList.contains('king')).toBe(false);
 
-    view.update({ position: position('black', { 9: blackKing }), selected: null, path: [], targets: [] });
+    void view.update({ position: position('black', { 9: blackKing }), selected: null, path: [], targets: [] });
     const king = view.element.querySelector('[data-square="9"] .piece');
     expect(king).toBe(man); // tentýž element
     expect(king?.classList.contains('king')).toBe(true);
@@ -346,10 +346,10 @@ describe('stabilita kamenů při překreslení (nález 22-1)', () => {
 
   it('odchod kamene z pole element odstraní', () => {
     const view = createBoardView(() => undefined);
-    view.update({ position: position('black', { 9: blackMan }), selected: null, path: [], targets: [] });
+    void view.update({ position: position('black', { 9: blackMan }), selected: null, path: [], targets: [] });
     expect(view.element.querySelector('[data-square="9"] .piece')).not.toBeNull();
 
-    view.update({ position: position('black', {}), selected: null, path: [], targets: [] });
+    void view.update({ position: position('black', {}), selected: null, path: [], targets: [] });
     expect(view.element.querySelector('[data-square="9"] .piece')).toBeNull();
   });
 });
