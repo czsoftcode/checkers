@@ -7,6 +7,22 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-07-05
+
+### Added
+
+- Plausible analytika (privacy-friendly, self-hosted na `plausible.softcode.cz`):
+  do web klienta se přidalo měření návštěvnosti. Měřicí skript se načítá jako
+  externí `<script async>` z `index.html`; inicializace (`window.plausible`
+  fronta + `plausible.init()`) je v novém linkovaném modulu `src/analytics.ts`
+  importovaném z `main.ts`, takže v HTML NENÍ žádný inline `<script>` blok
+  (drží se zákazu inline skriptů kvůli CSP). Chování je shodné s oficiálním
+  Plausible snippetem: fronta `q` zachytí případné události zaznamenané ještě
+  před dotažením externího skriptu, ten je po načtení přehraje. Modul je
+  idempotentní – když je `window.plausible` už nastavené, použije se ono.
+  Poznámka: měření se počítá jen v produkci na doméně `dama.softcode.cz`; na
+  `localhost` Plausible ve výchozím stavu nic neodesílá.
+
 ### Changed
 
 - Mobilní rozložení panelu: na úzké obrazovce (media query `max-width: 768px`,

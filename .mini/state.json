@@ -162,6 +162,11 @@
       "id": 32,
       "title": "Mobilní rozložení panelu",
       "status": "done"
+    },
+    {
+      "id": 33,
+      "title": "Plausible analytika bez inline",
+      "status": "done"
     }
   ]
 }

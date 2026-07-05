@@ -10,6 +10,7 @@
 import { APP_TITLE } from './index.js';
 import { createAppShell } from './app-shell.js';
 import { createHttpClient } from './server-client.js';
+import './analytics.js';
 import './styles.css';
 
 document.title = APP_TITLE;

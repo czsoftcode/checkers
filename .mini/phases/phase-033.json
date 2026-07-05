@@ -1,0 +1,42 @@
+{
+  "id": 33,
+  "title": "Plausible analytika bez inline",
+  "goal": "Do web klienta se přidá měření Plausible: externí skript v index.html a init v linkovaném TS modulu (žádný inline blok, CSP-čisté).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Modul analytics.ts s Plausible init",
+      "status": "done",
+      "detail": "Nový soubor packages/web/src/analytics.ts – nastaví window.plausible frontu (stub skládající volání do plausible.q) a zavolá plausible.init(). Žádný inline kód, čistý TS modul; init funguje i před dotažením externího skriptu díky frontě."
+    },
+    {
+      "title": "Typy pro window.plausible",
+      "status": "done",
+      "detail": "Deklarace typu (declare global nebo .d.ts) pro window.plausible a plausible.init, aby TS build prošel bez any."
+    },
+    {
+      "title": "Externí async skript v index.html",
+      "status": "done",
+      "detail": "Do <head> přidat <script async src=\"https://plausible.softcode.cz/js/pa-pJc3_LNyudf00LwoMIRnP.js\"> – jen externí tag, žádný inline blok."
+    },
+    {
+      "title": "Import analytics v main.ts",
+      "status": "done",
+      "detail": "import './analytics.js' na vstupu klienta, aby se init spustil při startu appky."
+    },
+    {
+      "title": "Ověření buildu + CHANGELOG",
+      "status": "done",
+      "detail": "pnpm build / tsc projde; v dist/index.html je externí skript a init je v hashovaném JS (ne inline); zápis do CHANGELOG."
+    }
+  ],
+  "startedAt": "2026-07-05T10:12:03.234Z",
+  "resolvedVerify": [
+    "Živý pageview na produkci"
+  ],
+  "completedAt": "2026-07-05T10:24:54.713Z",
+  "autoCommit": {
+    "preSha": "f9563e6d304128599b3d246b952a9f46caa5eede",
+    "subject": "Phase 33: Plausible analytika bez inline"
+  }
+}
