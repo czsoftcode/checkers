@@ -17,6 +17,8 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
   v navazující fázi.** Síla počítače je stejná jako u Profesionála; liší se jen
   vynucené zahájení.
 
+## [0.38.0] - 2026-07-06
+
 ### Added
 
 - **Nový režim Výuka (nápověda tahů).** Ve výběru obtížnosti přibyla čtvrtá volba
