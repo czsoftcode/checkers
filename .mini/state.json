@@ -212,6 +212,11 @@
       "id": 42,
       "title": "Drag & drop kamenů",
       "status": "done"
+    },
+    {
+      "id": 43,
+      "title": "Mobil bez tažení, jen tap",
+      "status": "done"
     }
   ]
 }

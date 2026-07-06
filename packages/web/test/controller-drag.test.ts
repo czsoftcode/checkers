@@ -111,13 +111,17 @@ function isEmpty(root: HTMLElement, square: number): boolean {
   return squareEl(root, square).querySelector('.piece') === null;
 }
 
-/** Vyrobí pointer událost s potřebnými poli (jsdom neumí PointerEvent konstruktor spolehlivě). */
-function pointer(type: string, x: number, y: number): Event {
+/**
+ * Vyrobí pointer událost s potřebnými poli (jsdom neumí PointerEvent konstruktor
+ * spolehlivě). `pointerType` je volitelný (výchozí 'mouse') – dotyk/pero se posílá
+ * s 'touch'/'pen', aby šlo ověřit, že tažení běží jen na myši (fáze 43).
+ */
+function pointer(type: string, x: number, y: number, pointerType = 'mouse'): Event {
   const e = new Event(type, { bubbles: true });
   Object.assign(e, {
     pointerId: 1,
     isPrimary: true,
-    pointerType: 'mouse',
+    pointerType,
     button: 0,
     clientX: x,
     clientY: y,
@@ -402,6 +406,81 @@ describe('drag & drop – uchopení při stisku', () => {
     expect(board.classList.contains('grabbing')).toBe(true);
     expect(squareEl(board, 9).classList.contains('selected')).toBe(true);
   });
+});
+
+describe('drag & drop – jen myš (dotyk a pero netáhnou)', () => {
+  for (const pointerType of ['touch', 'pen'] as const) {
+    it(`pointerdown s pointerType '${pointerType}' nezaloží tažení (žádné uchopení)`, () => {
+      const { board } = mount(position('black', { 9: blackMan }));
+      // Dotyk/pero nad vlastním kamenem: NESMÍ zvednout, vybrat ani zapnout grabbing –
+      // uchopení je vyhrazené myši; ovládání propadne na `click` (tap) níže.
+      squareEl(board, 9).dispatchEvent(pointer('pointerdown', 0, 0, pointerType));
+
+      expect(board.classList.contains('grabbing')).toBe(false);
+      expect(squareEl(board, 9).classList.contains('selected')).toBe(false);
+      expect(squareEl(board, 13).classList.contains('target')).toBe(false);
+      expect(squareEl(board, 14).classList.contains('target')).toBe(false);
+    });
+
+    it(`pohyb prstem/perem po stisku kámen neposune ani neodešle (${pointerType})`, async () => {
+      const { board, fake } = mount(position('black', { 9: blackMan }));
+      const from = squareEl(board, 9);
+      const target = squareEl(board, 13);
+      // Emuluj „tažení" prstem přes cíl 13: bez drag gesta se nic neposune. Pod
+      // bodem puštění je cíl, aby případný (chybný) drop resolver měl kam mířit.
+      const doc = document as unknown as { elementFromPoint: (x: number, y: number) => Element | null };
+      const original = doc.elementFromPoint;
+      doc.elementFromPoint = () => target;
+      try {
+        from.dispatchEvent(pointer('pointerdown', 0, 0, pointerType));
+        board.dispatchEvent(pointer('pointermove', 20, 20, pointerType));
+        board.dispatchEvent(pointer('pointerup', 40, 40, pointerType));
+      } finally {
+        doc.elementFromPoint = original;
+      }
+      await tick();
+
+      expect(fake.posted).toEqual([]); // žádný tah tažením prstem
+      expect(hasPiece(board, 9, 'black')).toBe(true); // kámen zůstal na místě
+      expect(isEmpty(board, 13)).toBe(true);
+      expect(board.classList.contains('grabbing')).toBe(false);
+    });
+
+    it(`myší pointercancel neuvízne a nespolkne následný ${pointerType} tap`, () => {
+      // Regrese: myší gesto zrušené `pointercancel`em (bez `click`) nastaví
+      // suppressNextClick=true a žádný click ho nespotřebuje. Dotykový/perový
+      // stisk musí tuto uvízlou supresi vynulovat, jinak by se tap tiše spolkl.
+      const { board } = mount(position('black', { 6: blackMan, 9: blackMan }));
+      // Myší gesto z pole 9, které skončí zrušením uprostřed tažení.
+      squareEl(board, 9).dispatchEvent(pointer('pointerdown', 100, 100));
+      board.dispatchEvent(pointer('pointermove', 120, 120));
+      board.dispatchEvent(pointer('pointercancel', 0, 0)); // → suppressNextClick=true, žádný click
+
+      // Dotykový/perový tap na jiné pole musí projít (nesmí být spolknut).
+      const from = squareEl(board, 6);
+      from.dispatchEvent(pointer('pointerdown', 0, 0, pointerType));
+      from.dispatchEvent(pointer('pointerup', 0, 0, pointerType));
+      click(from);
+      expect(squareEl(board, 6).classList.contains('selected')).toBe(true);
+    });
+
+    it(`tap (${pointerType}) dál vybírá a táhne přes click`, async () => {
+      const { board, fake } = mount(position('black', { 9: blackMan }));
+      // Reálné ťuknutí na dotyku: pointerdown/up (netáhnou) a pak `click` udělá výběr.
+      const from = squareEl(board, 9);
+      from.dispatchEvent(pointer('pointerdown', 0, 0, pointerType));
+      from.dispatchEvent(pointer('pointerup', 0, 0, pointerType));
+      click(from);
+      expect(squareEl(board, 9).classList.contains('selected')).toBe(true);
+
+      const target = squareEl(board, 13);
+      target.dispatchEvent(pointer('pointerdown', 0, 0, pointerType));
+      target.dispatchEvent(pointer('pointerup', 0, 0, pointerType));
+      click(target);
+      await tick();
+      expect(fake.posted).toEqual([{ from: 9, path: [13] }]);
+    });
+  }
 });
 
 describe('drag & drop – koexistence s tapem', () => {

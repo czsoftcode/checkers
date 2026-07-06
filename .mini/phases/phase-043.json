@@ -1,0 +1,38 @@
+{
+  "id": 43,
+  "title": "Mobil bez tažení, jen tap",
+  "goal": "Na dotykovém i perovém vstupu (pointerType ≠ 'mouse') se kámen netáhne a ovládá se výhradně ťuknutím/tapnutím jako před fází 42; tažení kamene myší na desktopu zůstává beze změny.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Gate drag startu jen na myš",
+      "status": "done",
+      "detail": "V pointerdown (board-view.ts ~ř. 201) přidat podmínku: když event.pointerType !== 'mouse', hned return (žádné setPointerCapture, onDragStart, startLift) → gesto se nezaloží a click vyřídí tap. Ověřit, že se suppressNextClick/preventDefault u dotyku nevolá, aby tap nebyl potlačen."
+    },
+    {
+      "title": "Sladit komentáře a JSDoc",
+      "status": "done",
+      "detail": "Upravit popis u attachDrag a bloku click (ř. 158-186), aby říkal: tažení jen myší, dotyk a pero ovládají desku výhradně ťuknutím. Bez změny chování, jen aby dokumentace nelhala."
+    },
+    {
+      "title": "Test: dotyk/pero netáhne, tap projde",
+      "status": "done",
+      "detail": "V controller-drag.test.ts rozšířit helper pointer() o volitelný pointerType; přidat test, že pointerdown s pointerType 'touch' (a 'pen') nezaloží drag (kámen se nevybere/nezvedne, žádné onDragStart) a že následný tap na dotyku vybírá/táhne přes click. Stávající myší drag testy zůstanou zelené."
+    },
+    {
+      "title": "Spustit testy a ruční ověření",
+      "status": "done",
+      "detail": "pnpm test v packages/web zelené; autor ručně na dotyku ověří, že kámen nejde táhnout a klikání funguje jako před fází 42, na desktopu myší drag beze změny."
+    }
+  ],
+  "startedAt": "2026-07-06T11:21:25.017Z",
+  "resolvedVerify": [
+    "Na reálném dotykovém zařízení kámen nejde táhnout, jen tapnout",
+    "Na desktopu myší drag beze změny"
+  ],
+  "completedAt": "2026-07-06T11:34:37.742Z",
+  "autoCommit": {
+    "preSha": "d5d9215cd0151ed2d2d9f835a24856c78a8bec2f",
+    "subject": "Phase 43: Mobil bez tažení, jen tap"
+  }
+}

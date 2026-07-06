@@ -156,9 +156,10 @@ export function createBoardView(
   }
 
   // Ťuknutí (tap) zůstává na `click`: sémantika výběru/tahu je beze změny a
-  // stávající testy (i klik po AI tahu) fungují dál. Tažení jede přes Pointer
-  // Events NÍŽE; když drag proběhl, `suppressNextClick` spolkne `click`, který by
-  // prohlížeč po gestu ještě vyslal – jinak by se tažení navíc počítalo jako tap.
+  // stávající testy (i klik po AI tahu) fungují dál. Na dotyku a peru je `click`
+  // JEDINÉ ovládání – tažení tam vypnuté (viz `attachDrag`). Tažení MYŠÍ jede přes
+  // Pointer Events NÍŽE; když drag proběhl, `suppressNextClick` spolkne `click`,
+  // který by prohlížeč po gestu ještě vyslal – jinak by se tažení počítalo i jako tap.
   let suppressNextClick = false;
   element.addEventListener('click', (event) => {
     if (suppressNextClick) {
@@ -177,8 +178,10 @@ export function createBoardView(
   }
 
   /**
-   * Napojí Pointer Events pro tažení. Kámen se UCHOPÍ hned při stisku (`pointerdown`)
-   * nad vlastním tažitelným kamenem: zvedne se (zvětší), vybere se a zvýrazní cíle,
+   * Napojí Pointer Events pro tažení – JEN MYŠÍ. Na dotyku a peru (`pointerType`
+   * ≠ 'mouse') se `pointerdown` hned vrátí a desku ovládá výhradně ťuknutí přes
+   * `click` (fáze 43). Kámen se myší UCHOPÍ hned při stisku (`pointerdown`) nad
+   * vlastním tažitelným kamenem: zvedne se (zvětší), vybere se a zvýrazní cíle,
    * kurzor se změní na „grabbing" (pěst). Následný pohyb kámen posouvá, `pointerup`
    * ho pustí (drop). Puštění na stejném poli / mimo = kámen se vrátí, ale ZŮSTANE
    * vybraný (jde pak doťukat cíl). Klik po uchopení se spolkne (`suppressNextClick`),
@@ -199,11 +202,19 @@ export function createBoardView(
     } | null = null;
 
     element.addEventListener('pointerdown', (event) => {
-      // Jen primární ukazatel a u myši jen levé tlačítko; sekundární doteky ignoruj.
-      if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) {
+      // Každý nový stisk = nová interakce → zruš případnou uvízlou supresi `click`
+      // z předchozího gesta. MUSÍ být PŘED gatem níže: jinak by dotykový/perový
+      // stisk (který gatem propadne) reset přeskočil a uvízlé `suppressNextClick`
+      // (např. po myším `pointercancel` bez `click` na hybridu) by spolklo nativní tap.
+      suppressNextClick = false;
+      // Tažení jen MYŠÍ. Dotyk a pero (`pointerType` ≠ 'mouse') desku neovládají
+      // tažením – ta se na nich řídí výhradně ťuknutím přes `click` (fáze 43,
+      // drag prstem/perem se na mobilu neosvědčil a kolidoval s tapnutím). Bez
+      // uchopení tu nesmíme sáhnout na `preventDefault`, jinak bychom potlačili
+      // nativní tap. Jen primární ukazatel a levé tlačítko myši; sekundární doteky ignoruj.
+      if (event.pointerType !== 'mouse' || !event.isPrimary || event.button !== 0) {
         return;
       }
-      suppressNextClick = false;
       gesture = null;
       const square = squareOf(event.target);
       if (square === null || !cb.canDrag(square)) {

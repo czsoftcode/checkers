@@ -7,6 +7,13 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Na dotyku a peru se kameny netáhnou, jen ťukají.** Tažení kamene (drag & drop)
+  je nově vyhrazené jen myši; na mobilu, tabletu a peru se kámen posouvá výhradně
+  ťuknutím (vybrat a ťuknout na cíl) jako před přidáním tažení. Tažení prstem se
+  neosvědčilo a kolidovalo s klikáním. Na desktopu myší tažení zůstává beze změny.
+
 ## [0.37.0] - 2026-07-06
 
 ### Added
