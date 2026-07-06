@@ -9,10 +9,10 @@
 
 import Fastify from 'fastify';
 import { z } from 'zod';
-import type { Color } from '@checkers/rules';
+import type { Color, Move } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { formatGamePdn, writeGamePdn } from './archive.js';
-import { findLegalMove, gameToDto, legalMoveDtos } from './dto.js';
+import { findLegalMove, gameToDto, legalMoveDtos, moveToDto } from './dto.js';
 import { ERROR_CODES, sendError } from './errors.js';
 import { LEVELS, STRENGTH_BY_LEVEL } from './levels.js';
 import { GameStore, effectiveResult } from './store.js';
@@ -219,6 +219,75 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     // Partie je teď terminální (draw) → archivuj právě jednou (markArchived).
     await maybeArchive(outcome);
     return reply.send({ accepted: true, game: dtoFor(outcome) });
+  });
+
+  // Nápověda tahu (fáze 44, mód „Výuka"): engine spočítá nejlepší tah pro člověka
+  // (stranu na tahu) a server ho vrátí. READ-ONLY: nesahá na store ani engineStatus,
+  // stav partie se nemění – klient si tah jen zvýrazní. Nápověda hraje VŽDY PLNOU
+  // silou (bestmove bez Strength), nezávisle na úrovni partie: má učit objektivně
+  // nejlepší tah, ne mělký podle úrovně soupeře. Engine je nedůvěryhodný i když radí,
+  // proto se jeho tah OVĚŘÍ přes findLegalMove (jako u tahu enginu níž) – nelegální
+  // výstup se člověku nikdy nepodá, spadne jako 503.
+  app.get<{ Params: { id: string } }>('/games/:id/hint', async (req, reply) => {
+    if (engine === undefined) {
+      return sendError(
+        reply,
+        409,
+        ERROR_CODES.hintUnavailable,
+        'Nápověda není v tomto režimu dostupná (server běží bez enginu).',
+      );
+    }
+
+    const record = store.get(req.params.id);
+    if (record === undefined) {
+      return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
+    }
+    if (effectiveResult(record) !== 'ongoing') {
+      return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
+    }
+    // Na tahu je engine (bílý) → není co radit člověku; navíc by se druhý souběžný
+    // požadavek zařadil do sériové fronty enginu. Klient nápovědu v tomhle stavu
+    // ani nežádá; tohle je pojistka (a symetrie s guardem v /moves).
+    if (record.state.position.turn === ENGINE_COLOR) {
+      return sendError(
+        reply,
+        409,
+        ERROR_CODES.notYourTurn,
+        'Na tahu je engine (bílý), nápověda je jen na tvém tahu.',
+      );
+    }
+
+    // Ověřovat proti TÉ pozici, na kterou jsme se enginu ptali (zachytíme ji před
+    // awaitem). Selhání enginu (timeout/pád/protokol) NENÍ nápověda: spadne jako 503
+    // a partie zůstane beze změny (stejně jako u nabídky remízy).
+    const position = record.state.position;
+    let suggested: Move;
+    try {
+      suggested = await engine.bestmove(position, undefined);
+    } catch (error) {
+      console.error(`Engine selhal při hledání nápovědy pro partii ${req.params.id}:`, error);
+      return sendError(
+        reply,
+        503,
+        ERROR_CODES.engineUnavailable,
+        'Počítač teď nedokáže poradit, zkus to prosím znovu.',
+      );
+    }
+
+    // Engine je nedůvěryhodný: doporučený tah PROVĚŘ proti legálním tahům pozice.
+    // Nelegální/nesmyslný výstup = engine se zbláznil → 503, člověku se nepodá.
+    const legal = findLegalMove(position, suggested.from, suggested.path);
+    if (legal === undefined) {
+      console.error(`Engine vrátil nelegální nápovědu pro partii ${req.params.id}, odmítám.`);
+      return sendError(
+        reply,
+        503,
+        ERROR_CODES.engineUnavailable,
+        'Počítač teď nedokáže poradit, zkus to prosím znovu.',
+      );
+    }
+
+    return reply.send({ move: moveToDto(legal) });
   });
 
   app.post<{ Params: { id: string } }>('/games/:id/moves', async (req, reply) => {

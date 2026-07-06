@@ -1,0 +1,39 @@
+{
+  "id": 44,
+  "title": "Server: endpoint nápovědy tahu",
+  "goal": "Server přidá endpoint, který pro aktuální pozici (strana na tahu = člověk) vrátí enginem doporučený legální tah, ověřený stejnou autoritativní cestou jako každý jiný tah, a na unhappy path odpoví chybou místo tichého selhání (neexistující partie, není tah člověka, konec hry, pád/timeout enginu).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Přidat kód hint_unavailable do ERROR_CODES",
+      "status": "done",
+      "detail": "packages/server/src/errors.ts — nový klíč po vzoru draw_offer_unavailable, jediný zdroj pravdy kódu (konstanta, ne literál). Typ ErrorCode se rozšíří automaticky."
+    },
+    {
+      "title": "Implementovat GET /games/:id/hint v app.ts",
+      "status": "done",
+      "detail": "Guardy v pořadí: engine===undefined → 409 hint_unavailable; partie neexistuje → 404 game_not_found; effectiveResult!==ongoing → 409 game_over; engine na tahu (turn===ENGINE_COLOR) → 409 not_your_turn. Pak engine.bestmove(position, undefined) v try/catch (výjimka → 503 engine_unavailable). Vrácený tah ověřit findLegalMove; nelegální → 503 engine_unavailable. Legální → 200 { move: MoveDto }. NESAHAT na store ani engineStatus (read-only)."
+    },
+    {
+      "title": "Test happy path + read-only invariant",
+      "status": "done",
+      "detail": "Stub engine vrátí legální tah → 200 s MoveDto (from/to/path/captures). Ověřit, že GET /games/:id po nápovědě vrací nezměněný stav (turn, engineStatus, pozice beze změny)."
+    },
+    {
+      "title": "Testy unhappy path se zuby",
+      "status": "done",
+      "detail": "Šest větví: 404 (neexistuje), 409 game_over (skončená partie), 409 not_your_turn (na tahu engine), 409 hint_unavailable (server bez enginu), 503 engine_unavailable (stub bestmove vyhodí výjimku), 503 engine_unavailable (stub vrátí nelegální tah). Použít stub EngineMover jako v offer-draw.test.ts."
+    },
+    {
+      "title": "Verifikace: testy, lint, typecheck, ruční curl",
+      "status": "done",
+      "detail": "pnpm test (server) + lint + typecheck zelené. Ruční ověření: spustit server s enginem, curl GET /games/:id/hint na čerstvé partii vrátí legální tah; curl na neexistující partii vrátí 404."
+    }
+  ],
+  "startedAt": "2026-07-06T15:40:34.020Z",
+  "completedAt": "2026-07-06T15:58:31.434Z",
+  "autoCommit": {
+    "preSha": "325544bb310606dfb8cc0d4b1414a74abe1b5917",
+    "subject": "Phase 44: Server: endpoint nápovědy tahu"
+  }
+}

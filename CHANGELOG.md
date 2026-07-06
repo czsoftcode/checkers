@@ -7,6 +7,15 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+
+- **Server umí poradit nejlepší tah (základ módu Výuka).** Nový endpoint
+  `GET /games/:id/hint` vrátí pro pozici, kde je na tahu člověk, tah doporučený
+  enginem – vždy plnou silou, bez ohledu na zvolenou úroveň, aby nápověda učila
+  objektivně nejlepší tah. Server partii nijak nemění (jen poradí) a doporučený
+  tah si ověří jako legální, takže nikdy nepodá nesmysl. Zobrazení nápovědy na
+  desce a samotný přepínač „Výuka" přijdou v navazující fázi.
+
 ### Changed
 
 - **Na dotyku a peru se kameny netáhnou, jen ťukají.** Tažení kamene (drag & drop)

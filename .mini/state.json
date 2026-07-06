@@ -217,6 +217,11 @@
       "id": 43,
       "title": "Mobil bez tažení, jen tap",
       "status": "done"
+    },
+    {
+      "id": 44,
+      "title": "Server: endpoint nápovědy tahu",
+      "status": "done"
     }
   ]
 }

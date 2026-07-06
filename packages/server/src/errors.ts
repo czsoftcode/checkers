@@ -16,6 +16,8 @@ export const ERROR_CODES = {
   notYourTurn: 'not_your_turn',
   /** Nabídka remízy v manuálním režimu (server běží bez enginu → není decidér). */
   drawOfferUnavailable: 'draw_offer_unavailable',
+  /** Nápověda tahu v manuálním režimu (server běží bez enginu → není radící). */
+  hintUnavailable: 'hint_unavailable',
   /** Nabídka remízy, když engine zrovna přemýšlí (na tahu je engine). */
   engineBusy: 'engine_busy',
   /** Engine selhal při vyhodnocení nabídky (timeout/pád/protokol) – přechodné. */
