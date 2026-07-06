@@ -252,3 +252,44 @@ describe('úroveň partie protéká až do bestmove', () => {
     expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_request');
   });
 });
+
+describe('Mistrovství: ballot nasazen a engine (bílý) táhne PRVNÍ', () => {
+  it('POST /games championship → 201, po ballotu bílý na tahu, engine se rozjede (thinking) a dotáhne', async () => {
+    // Legální stub jako engine → autorita mu tah stejně ověří. Bez enginu by
+    // partie po ballotu jen stála na tahu bílého a nikdo by nezačal.
+    app = buildApp({ engine: legalStub });
+    const res = await app.inject({ method: 'POST', url: '/games', payload: { level: 'championship' } });
+    expect(res.statusCode).toBe(201);
+    const created = res.json<GameDto>();
+
+    // Po ballotu: bílý (engine) na tahu, vylosovaný ballot je zaznamenaný.
+    expect(created.level).toBe('championship');
+    expect(created.position.turn).toBe('white');
+    expect(created.ballotIndex).not.toBeNull();
+    // Engine se spustil UŽ při založení (na rozdíl od ostatních úrovní, kde
+    // začíná člověk/černý) → engineStatus 'thinking' hned v odpovědi.
+    expect(created.engineStatus).toBe('thinking');
+
+    // Engine dotáhne první tah na pozadí → deska se překlopí na černého (člověka).
+    // To je zub „engine táhl PRVNÍ": kdyby POST engine nespustil, zůstal by
+    // navždy bílý na tahu a polling by vypršel.
+    const done = await pollUntil(
+      created.id,
+      (dto) => dto.engineStatus === 'idle' && dto.position.turn === 'black',
+    );
+    expect(done.result).toBe('ongoing');
+    expect(done.ballotIndex).toBe(created.ballotIndex);
+  });
+
+  it('ostatní úroveň (professional): POST engine NEspustí, černý (člověk) na tahu, ballotIndex null', async () => {
+    // Zpětná kompatibilita: neballotové partie se založením nemění – engine se
+    // rozjede až po tahu člověka, ne hned.
+    app = buildApp({ engine: legalStub });
+    const res = await app.inject({ method: 'POST', url: '/games', payload: { level: 'professional' } });
+    expect(res.statusCode).toBe(201);
+    const created = res.json<GameDto>();
+    expect(created.position.turn).toBe('black');
+    expect(created.engineStatus).toBe('idle');
+    expect(created.ballotIndex).toBeNull();
+  });
+});

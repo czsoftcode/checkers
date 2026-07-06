@@ -1,0 +1,47 @@
+{
+  "id": 47,
+  "title": "Serverový los ballotu: Mistrovství",
+  "goal": "Při založení partie na úrovni Mistrovství server vylosuje seedovatelným PRNG jeden ballot z THREE_MOVE_BALLOTS a jeho tři půltahy přehraje autoritativní cestou advanceState (stejnou jako tah hráče), takže partie začíná v ověřené popballotové pozici s bílým (AI) na tahu; každý nasazený ballot je legální ověřenou serverovou cestou a seedovaný los je v testu deterministický. Rozsah je jen server – klientský výběr úrovně a orientace desky patří do navazující fáze.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Úroveň championship v levels.ts",
+      "status": "done",
+      "detail": "Přidat 'championship' do LEVELS a STRENGTH_BY_LEVEL.championship = undefined (plná síla = Profesionál, komentář proč). DEFAULT_LEVEL beze změny. z.enum(LEVELS) i typ GameLevel se rozšíří samy. Ověří typecheck + levels.test (mapa pokrývá všechny úrovně)."
+    },
+    {
+      "title": "Seedovatelný picker ballotu na serveru",
+      "status": "done",
+      "detail": "Malá čistá funkce PRNG (kopie mulberry32 do serveru, NEimportovat z cli) + helper losující index do decku. Typ pickBallot: () => number. Default založený na Math.random. Bez nové závislosti na rules kromě délky decku."
+    },
+    {
+      "title": "Los + nasazení v store.create (+ ballotIndex)",
+      "status": "done",
+      "detail": "create pro championship: initialGameState() → vylosovat index → playBallot(THREE_MOVE_BALLOTS[i]) → tři Move přehrát přes advanceState a uložit do moves. ballotIndex do StoredGame/GameRecord/toRecord i do GameDto (dto.ts); pro neballotové partie null. Jednorázový serverový log losu."
+    },
+    {
+      "title": "POST /games spustí engine po ballotu",
+      "status": "done",
+      "detail": "V app.ts po store.create zavolat maybeTriggerEngine (no-op, když je na tahu černý). Injektovat pickBallot do GameStore přes buildApp/BuildAppOptions (default Math.random). Championship partie se vrátí 201 s engineStatus 'thinking'."
+    },
+    {
+      "title": "Testy se zuby",
+      "status": "done",
+      "detail": "Unit (GameStore se seedovaným pickerem): deterministický ballotIndex; po ballotu turn==='white', černých 12, bílých 11-12, moves.length===3; neballotová úroveň → ballotIndex===null, výchozí rozestavění, černý na tahu. Zub: dočasné rozbití cíle ballotu v rules → playBallot/create throw. API (buildApp + fake engine): championship → engine (bílý) táhne první."
+    },
+    {
+      "title": "Verifikace + nezávislý self-review",
+      "status": "done",
+      "detail": "Projít unhappy path (prázdné/rozbité vstupy, zpětná kompatibilita ostatních úrovní), spustit lint/typecheck/testy. Fáze sahá na kontrakt rules↔store a vstupní bod POST /games → nezávislý sub-agent (čerstvý kontext) jako self-review dle CLAUDE.md."
+    }
+  ],
+  "startedAt": "2026-07-06T18:41:41.381Z",
+  "resolvedVerify": [
+    "Reálný engine (ne stub) po ballotu odehraje bílého do limitu"
+  ],
+  "completedAt": "2026-07-06T19:18:24.369Z",
+  "autoCommit": {
+    "preSha": "be901d9188d91faccfd54d3ed77b6ee68bde9085",
+    "subject": "Phase 47: Serverový los ballotu: Mistrovství"
+  }
+}

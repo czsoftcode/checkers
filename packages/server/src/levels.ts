@@ -14,7 +14,7 @@
 import type { Strength } from './engine-client.js';
 
 /** Úroveň obtížnosti. Interní hodnoty (drát/kód); v UI se lokalizují do češtiny. */
-export const LEVELS = ['professional', 'intermediate', 'beginner', 'education'] as const;
+export const LEVELS = ['championship', 'professional', 'intermediate', 'beginner', 'education'] as const;
 
 /** Typ úrovně odvozený ze seznamu – přidání úrovně = jediná změna v `LEVELS`. */
 export type GameLevel = (typeof LEVELS)[number];
@@ -56,6 +56,12 @@ export const DEFAULT_LEVEL: GameLevel = 'professional';
  * a Profesionál v provozu má neomezenou hloubku – test ho jen aproximuje).
  */
 export const STRENGTH_BY_LEVEL: Record<GameLevel, Strength | undefined> = {
+  // `championship` → `undefined`: ŽÁDNÉ páky, soupeř hraje PLNOU silou stejně jako
+  // Profesionál. Mistrovství se od Profesionála liší JEN vynuceným třítahovým
+  // zahájením (3-move ballot) losovaným serverem při založení partie – síla enginu
+  // je identická. Los a nasazení ballotu řeší store (`create`), ne tahle mapa;
+  // tady jen stvrzujeme, že úroveň nemá vlastní oslabení.
+  championship: undefined,
   professional: undefined,
   intermediate: { maxDepth: 3, carelessness: 0.2 },
   beginner: { maxDepth: 1, carelessness: 0.5 },

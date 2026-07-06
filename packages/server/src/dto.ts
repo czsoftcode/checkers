@@ -35,6 +35,14 @@ export interface GameDto {
    * přepínači (ten mění až další „Nová hra"). Autoritou o úrovni je server.
    */
   readonly level: GameLevel;
+  /**
+   * Index vylosovaného třítahového zahájení (3-move ballot) do decku
+   * `THREE_MOVE_BALLOTS`, nebo `null` když partie žádné vynucené zahájení nemá.
+   * Nenulový je jen u úrovně Mistrovství. Klient ho zatím nemusí zobrazovat
+   * (název zahájení je věc pozdější UI fáze); je v kontraktu, ať ho pak umí
+   * ukázat bez změny drátu.
+   */
+  readonly ballotIndex: number | null;
 }
 
 /** Přepis `Move` z `rules` do drátového tvaru (kopie polí, ne readonly odkaz). */
@@ -61,6 +69,7 @@ export function gameToDto(
   engineStatus: EngineStatus,
   result: GameResult,
   level: GameLevel,
+  ballotIndex: number | null,
 ): GameDto {
   return {
     id,
@@ -69,6 +78,7 @@ export function gameToDto(
     legalMoves: legalMoveDtos(state.position),
     engineStatus,
     level,
+    ballotIndex,
   };
 }
 

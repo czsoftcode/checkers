@@ -47,6 +47,14 @@ describe('úrovně obtížnosti', () => {
     expect(STRENGTH_BY_LEVEL.education).toBeUndefined();
   });
 
+  it('Mistrovství hraje soupeře plnou silou (undefined) – liší se jen vynuceným zahájením', () => {
+    expect(LEVELS).toContain('championship');
+    // Shodná síla jako Profesionál: žádné páky. Rozdíl Mistrovství je JEN vynucený
+    // 3-move ballot losovaný serverem, ne slabší/silnější engine – to hlídá store,
+    // ne tahle mapa.
+    expect(STRENGTH_BY_LEVEL.championship).toBeUndefined();
+  });
+
   it('každá úroveň v LEVELS má záznam v mapě síly', () => {
     for (const level of LEVELS) {
       expect(level in STRENGTH_BY_LEVEL).toBe(true);

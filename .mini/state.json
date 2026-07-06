@@ -232,6 +232,11 @@
       "id": 46,
       "title": "3-move ballot: los zahájení",
       "status": "done"
+    },
+    {
+      "id": 47,
+      "title": "Serverový los ballotu: Mistrovství",
+      "status": "done"
     }
   ]
 }

@@ -34,3 +34,4 @@ export type {
 } from './engine-client.js';
 export { LEVELS, DEFAULT_LEVEL, STRENGTH_BY_LEVEL } from './levels.js';
 export type { GameLevel } from './levels.js';
+export { mulberry32 } from './prng.js';

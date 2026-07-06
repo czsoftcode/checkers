@@ -9,7 +9,13 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { advanceState, gameResultFromState, initialGameState } from '@checkers/rules';
+import {
+  THREE_MOVE_BALLOTS,
+  advanceState,
+  gameResultFromState,
+  initialGameState,
+  playBallot,
+} from '@checkers/rules';
 import type { GameResult, GameState, Move } from '@checkers/rules';
 import { DEFAULT_LEVEL } from './levels.js';
 import type { GameLevel } from './levels.js';
@@ -49,6 +55,15 @@ export interface GameRecord {
    * klienta. Mapa úroveň → páky enginu žije v `levels.ts`.
    */
   readonly level: GameLevel;
+  /**
+   * Index vylosovaného třítahového zahájení (3-move ballot) do
+   * `THREE_MOVE_BALLOTS`, nebo `null` pro partii bez vynuceného zahájení.
+   * Nenulový je JEN u úrovně Mistrovství (`championship`); u ostatních úrovní
+   * partie začíná výchozím rozestavěním a `ballotIndex` je `null`. Ballot samotný
+   * je zároveň prvními třemi tahy v `moves` – index je navíc, ať klient (a log)
+   * pozná KTERÉ zahájení padlo bez zpětného dohledávání proti decku.
+   */
+  readonly ballotIndex: number | null;
 }
 
 interface StoredGame {
@@ -58,6 +73,7 @@ interface StoredGame {
   archived: boolean;
   forcedResult: GameResult | null;
   level: GameLevel;
+  ballotIndex: number | null;
 }
 
 /**
@@ -80,6 +96,18 @@ export class GameStore {
   private readonly games = new Map<string, StoredGame>();
 
   /**
+   * Zdroj náhody pro los ballotu (úroveň Mistrovství). Očekává se hodnota
+   * v [0, 1) jako `Math.random`. Injektuje se kvůli testu: seedovaný
+   * `mulberry32(seed)` dá deterministický los (stejný seed = stejný ballot),
+   * takže test má zuby. Produkce nechá výchozí `Math.random`.
+   */
+  private readonly rng: () => number;
+
+  constructor(rng: () => number = Math.random) {
+    this.rng = rng;
+  }
+
+  /**
    * Snímek uloženého stavu do neměnného záznamu. `moves` se KOPÍRUJE, ne sdílí:
    * bez kopie by `record.moves` byl živý odkaz na pole, které store dál mutuje –
    * archivace by pak mohla vzít jiný seznam tahů, než jaký v partii byl v okamžiku
@@ -94,23 +122,69 @@ export class GameStore {
       archived: game.archived,
       forcedResult: game.forcedResult,
       level: game.level,
+      ballotIndex: game.ballotIndex,
     };
   }
 
   /**
-   * Založí novou partii ve výchozím rozestavění (černý na tahu, engine idle).
-   * `level` řídí sílu enginu; výchozí je Profesionál (dnešní chování), takže
-   * volání bez argumentu zůstává zpětně kompatibilní.
+   * Vylosuje třítahové zahájení a NASADÍ ho autoritativní cestou: playBallot
+   * spáruje půltahy proti reálným `legalMoves` (na neshodě throwuje = hlasitá
+   * chyba, ne tichý falešný start), a jeho tři `Move` se pak přehrají přes
+   * `advanceState` – stejná cesta jako tah hráče/enginu.
+   *
+   * Proč přehrát přes advanceState, a ne převzít hotovou `position` z playBallot:
+   * store nese `GameState` (pozice + čítače remízy), ne holou `Position`.
+   * `GameState` se staví z `initialGameState()` a `advanceState` – tady se ta
+   * stavba jen zopakuje po odehraných tazích, místo ruční fabrikace stavu kolem
+   * pozice. U SOUČASNÉHO decku je 3. půltah vždy pokrok (tah mužem nebo braní),
+   * takže čítače stejně končí na nule; přehrání je tedy funkčně ekvivalentní, ale
+   * drží se jednoho zdroje pravdy o tvaru stavu (kdyby deck někdy obsahoval
+   * zahájení bez pokroku, čítače sednou samy).
+   *
+   * Vrací výslednou pozici (bílý na tahu), tři reálné tahy do historie a index
+   * vylosovaného zahájení. Index mimo rozsah decku (rozbitý injektovaný `rng`)
+   * vyhodí – to je programová chyba, ne klientský vstup, a nemaskuje se.
+   */
+  private seedBallot(): { state: GameState; moves: Move[]; index: number } {
+    const index = Math.floor(this.rng() * THREE_MOVE_BALLOTS.length);
+    const ballot = THREE_MOVE_BALLOTS[index];
+    if (ballot === undefined) {
+      throw new RangeError(
+        `Los ballotu mimo rozsah: index ${String(index)} pro deck délky ${String(
+          THREE_MOVE_BALLOTS.length,
+        )} (rozbitý rng?)`,
+      );
+    }
+    const { moves } = playBallot(ballot);
+    let state = initialGameState();
+    for (const move of moves) {
+      state = advanceState(state, move);
+    }
+    // Kopie do MUTABLE pole: store do `moves` dál pushuje (applyMove), kdežto
+    // playBallot vrací `readonly Move[]`. Bez kopie by StoredGame.moves nešlo
+    // typovat jako mutable a sdílel by odkaz s návratem playBallotu.
+    return { state, moves: [...moves], index };
+  }
+
+  /**
+   * Založí novou partii. Pro úroveň Mistrovství (`championship`) vylosuje a
+   * nasadí třítahové zahájení (viz {@link seedBallot}) – partie začíná
+   * popballotovou pozicí s BÍLÝM na tahu (= engine táhne první) a s třemi tahy
+   * v historii. Pro ostatní úrovně platí výchozí rozestavění (černý na tahu),
+   * `ballotIndex` je `null`. `level` řídí sílu enginu; výchozí je Profesionál
+   * (dnešní chování), takže volání bez argumentu zůstává zpětně kompatibilní.
    */
   create(level: GameLevel = DEFAULT_LEVEL): GameRecord {
     const id = randomUUID();
+    const seeded = level === 'championship' ? this.seedBallot() : null;
     const game: StoredGame = {
-      state: initialGameState(),
+      state: seeded?.state ?? initialGameState(),
       engineStatus: 'idle',
-      moves: [],
+      moves: seeded?.moves ?? [],
       archived: false,
       forcedResult: null,
       level,
+      ballotIndex: seeded?.index ?? null,
     };
     this.games.set(id, game);
     return this.toRecord(id, game);

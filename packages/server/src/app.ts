@@ -58,11 +58,17 @@ export interface BuildAppOptions {
    * disk řešit nechtějí. Reálný běh mu předá cestu z env (`main.ts`).
    */
   readonly pdnDir?: string;
+  /**
+   * Zdroj náhody pro los třítahového zahájení (úroveň Mistrovství). Předá se
+   * store. Když chybí, store použije `Math.random`; test injektuje seedovaný
+   * PRNG (`mulberry32`), aby byl los deterministický a měl zuby.
+   */
+  readonly rng?: () => number;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
-  const store = new GameStore();
+  const store = new GameStore(options.rng);
   const engine = options.engine;
   const pdnDir = options.pdnDir;
 
@@ -105,6 +111,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       record.engineStatus,
       effectiveResult(record),
       record.level,
+      record.ballotIndex,
     );
   }
 
@@ -120,7 +127,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         `Neplatné tělo: očekávám { level: ${LEVELS.join(' | ')} }`,
       );
     }
-    return reply.code(201).send(dtoFor(store.create(parsed.data.level)));
+    const record = store.create(parsed.data.level);
+    // Mistrovství: partie začíná vylosovaným ballotem → jednorázový záznam KTERÉ
+    // zahájení padlo (ověřitelnost losu, debug férovosti). Ballot je zároveň
+    // prvními třemi tahy v historii; index je navíc.
+    if (record.ballotIndex !== null) {
+      console.log(`[games] Mistrovství: partie ${record.id} začíná ballotem #${record.ballotIndex}`);
+    }
+    // Po ballotu je na tahu BÍLÝ = engine → musí táhnout PRVNÍ. Na rozdíl od
+    // ostatních úrovní (černý/člověk začíná) se tu engine spouští už při založení.
+    // `maybeTriggerEngine` si sám hlídá `turn === ENGINE_COLOR`, takže pro
+    // neballotové partie (černý na tahu) je to no-op → zpětně kompatibilní.
+    maybeTriggerEngine(record);
+    // Čerstvý záznam: `maybeTriggerEngine` mohl přepnout engineStatus na
+    // `thinking`; odpověď to má ukázat (engine dotáhne na pozadí, klient dopolluje).
+    const fresh = store.get(record.id) ?? record;
+    return reply.code(201).send(dtoFor(fresh));
   });
 
   app.get<{ Params: { id: string } }>('/games/:id', (req, reply) => {
