@@ -1,0 +1,37 @@
+{
+  "id": 46,
+  "title": "3-move ballot: los zahájení",
+  "goal": "V knihovně rules (čistý TS, nulové I/O) přidat kurátorovaný seznam přijatých třítahových zahájení a čistou funkci, která zvolený ballot odehraje přes stávající generátor tahů a vrátí výslednou pozici; každý ballot je testem ověřen jako legální (fixtures se zuby).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Datový soubor 156 zahájení",
+      "status": "done",
+      "detail": "Vygenerovat packages/rules/src/openings.ts: typ Ply {from,to} + Ballot (3 půltahy) + exportovaná konstanta THREE_MOVE_BALLOTS (156 položek jako celočíselné páry, u každé komentář s původním PDN + jménem). Data natvrdo z jednorázové extrakce PDF; PDF není závislost repa. Ověřitelné: 156 položek, typecheck projde."
+    },
+    {
+      "title": "Funkce playBallot + export",
+      "status": "done",
+      "detail": "Čistá funkce z initialPosition(): pro každý ze 3 půltahů najít v legalMoves(pos) PRÁVĚ JEDEN tah s from===ply.from && path[last]===ply.to (jinak throw s jasnou chybou), pak applyMove. Vrací { position, moves }. Vyexportovat playBallot, THREE_MOVE_BALLOTS a typy přes index.ts."
+    },
+    {
+      "title": "Test se zuby nad reálnými pravidly",
+      "status": "done",
+      "detail": "packages/rules/test/openings.test.ts: všech 156 ballotů playBallot projde; po ballotu turn==='white', černých 12, bílých ∈ {11,12}; THREE_MOVE_BALLOTS.length===156; žádné duplicity. Reálná cesta rules, ne mock. Zuby doložit: dočasně rozbít cíl jednoho ballotu → test padne na 'žádná legální shoda', pak vrátit."
+    },
+    {
+      "title": "Verifikace + nezávislý self-review",
+      "status": "done",
+      "detail": "pnpm -F @checkers/rules test, lint, typecheck zeleně. Před reportem pustit nezávislého sub-agenta (čerstvý kontext) na chybovou cestu playBallot (throw při neshodě/víc shodách), správnost from+cíl matchování a soulad datového kontraktu s budoucí serverovou fází."
+    }
+  ],
+  "startedAt": "2026-07-06T17:51:55.949Z",
+  "resolvedVerify": [
+    "Sémantika decku: je těch 156 zahájení opravdu zamýšlený accepted seznam?"
+  ],
+  "completedAt": "2026-07-06T18:24:38.658Z",
+  "autoCommit": {
+    "preSha": "bd2c38116cf7f2b1a1b62ace5fe8973006866c15",
+    "subject": "Phase 46: 3-move ballot: los zahájení"
+  }
+}

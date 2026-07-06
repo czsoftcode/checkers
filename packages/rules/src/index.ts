@@ -35,3 +35,5 @@ export { gameResult, gameResultFromState } from './result.js';
 export type { GameResult } from './result.js';
 export { formatMove, parseMove } from './notation.js';
 export { perft, MAX_PERFT_DEPTH } from './perft.js';
+export { THREE_MOVE_BALLOTS, playBallot } from './openings.js';
+export type { Ply, Ballot, BallotResult } from './openings.js';

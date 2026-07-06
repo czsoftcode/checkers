@@ -227,6 +227,11 @@
       "id": 45,
       "title": "Úroveň Výuka: nápověda na desce",
       "status": "done"
+    },
+    {
+      "id": 46,
+      "title": "3-move ballot: los zahájení",
+      "status": "done"
     }
   ]
 }
