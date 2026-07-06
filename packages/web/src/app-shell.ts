@@ -110,8 +110,12 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const panel = document.createElement('div');
   panel.className = 'panel';
 
+  // Stavový řádek pod deskou: za běhu prázdný, nese hlášku o načítání partie.
+  // Výsledek a chyby jdou do modalu, ne sem. Umístí se do `.status-bar` pod deskou.
+  // Startuje skrytý (prázdný) – `setStatus('')` drží `.hidden`, ať prázdný odstavec
+  // ve vodorovném řádku netvoří mezeru ani falešný oddělovač před verdiktem remízy.
   const status = document.createElement('p');
-  status.className = 'status';
+  status.className = 'status hidden';
 
   // Výběr úrovně pro DALŠÍ novou hru. Musí vzniknout PŘED prvním `startNewGame()`
   // (na konci funkce), protože jeho hodnotu čte při zakládání partie. Výchozí je
@@ -149,8 +153,8 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const newGameBtn = button('btn-newgame', 'Nová hra');
   controls.append(levelSelect, controlsDivider, offerDrawBtn, resignBtn, newGameBtn);
 
-  // Samostatný řádek pro verdikt nabídky remízy (řídí ho výhradně skořápka kolem
-  // offerDraw, NE onState) – proud stavů z pollingu ho tak nepřepíše.
+  // Verdikt nabídky remízy (řídí ho výhradně skořápka kolem offerDraw, NE onState –
+  // proud stavů z pollingu ho tak nepřepíše). Žije ve stavovém řádku POD deskou.
   const offerMsg = document.createElement('p');
   offerMsg.className = 'offer-msg hidden';
 
@@ -164,7 +168,9 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const noBtn = button('btn-confirm-no', 'Zrušit');
   confirm.append(confirmLabel, yesBtn, noBtn);
 
-  panel.append(status, controls, confirm, offerMsg);
+  // Panel nad deskou nese UŽ JEN ovládání (tlačítka + přepínač) a potvrzení vzdání –
+  // žádný prázdný stavový řádek nad tlačítky, ať je panel co nejnižší a deska větší.
+  panel.append(controls, confirm);
 
   const boardSlot = document.createElement('div');
   boardSlot.className = 'board-slot';
@@ -188,7 +194,31 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   boardRow.className = 'board-row';
   boardRow.append(boardSlot, turnIndicator);
 
-  element.append(panel, boardRow);
+  // Stavový řádek POD deskou: vyplní mezeru mezi deskou a spodním okrajem (CSS
+  // flex: 1). Nese informace, které dřív byly nad/pod tlačítky – hlášku o načítání
+  // (status) i verdikt nabídky remízy (offerMsg). Výsledek/chyba jdou do modalu.
+  const statusBar = document.createElement('div');
+  statusBar.className = 'status-bar';
+  statusBar.append(status, offerMsg);
+
+  element.append(panel, boardRow, statusBar);
+
+  // Modal s výsledkem partie / chybou: překryv přes celý viewport se zprávou a
+  // tlačítkem „Zavřít". Ovládá se z `render()` (konec partie, chyba enginu) a
+  // z chybové cesty zakládání partie. Startuje skrytý. Žádné inline styly (CSP) –
+  // vzhled je v CSS. `role=dialog`/`aria-modal` na dialogu kvůli přístupnosti.
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay hidden';
+  const modalDialog = document.createElement('div');
+  modalDialog.className = 'modal-dialog';
+  modalDialog.setAttribute('role', 'dialog');
+  modalDialog.setAttribute('aria-modal', 'true');
+  const modalMsg = document.createElement('p');
+  modalMsg.className = 'modal-msg';
+  const modalCloseBtn = button('btn-modal-close', 'Zavřít');
+  modalDialog.append(modalMsg, modalCloseBtn);
+  modal.append(modalDialog);
+  element.append(modal);
 
   let controller: BoardController | null = null;
   // Poslední známý stav ze serveru – řídí stav tlačítek (result i turn a
@@ -212,6 +242,20 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // URL a řetězcové porovnání by pak selhalo. Předává se do `pickBackground` jako
   // `exclude`, aby se stejné pozadí nevylosovalo dvakrát po sobě.
   let lastBg: string | undefined;
+  // Klíč posledního terminálního stavu, na který už modal vyskočil (výsledek partie
+  // nebo 'error'). Brání opakovanému otevření při každém pollu; po zavření uživatelem
+  // zůstává nastavený, takže se pro tentýž stav znovu neotevře. Nová hra ho resetuje.
+  let notifiedTerminalKey: string | null = null;
+
+  /**
+   * Nastaví text stavového řádku a schová ho, když je prázdný. Skrytí (`.hidden` =
+   * display:none) je nutné kvůli vodorovnému rozložení `.status-bar`: prázdný
+   * odstavec by jinak zabíral mezeru a spouštěl CSS oddělovač před další hláškou.
+   */
+  function setStatus(text: string): void {
+    status.textContent = text;
+    status.classList.toggle('hidden', text === '');
+  }
 
   /** Přepne mezi hlavními tlačítky a inline potvrzením vzdání. */
   function showConfirm(show: boolean): void {
@@ -220,24 +264,50 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   }
 
   /**
-   * Text řádku stavu. Za běhu partie je prázdný – kdo je na tahu, signalizuje
-   * barva svítícího kamene (turn-indicator), ne text. Řádek nese jen konec partie
-   * a chybu enginu.
+   * Zpráva do modalu pro terminální stav: výsledek partie (bez „Konec:" prefixu)
+   * nebo chyba enginu. `null`, když se nemá nic hlásit (běžící partie).
    */
-  function statusText(s: GameStatus): string {
+  function terminalMessage(s: GameStatus): string | null {
     if (s.result === 'black-wins') {
-      return 'Konec: vyhráli jste.';
+      return 'Vyhráli jste.';
     }
     if (s.result === 'white-wins') {
-      return 'Konec: vyhrál počítač.';
+      return 'Vyhrál počítač.';
     }
     if (s.result === 'draw') {
-      return 'Konec: remíza.';
+      return 'Remíza.';
     }
     if (s.engineStatus === 'error') {
-      return 'Počítač hlásí chybu – partie stojí.';
+      return 'Počítač hlásí chybu, partie stojí.';
     }
-    return '';
+    return null;
+  }
+
+  /** Klíč terminálního stavu pro latch (výsledek, nebo 'error'); `null` = neterminální. */
+  function terminalKey(s: GameStatus): string | null {
+    if (s.result !== 'ongoing') {
+      return s.result;
+    }
+    return s.engineStatus === 'error' ? 'error' : null;
+  }
+
+  /** Otevře modal s danou zprávou a dá fokus na „Zavřít" (přístupnost). */
+  function showModal(text: string): void {
+    modalMsg.textContent = text;
+    modalDialog.setAttribute('aria-label', text);
+    modal.classList.remove('hidden');
+    modalCloseBtn.focus();
+  }
+
+  /** Zavře modal (když je otevřený) a vrátí fokus na „Nová hra", je-li aktivní. */
+  function closeModal(): void {
+    if (modal.classList.contains('hidden')) {
+      return;
+    }
+    modal.classList.add('hidden');
+    if (!newGameBtn.disabled) {
+      newGameBtn.focus();
+    }
   }
 
   /** Nastaví stav všech tlačítek podle posledního stavu partie + běžících operací. */
@@ -273,9 +343,28 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     if (s.result !== 'ongoing' || s.turn !== 'black' || s.engineStatus !== 'idle') {
       firstMoveMade = true;
     }
-    status.textContent = statusText(s);
+    // Řádek stavu už nenese výsledek ani chybu (jdou do modalu); za běhu je prázdný.
+    setStatus('');
     refreshControls();
     updateTurnIndicator(s);
+    // Modal na terminální stav (výsledek partie / chyba enginu) – jen při ZMĚNĚ
+    // stavu, ne při každém pollu. Po zavření zůstane `notifiedTerminalKey`, takže
+    // se pro tentýž stav znovu neotevře.
+    const key = terminalKey(s);
+    if (key === null) {
+      // Návrat do neterminálního stavu (běžící partie) latch uvolní. Dnes se sem
+      // po konci partie stav nevrací (výsledek je konečný, chyba enginu drží tah
+      // u enginu), takže po zavření modalu k reopenu nedojde. Reset je tu ale
+      // schválně, ať nespoléháme na tuhle neměnnost serveru: kdyby engine přešel
+      // error → idle → error, druhá chyba by se jinak zalatchovala a spolkla.
+      notifiedTerminalKey = null;
+    } else if (key !== notifiedTerminalKey) {
+      notifiedTerminalKey = key;
+      const msg = terminalMessage(s);
+      if (msg !== null) {
+        showModal(msg);
+      }
+    }
     // Po skončení partie nemá potvrzení vzdání smysl – schovej ho.
     if (s.result !== 'ongoing') {
       showConfirm(false);
@@ -343,6 +432,10 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     loading = true;
     firstMoveMade = false; // nová partie → úroveň zas volná až do prvního tahu
     showConfirm(false);
+    // Nová partie: zavři případný modal z minulé hry a resetuj latch, ať výsledek
+    // (nebo chyba) nové partie zase vyskočí.
+    notifiedTerminalKey = null;
+    closeModal();
     // Nové pozadí HNED (před await createGame), ať se přehodí okamžitě. Předchozí
     // pozadí se vyloučí (`lastBg`), ať nepadne dvakrát po sobě totéž. Prázdný
     // výčet → undefined → src='' → zůstane výchozí barevné pozadí z CSS, žádný
@@ -372,7 +465,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       controller = null;
     }
     boardSlot.replaceChildren();
-    status.textContent = 'Načítám partii…';
+    setStatus('Načítám partii…');
     try {
       const game = await client.createGame(level);
       if (disposed) {
@@ -390,7 +483,10 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     } catch (error) {
       loading = false;
       console.error('Nepodařilo se založit partii:', error);
-      status.textContent = 'Partii se nepodařilo založit. Zkuste to znovu tlačítkem Nová hra.';
+      setStatus(''); // hláška jde do modalu, ne do (mizejícího) řádku stavu
+      // Umělé `white-wins` níž jen odemyká „Novou hru" – NESMÍ vyvolat výherní modal,
+      // proto ho hlásíme ručně jako chybu (a `render()` se na téhle cestě nevolá).
+      showModal('Partii se nepodařilo založit. Zkuste to znovu tlačítkem Nová hra.');
       // Chyba = partie „neběží": povol Novou hru k opakování, vzdání i nabídku zamkni.
       lastStatus = { result: 'white-wins', turn: 'white', engineStatus: 'idle' };
       resignBtn.disabled = true;
@@ -424,6 +520,24 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     void startNewGame();
   });
 
+  modalCloseBtn.addEventListener('click', () => {
+    closeModal();
+  });
+  // Klik na tmavý backdrop (mimo dialog) zavře; klik dovnitř dialogu ne.
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeModal();
+    }
+  });
+  // Esc zavře modal, když je otevřený. Listener je na document (modal může mít fokus
+  // na tlačítku Zavřít) – odhlásí se v `dispose`, ať po odstranění appky nezůstane.
+  const onKeydown = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      closeModal();
+    }
+  };
+  document.addEventListener('keydown', onKeydown);
+
   // Přepnutí úrovně PŘED prvním tahem rovnou přehraje partii na novou úroveň:
   // žádný tah ještě nepadl, nic se neztrácí. Za běhu partie je select zamčený
   // (sem se nedostane); po konci partie se úroveň jen zvolí pro příští „Nová hra"
@@ -443,6 +557,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     element,
     dispose: () => {
       disposed = true;
+      document.removeEventListener('keydown', onKeydown);
       controller?.dispose();
       controller = null;
     },

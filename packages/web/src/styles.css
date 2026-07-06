@@ -1,15 +1,15 @@
 :root {
-  /* Deska se musí svisle vejít POD oznamovací panel (ten je teď v toku nad ní,
-     ne fixed) i s okrajem – proto vh člen odečítá rezervu na výšku panelu. Panel
-     je reálně jen ~5,5rem vysoký (řádek stavu + řádek ovládání + padding); 6rem
-     tak stačí i s hláškou nabídky remízy a přitom nenechává nahoře/dole zbytečně
-     velký prázdný pás (větší rezerva = menší deska = víc bílého místa při
-     svislém centrování).
+  /* Deska bere skoro celou výšku okna: odečítá se rezerva na panel nad ní (~3,5rem),
+     viditelný stavový pruh pod ní (~3rem i s mezerou) a rám desky (2×6px, který se
+     u content-box přičítá NAD --board-size) = 7,5rem. Body má padding-bottom 0,
+     takže dostupná výška je 98vh (100vh − 2vh horní padding) a deska = 98vh − 7,5rem;
+     zbytek si vezme panel + `.status-bar { flex: 1 }`. Pod deskou tak sedí čitelný
+     stavový pruh u spodní hrany, ne velký prázdný pás, a nevzniká svislý scroll.
      Šířkový člen odečítá 9rem: vpravo od desky sedí indikátor strany na tahu, na
      vysokém/úzkém okně (kde je aktivní 94vw) tím nevznikne vodorovný scroll.
      POZOR: na <768 px je --board-size přepsané v @media (indikátor je tam POD
      deskou a panel se počítá jinak), takže se tahle rezerva na mobilu neuplatní. */
-  --board-size: min(calc(90vh - 6rem), calc(94vw - 9rem));
+  --board-size: min(calc(98vh - 7.5rem), calc(94vw - 9rem));
   --square: calc(var(--board-size) / 8);
   --light: #e8d3a1;
   --dark: #8a5a2b;
@@ -23,25 +23,63 @@ body {
   margin: 0;
   min-height: 100vh;
   display: flex;
-  /* Skořápka u levého okraje (deska vlevo), svisle na střed. Panel je v toku nad
-     deskou, takže se nic nepřekrývá; velikost desky (--board-size) je zvolená tak,
-     aby se panel + deska do okna svisle vešly bez scrollu. */
-  align-items: center;
+  /* Skořápka u levého okraje (deska vlevo). `align-items: stretch` ji roztáhne na
+     plnou výšku okna, aby stavový řádek pod deskou seděl u spodní hrany (viz
+     `.status-bar { flex: 1 }`). `padding-bottom: 0`, ať deska + stavový proužek
+     dosáhnou až ke spodnímu okraji a nezůstal tam prázdný pás. */
+  align-items: stretch;
   justify-content: flex-start;
-  padding: 2vh 2rem;
+  padding: 2vh 2rem 0;
   box-sizing: border-box;
   background: #232323;
   color: #eee;
   font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* Skořápka je svislý sloupec: nahoře oznamovací panel (na šířku desky), pod ním
-   řádek s deskou. `align-items: flex-start` zarovná panel k levé hraně desky, ať
-   je panel přesně nad deskou (indikátor vpravo do zarovnání nezasahuje). */
+/* Skořápka je svislý sloupec: nahoře panel s ovládáním (na šířku desky), pod ním
+   řádek s deskou a úplně dole stavový řádek, který vyplní zbytek výšky. `align-items:
+   flex-start` zarovná panel i stavový řádek k levé hraně desky (indikátor vpravo do
+   zarovnání nezasahuje). */
 .game {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+/* Stavový řádek pod deskou: viditelný tmavý pruh (jako panel) u spodní hrany okna,
+   na šířku desky. `flex: 1` ho roztáhne do zbytku výšky pod deskou (žádná prázdná
+   mezera mezi deskou a pruhem), `min-height` drží čitelnou výšku i když je prázdný.
+   Hlášky jsou VODOROVNĚ ZLEVA vedle sebe (načítání, verdikt nabídky remízy);
+   výsledek/chyby jdou do modalu. */
+.status-bar {
+  flex: 1;
+  box-sizing: border-box;
+  width: var(--board-size);
+  min-height: 2.4rem;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.82);
+}
+
+/* Oddělovač mezi hláškami: svislá čárka + odsazení vlevo dostane každá VIDITELNÁ
+   hláška, před kterou je jiná viditelná (`:not(.hidden) + :not(.hidden)`). Skryté
+   (`.hidden` = display:none) hlášky do „předchozí viditelné" nepočítají, takže
+   samotná hláška oddělovač nedostane. */
+.status-bar > :not(.hidden) + :not(.hidden) {
+  border-left: 1px solid #555;
+  padding-left: 0.75rem;
+}
+
+/* Odstavce hlášek ve stavovém řádku: bez okrajů, aby seděly do řady. */
+.status-bar > p {
+  margin: 0;
 }
 
 /* Řádek desky: deska a vedle ní (vpravo) indikátor strany na tahu, svisle na
@@ -138,7 +176,8 @@ body {
 }
 
 .controls button,
-.confirm button {
+.confirm button,
+.modal-dialog button {
   padding: 0.5rem 1rem;
   font-size: 1rem;
   border: 1px solid #666;
@@ -149,7 +188,8 @@ body {
 }
 
 .controls button:hover:not(:disabled),
-.confirm button:hover:not(:disabled) {
+.confirm button:hover:not(:disabled),
+.modal-dialog button:hover:not(:disabled) {
   background: #4a4a4a;
 }
 
@@ -172,6 +212,45 @@ body {
   text-align: center;
   overflow-wrap: break-word;
   color: #cdd;
+}
+
+/* Modal s výsledkem partie / chybou: ztmavený překryv přes celý viewport (nad
+   vším – panel/deska nemají z-index), uprostřed dialog se zprávou a tlačítkem
+   Zavřít. Zavírá se křížkem/tlačítkem, Esc nebo klikem na tento backdrop. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* Vyšší specificita (2 třídy) než .modal-overlay i obecné .hidden, ať skrytí
+   vyhraje bez ohledu na pořadí pravidel. */
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-width: min(22rem, 90vw);
+  padding: 1.5rem 1.75rem;
+  border-radius: 10px;
+  background: #2a2a2a;
+  color: #eee;
+  text-align: center;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.modal-msg {
+  margin: 0;
+  font-size: 1.15rem;
 }
 
 .board {
@@ -344,6 +423,13 @@ body {
   .board-row {
     flex-direction: column;
     align-items: center;
+  }
+
+  /* Na mobilu není co vyplňovat (sloupec se svisle rolluje, ne stretche), tak
+     stavový řádek nechme jen na výšku obsahu, s malým odsazením od desky. */
+  .status-bar {
+    flex: none;
+    margin-top: 0.6rem;
   }
 
   /* Svislý oddělovač dává smysl jen v jednořádkovém ovládání (desktop). Na mobilu

@@ -202,6 +202,11 @@
       "id": 40,
       "title": "Oznamovací box natrvalo nad deskou",
       "status": "done"
+    },
+    {
+      "id": 41,
+      "title": "Výsledek partie jako modal",
+      "status": "done"
     }
   ]
 }

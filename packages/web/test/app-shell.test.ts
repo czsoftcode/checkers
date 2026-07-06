@@ -142,25 +142,42 @@ describe('app-shell – stav tlačítek podle výsledku', () => {
     created[0]?.emit(OVER);
     expect(resignBtn.disabled).toBe(true);
     expect(newBtn.disabled).toBe(false);
-    expect(q(shell.element, '.status').textContent).toBe('Konec: vyhrál počítač.');
+    // Výsledek jde do modalu (bez „Konec:" prefixu), řádek stavu zůstává prázdný.
+    const modal = q(shell.element, '.modal-overlay');
+    expect(modal.classList.contains('hidden')).toBe(false);
+    expect(q(modal, '.modal-msg').textContent).toBe('Vyhrál počítač.');
+    expect(q(shell.element, '.status').textContent).toBe('');
   });
 });
 
 describe('app-shell – panel nad deskou: obsah a struktura', () => {
-  it('za běhu partie je řádek stavu prázdný (kdo je na tahu = barva kamene), soupeř nikde', async () => {
+  it('za běhu partie je řádek stavu prázdný a SKRYTÝ (kdo je na tahu = barva kamene), soupeř nikde', async () => {
     const { shell } = await mountRunning();
     // Výchozí ongoing stav (černý na tahu, idle): status nenese žádný text o tahu.
-    expect(q(shell.element, '.status').textContent).toBe('');
+    const status = q(shell.element, '.status');
+    expect(status.textContent).toBe('');
+    // Prázdný status je .hidden (display:none), ať ve vodorovném stavovém řádku
+    // netvoří mezeru ani falešný oddělovač před verdiktem nabídky remízy.
+    expect(status.classList.contains('hidden')).toBe(true);
     // Samostatný řádek se soupeřem (.level-info) jsme zrušili – v DOM není.
     expect(shell.element.querySelector('.level-info')).toBeNull();
   });
 
-  it('konec partie i chyba enginu se v řádku stavu pořád ukazují (status neztratil zuby)', async () => {
-    const { shell, created } = await mountRunning();
-    created[0]?.emit({ result: 'draw', turn: 'black', engineStatus: 'idle' });
-    expect(q(shell.element, '.status').textContent).toBe('Konec: remíza.');
-    created[0]?.emit({ result: 'ongoing', turn: 'black', engineStatus: 'error' });
-    expect(q(shell.element, '.status').textContent).toContain('chybu');
+  it('konec partie i chyba enginu vyskočí jako modal (bez „Konec:" prefixu), status prázdný', async () => {
+    // Remíza → modal „Remíza." (žádný „Konec:" prefix), status prázdný.
+    const draw = await mountRunning();
+    const drawModal = q(draw.shell.element, '.modal-overlay');
+    draw.created[0]?.emit({ result: 'draw', turn: 'black', engineStatus: 'idle' });
+    expect(drawModal.classList.contains('hidden')).toBe(false);
+    expect(q(drawModal, '.modal-msg').textContent).toBe('Remíza.');
+    expect(q(draw.shell.element, '.status').textContent).toBe('');
+
+    // Chyba enginu (result ongoing, engineStatus error) → taky modal (samostatný mount).
+    const err = await mountRunning();
+    const errModal = q(err.shell.element, '.modal-overlay');
+    err.created[0]?.emit({ result: 'ongoing', turn: 'black', engineStatus: 'error' });
+    expect(errModal.classList.contains('hidden')).toBe(false);
+    expect(q(errModal, '.modal-msg').textContent).toContain('chybu');
   });
 
   it('přepínač úrovně je v řádku ovládání vlevo od „Nabízím remízu", s oddělovačem mezi nimi', async () => {
@@ -176,6 +193,23 @@ describe('app-shell – panel nad deskou: obsah a struktura', () => {
     // Zrušený samostatný řádek/popisek úrovně („Nová hra proti:") v DOM není.
     expect(shell.element.querySelector('.level-row')).toBeNull();
     expect(shell.element.querySelector('.level-label')).toBeNull();
+  });
+
+  it('stavový řádek je POD deskou (ve .status-bar), ne v panelu; status i offer-msg tam žijí', async () => {
+    const { shell } = await mountRunning();
+    const panel = q(shell.element, '.panel');
+    const boardRow = q(shell.element, '.board-row');
+    const statusBar = q(shell.element, '.status-bar');
+    // .status-bar je až ZA řádkem desky (pod ní).
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(boardRow.compareDocumentPosition(statusBar) & FOLLOWING).toBeTruthy();
+    // Stavové informace (status + verdikt nabídky remízy) jsou uvnitř .status-bar…
+    expect(statusBar.querySelector('.status')).not.toBeNull();
+    expect(statusBar.querySelector('.offer-msg')).not.toBeNull();
+    // …a UŽ NE v horním panelu (tam zůstalo jen ovládání) – jinak by nad tlačítky
+    // zůstal prázdný pás, který jsme schválně odstranili.
+    expect(panel.querySelector('.status')).toBeNull();
+    expect(panel.querySelector('.offer-msg')).toBeNull();
   });
 
   it('panel je v toku nad řádkem desky; deska i indikátor žijí uvnitř .board-row', async () => {
@@ -442,9 +476,118 @@ describe('app-shell – selhání při zakládání partie', () => {
 
     const resignBtn = q(shell.element, '.btn-resign') as HTMLButtonElement;
     const newBtn = q(shell.element, '.btn-newgame') as HTMLButtonElement;
-    expect(q(shell.element, '.status').textContent).toContain('nepodařilo');
+    // Hláška o selhání jde do modalu (ne do mizejícího řádku stavu).
+    const modal = q(shell.element, '.modal-overlay');
+    expect(modal.classList.contains('hidden')).toBe(false);
+    expect(q(modal, '.modal-msg').textContent).toContain('nepodařilo');
+    expect(q(shell.element, '.status').textContent).toBe('');
     expect(resignBtn.disabled).toBe(true);
     expect(newBtn.disabled).toBe(false);
+  });
+});
+
+describe('app-shell – modal výsledku partie', () => {
+  const hidden = (el: HTMLElement): boolean => el.classList.contains('hidden');
+
+  it('výsledek otevře modal jen JEDNOU – opakovaný stejný stav ho po zavření znovu neotevře', async () => {
+    const { shell, created } = await mountRunning();
+    const modal = q(shell.element, '.modal-overlay');
+    const closeBtn = q(shell.element, '.btn-modal-close');
+
+    created[0]?.emit(OVER); // white-wins → modal
+    expect(hidden(modal)).toBe(false);
+
+    // Uživatel zavře modal.
+    click(closeBtn);
+    expect(hidden(modal)).toBe(true);
+
+    // Další poll se STEJNÝM terminálním stavem (result se nemění, dokud běží polling)
+    // NESMÍ modal znovu otevřít – jinak by po každém pollu problikával.
+    created[0]?.emit(OVER);
+    expect(hidden(modal)).toBe(true);
+  });
+
+  it('modal jde zavřít tlačítkem, klávesou Esc i klikem na backdrop; klik do dialogu ne', async () => {
+    const { shell, created } = await mountRunning();
+    const modal = q(shell.element, '.modal-overlay');
+    const dialog = q(shell.element, '.modal-dialog');
+    const closeBtn = q(shell.element, '.btn-modal-close');
+
+    // Tlačítko Zavřít.
+    created[0]?.emit(OVER);
+    expect(hidden(modal)).toBe(false);
+    click(closeBtn);
+    expect(hidden(modal)).toBe(true);
+
+    // Esc (nová hra by latch resetla, tak přejdeme přes remízu = jiný terminální klíč).
+    created[0]?.emit({ result: 'draw', turn: 'black', engineStatus: 'idle' });
+    expect(hidden(modal)).toBe(false);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(hidden(modal)).toBe(true);
+
+    // Klik DOVNITŘ dialogu modal nezavře; klik na backdrop (overlay) ano.
+    created[0]?.emit({ result: 'black-wins', turn: 'black', engineStatus: 'idle' });
+    expect(hidden(modal)).toBe(false);
+    click(dialog); // e.target = dialog → nezavírá
+    expect(hidden(modal)).toBe(false);
+    click(modal); // e.target = overlay (backdrop) → zavírá
+    expect(hidden(modal)).toBe(true);
+  });
+
+  it('nová hra resetuje latch a skryje modal → výsledek další partie zas vyskočí', async () => {
+    const { shell, created } = await mountRunning();
+    const modal = q(shell.element, '.modal-overlay');
+
+    created[0]?.emit(OVER);
+    expect(hidden(modal)).toBe(false);
+
+    // Nová hra: modal se skryje a latch se resetuje.
+    click(q(shell.element, '.btn-newgame'));
+    await tick();
+    expect(hidden(modal)).toBe(true);
+
+    // Nový controller (index 1) ohlásí konec → modal zas vyskočí (latch resetnutý).
+    created[1]?.emit(OVER);
+    expect(hidden(modal)).toBe(false);
+  });
+
+  it('latch se uvolní návratem do běžícího stavu → opětovná chyba enginu zas vyskočí', async () => {
+    // Zuby pro defenzivní reset latche při neterminálním stavu (nezávisle na tom,
+    // jestli tuhle sekvenci server dnes umí vyrobit).
+    const { shell, created } = await mountRunning();
+    const modal = q(shell.element, '.modal-overlay');
+
+    created[0]?.emit({ result: 'ongoing', turn: 'black', engineStatus: 'error' });
+    expect(hidden(modal)).toBe(false);
+    click(q(shell.element, '.btn-modal-close'));
+    expect(hidden(modal)).toBe(true);
+
+    // Návrat na běžící (idle) latch uvolní…
+    created[0]?.emit({ result: 'ongoing', turn: 'black', engineStatus: 'idle' });
+    // …takže další chyba modal zas otevře (nezalatchuje se tiše).
+    created[0]?.emit({ result: 'ongoing', turn: 'black', engineStatus: 'error' });
+    expect(hidden(modal)).toBe(false);
+  });
+
+  it('selhání createGame neukáže „výherní" modal, i když se pod ním nastaví umělé white-wins', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const client: ServerClient = {
+      createGame: () => Promise.reject(new Error('síť dole')),
+      getGame: () => Promise.resolve(gameDto(initialPosition())),
+      postMove: () => Promise.resolve(gameDto(initialPosition())),
+      resign: () => Promise.resolve(gameDto(initialPosition(), 'white-wins')),
+      offerDraw: () => Promise.resolve({ accepted: false, game: gameDto(initialPosition()) }),
+    };
+    const shell = createAppShell(client);
+    document.body.append(shell.element);
+    await tick();
+
+    const modal = q(shell.element, '.modal-overlay');
+    // Modal je vidět, ale s CHYBOVOU hláškou – ne „Vyhrál počítač." z umělého white-wins.
+    expect(hidden(modal)).toBe(false);
+    const msg = q(modal, '.modal-msg').textContent ?? '';
+    expect(msg).toContain('nepodařilo');
+    expect(msg).not.toContain('Vyhrál');
   });
 });
 

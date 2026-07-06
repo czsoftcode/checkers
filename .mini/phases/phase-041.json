@@ -1,0 +1,43 @@
+{
+  "id": 41,
+  "title": "Výsledek partie jako modal",
+  "goal": "Výsledek dohrané partie (výhra / remíza / prohra) i chybové hlášky (chyba enginu i selhání založení partie) ukázat jako vyskakovací modal se zavřením, bez „Konec:“ prefixu, místo mizející hlášky ve stavovém řádku; modal se po konci/chybě objeví jen jednou, „Nová hra“ zůstává v panelu.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Modal: DOM overlay + CSS",
+      "status": "done",
+      "detail": "V app-shell.ts vytvořit skrytý overlay (backdrop + dialog s textem a tlačítkem „Zavřít\"), přidat do .game. Ostylovat v styles.css přes CSS třídy (žádné inline styly kvůli CSP): přes celý viewport, nad vším, role=dialog/aria-modal. Ověření: prvek v DOM, startuje skrytý (.hidden)."
+    },
+    {
+      "title": "Otevření/zavření modalu + přístupnost",
+      "status": "done",
+      "detail": "Funkce showModal(text)/closeModal(); zavření tlačítkem „Zavřít\", klávesou Esc a klikem na backdrop (ne na obsah dialogu); při otevření fokus na „Zavřít\", po zavření fokus zpět do panelu. Ověření: test otevře modal a zavře ho tlačítkem i Esc; klik do dialogu ho nezavře."
+    },
+    {
+      "title": "Latch + výsledek partie do modalu (pryč „Konec:\")",
+      "status": "done",
+      "detail": "Helper terminalMessage(s) vrací zprávu pro výhru („Vyhráli jste.\"), prohru („Vyhrál počítač.\"), remízu („Remíza.\") bez „Konec:\" prefixu, jinak null. V render()/onState otevřít modal jen při ZMĚNĚ terminálního stavu (ne každý poll); po zavření se pro tentýž stav znovu neotevře; nová hra latch resetuje a modal skryje. .status už výsledek nepíše. Ověření: test – opakovaný emit(win) otevře modal jednou; po zavření a dalším pollu zavřený; .status neobsahuje „Konec\"; nová hra reset."
+    },
+    {
+      "title": "Chyba enginu i selhání založení do modalu",
+      "status": "done",
+      "detail": "engineStatus 'error' jde přes terminalMessage do modalu; selhání createGame v catch vyvolá error-modal explicitně. Umělé white-wins v catch NESMÍ spustit výherní modal (catch render() nevolá, modal se vyvolá ručně error-hláškou). Ověření: test – createGame reject → modal s chybovou hláškou a žádný výherní modal; engineStatus 'error' → modal „Počítač hlásí chybu…\"."
+    },
+    {
+      "title": "Testy + vizuální ověření",
+      "status": "done",
+      "detail": "Souhrnné testy se zuby (latch, obsah modalu, prázdný stavový řádek, chybové cesty); projet v prohlížeči – výhra/remíza/prohra i chyba vyskočí jako modal, zavření funguje, „Nová hra\" zůstává v panelu funkční."
+    }
+  ],
+  "startedAt": "2026-07-06T04:24:09.907Z",
+  "resolvedVerify": [
+    "Vizuální kontrola modalu i nového stavového řádku pod deskou (desktop i mobil)",
+    "A11y drobnost: fokus po zavření chybového modalu"
+  ],
+  "completedAt": "2026-07-06T05:09:33.159Z",
+  "autoCommit": {
+    "preSha": "4de10d7dd1ed00107d5a2330079aa4ce2b6f25cf",
+    "subject": "Phase 41: Výsledek partie jako modal"
+  }
+}

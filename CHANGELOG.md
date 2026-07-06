@@ -7,6 +7,25 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-07-06
+
+### Added
+
+- **Výsledek partie i chyby se ukazují jako vyskakovací okno (modal).** Konec
+  partie (výhra „Vyhráli jste.", prohra „Vyhrál počítač.", remíza „Remíza." – bez
+  dřívějšího „Konec:" prefixu), chyba enginu i selhání založení partie vyskočí
+  uprostřed obrazovky, ať se neztratí. Modal se zavře tlačítkem „Zavřít", klávesou
+  Esc nebo klikem mimo něj, po konci partie se objeví jen jednou a „Nová hra"
+  zůstává v panelu.
+
+### Changed
+
+- **Přeuspořádání plochy: stavové hlášky jsou v pruhu POD deskou, deska je větší.**
+  Horní panel nese už jen ovládání (tlačítka + přepínač úrovně) – zmizel prázdný
+  pás nad tlačítky, čímž se zvětšila hrací deska. Průběžné hlášky (načítání partie,
+  verdikt nabídky remízy) se píšou vodorovně zleva do tmavého stavového pruhu u
+  spodní hrany okna (víc hlášek oddělí svislá čárka).
+
 ## [0.35.0] - 2026-07-06
 
 ### Changed
