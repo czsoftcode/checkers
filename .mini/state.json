@@ -182,6 +182,11 @@
       "id": 36,
       "title": "Úroveň Pokročilý: kalibrace a UI",
       "status": "done"
+    },
+    {
+      "id": 37,
+      "title": "README: spuštění vývoj a web build",
+      "status": "done"
     }
   ]
 }

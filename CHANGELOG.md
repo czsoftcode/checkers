@@ -7,6 +7,16 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+
+- Kořenový **README.md** s ověřeným návodem: požadavky (Node 24, pnpm 10.33.0),
+  instalace, vývojové spuštění serveru (`:3000`) i webového klienta (`:5173` s
+  proxy `/games`), produkční web build (`vite build` + `preview`), proměnné
+  prostředí (`PORT`, `ENGINE_TIME_MS`, `CHECKERS_PDN_DIR`) a příkazy testů/kontrol.
+  Každý příkaz je reálně odzkoušený; README poctivě uvádí, že samostatná produkční
+  verze serveru zatím neexistuje (běží přes `tsx`) a že `vite preview` je jen
+  lokální náhled, ne produkční web server.
+
 ## [0.32.0] - 2026-07-05
 
 ### Added

@@ -1,0 +1,47 @@
+{
+  "id": 37,
+  "title": "README: spuštění vývoj a web build",
+  "goal": "Vytvořit kořenový README.md, který ověřenými příkazy popíše požadavky (Node 24, pnpm), instalaci, vývojové spuštění serveru i webového klienta, produkční web build (vite build + preview) a klíčové proměnné prostředí; poctivě uvede, že samostatná produkční verze serveru zatím neexistuje (běží přes tsx).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Sekce Požadavky a instalace",
+      "status": "done",
+      "detail": "Node 24 (.nvmrc, engines >=24), pnpm 10.33.0 (packageManager), pnpm install. Ověřeno reálným během."
+    },
+    {
+      "title": "Sekce Vývojové spuštění",
+      "status": "done",
+      "detail": "Server pnpm --filter @checkers/server start (:3000) + web pnpm --filter @checkers/web dev (:5173, proxy /games); hrát na http://localhost:5173. Příkazy ověřené."
+    },
+    {
+      "title": "Sekce Produkční web build",
+      "status": "done",
+      "detail": "pnpm --filter @checkers/web build → dist/, preview; poznámka že preview neproxuje /games a server nemá produkční build (tsx), hotový prod full-stack repo neobsahuje."
+    },
+    {
+      "title": "Sekce Proměnné prostředí",
+      "status": "done",
+      "detail": "PORT, ENGINE_TIME_MS, CHECKERS_PDN_DIR (default .pdn/ v rootu) – hodnoty a defaulty ověřené proti server/src/main.ts."
+    },
+    {
+      "title": "Sekce Testy a kontroly",
+      "status": "done",
+      "detail": "pnpm test, pnpm lint, pnpm typecheck z rootu (workspace -r)."
+    },
+    {
+      "title": "Ověřit všechny příkazy na čistém stavu",
+      "status": "done",
+      "detail": "Každý příkaz z README reálně spustit a potvrdit že projde/nastartuje; odchylky opravit v textu."
+    }
+  ],
+  "startedAt": "2026-07-06T01:40:55.695Z",
+  "resolvedVerify": [
+    "Nesoulad nápovědy CLI (mimo README, mimo rozsah fáze)"
+  ],
+  "completedAt": "2026-07-06T02:13:20.302Z",
+  "autoCommit": {
+    "preSha": "ad9e4b148b0c36e83c30b6916a4cd659b00be555",
+    "subject": "Phase 37: README: spuštění vývoj a web build"
+  }
+}
