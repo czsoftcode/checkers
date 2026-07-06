@@ -1,11 +1,15 @@
 :root {
-  /* Skoro celá výška okna; na úzkých oknech omezeno šířkou, ať se deska vejde.
-     Odečtená rezerva (9rem) drží vpravo místo pro indikátor strany na tahu, aby
-     na vysokém/úzkém okně (kde je aktivní člen 94vw) nevznikl vodorovný scroll.
-     Na běžném širokém monitoru je aktivní 90vh, takže rezerva desku nezmenší.
+  /* Deska se musí svisle vejít POD oznamovací panel (ten je teď v toku nad ní,
+     ne fixed) i s okrajem – proto vh člen odečítá rezervu na výšku panelu. Panel
+     je reálně jen ~5,5rem vysoký (řádek stavu + řádek ovládání + padding); 6rem
+     tak stačí i s hláškou nabídky remízy a přitom nenechává nahoře/dole zbytečně
+     velký prázdný pás (větší rezerva = menší deska = víc bílého místa při
+     svislém centrování).
+     Šířkový člen odečítá 9rem: vpravo od desky sedí indikátor strany na tahu, na
+     vysokém/úzkém okně (kde je aktivní 94vw) tím nevznikne vodorovný scroll.
      POZOR: na <768 px je --board-size přepsané v @media (indikátor je tam POD
-     deskou, ne vpravo), takže se rezerva na mobilu neuplatní. */
-  --board-size: min(90vh, calc(94vw - 9rem));
+     deskou a panel se počítá jinak), takže se tahle rezerva na mobilu neuplatní. */
+  --board-size: min(calc(90vh - 6rem), calc(94vw - 9rem));
   --square: calc(var(--board-size) / 8);
   --light: #e8d3a1;
   --dark: #8a5a2b;
@@ -19,8 +23,10 @@ body {
   margin: 0;
   min-height: 100vh;
   display: flex;
+  /* Skořápka u levého okraje (deska vlevo), svisle na střed. Panel je v toku nad
+     deskou, takže se nic nepřekrývá; velikost desky (--board-size) je zvolená tak,
+     aby se panel + deska do okna svisle vešly bez scrollu. */
   align-items: center;
-  /* Deska u levého okraje (vpravo nahoře plave panel – takhle se nekříží). */
   justify-content: flex-start;
   padding: 2vh 2rem;
   box-sizing: border-box;
@@ -29,17 +35,24 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* Skořápka: deska u levého okraje ve své plné velikosti, panel plave nad ní.
-   `align-items: center` svisle vycentruje indikátor strany na tahu vedle desky
-   (deska je vyšší, takže se indikátor zarovná na její střed). */
+/* Skořápka je svislý sloupec: nahoře oznamovací panel (na šířku desky), pod ním
+   řádek s deskou. `align-items: flex-start` zarovná panel k levé hraně desky, ať
+   je panel přesně nad deskou (indikátor vpravo do zarovnání nezasahuje). */
 .game {
   display: flex;
-  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Řádek desky: deska a vedle ní (vpravo) indikátor strany na tahu, svisle na
+   střed desky. Na <768 px se přepne na sloupec (indikátor pod deskou). */
+.board-row {
+  display: flex;
   align-items: center;
 }
 
 /* Pozadí celé stránky: obrázek přes celý viewport, POD veškerým obsahem
-   (z-index: -1 < deska 0 < panel 10). `pointer-events: none`, ať nezachytává
+   (z-index: -1 → panel i deska v běžném toku jsou nad ním). `pointer-events: none`, ať nezachytává
    kliky do desky. `object-fit: cover` vyplní plochu bez deformace. Když je
    `src` prázdný (žádný obrázek), prvek nic nevykreslí a prosvítá barevné
    pozadí z `body`. */
@@ -53,52 +66,27 @@ body {
   pointer-events: none;
 }
 
-/* Stav + tlačítka v pravém horním rohu, mimo tok – nezmenšují hrací plochu. */
+/* Stav + tlačítka: v toku NAD deskou, na šířku desky (na žádné šířce nezasahuje do
+   desky – dřív plaval fixed v rohu a při některých šířkách desku překrýval).
+   `box-sizing: border-box`, ať se padding vejde do width a panel nevyčnívá za
+   hranu desky. */
 .panel {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10;
+  box-sizing: border-box;
+  width: var(--board-size);
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 0.5rem;
   padding: 0.6rem 0.8rem;
   border-radius: 8px;
   background: rgba(20, 20, 20, 0.82);
-  /* Strop šířky, ať se dlouhé hlášky (stav, verdikt nabídky) zalomí místo aby
-     roztáhly panel přes celou obrazovku na úzkém monitoru. */
-  max-width: min(16rem, 60vw);
 }
 
 .status {
   margin: 0;
   font-size: 1rem;
   min-height: 1.3em;
-  text-align: right;
-}
-
-/* Skutečná úroveň rozehrané partie (proti čemu se právě hraje). */
-.level-info {
-  margin: 0;
-  font-size: 0.9rem;
-  min-height: 1.1em;
-  text-align: right;
-  color: #cdd;
-}
-
-/* Řádek s výběrem úrovně obtížnosti (popisek + rozbalovací seznam). */
-.level-row {
-  display: flex;
-  align-items: center;
-}
-
-.level-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.95rem;
-  color: #eee;
+  text-align: center;
 }
 
 .level-select {
@@ -116,18 +104,31 @@ body {
   cursor: default;
 }
 
-/* Hlavní tlačítka pod sebou (na úzkém monitoru se vedle sebe nevešla) a stejně
-   široká – sloupec se stretchem je srovná na šířku nejširšího popisku. */
+/* Řádek ovládání: vlevo přepínač úrovně, svislý oddělovač, pak hlavní tlačítka.
+   Panel je na šířku desky, takže se vše do řádku pohodlně vejde; `flex-wrap` je
+   pojistka pro velmi úzké šířky (položky se zalomí místo přetečení). */
 .controls {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: 0.5rem;
+}
+
+/* Svislý oddělovač mezi přepínačem úrovně a tlačítky. `align-self: stretch` ho
+   protáhne na výšku řádku. Nezmenšovat (flex: none). */
+.controls-divider {
+  flex: none;
+  align-self: stretch;
+  width: 1px;
+  background: #555;
 }
 
 .confirm {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.75rem;
 }
 
@@ -168,7 +169,7 @@ body {
   margin: 0;
   font-size: 0.95rem;
   min-height: 1.2em;
-  text-align: right;
+  text-align: center;
   overflow-wrap: break-word;
   color: #cdd;
 }
@@ -303,13 +304,12 @@ body {
 }
 
 /* --- Malý mobil ---------------------------------------------------------
-   Na úzké obrazovce panel NEplave přes desku (position: fixed by ji na malém
-   displeji zakrýval), ale řadí se do toku NAD desku jako svislý sloupec:
-   nahoře „kdo je na tahu", uprostřed hlavní tlačítka vedle sebe, pod nimi
-   hláška o remíze. Breakpoint 768 px pokrývá telefony i menší tablety – na užších
-   zařízeních plovoucí panel překrýval desku, tak je od téhle šířky v toku. Na
-   landscape s nízkou výškou se sloupec (panel + deska) může svisle srolovat;
-   obsah zůstává dosažitelný, což je lepší než překryv fixed panelem. */
+   Sloupec panel-nad-deskou má stejnou skořápku jako desktop (panel v toku, na
+   šířku desky) – mobil tu jen dolaďuje, co se na úzké/nízké obrazovce liší:
+   menší velikost desky, indikátor strany na tahu POD deskou (ne vpravo) a menší
+   tlačítka. Breakpoint 768 px pokrývá telefony i menší tablety. Na landscape s
+   nízkou výškou se sloupec (panel + deska) může svisle srolovat; obsah zůstává
+   dosažitelný. */
 @media (max-width: 768px) {
   body {
     /* Sloupec zarovnaný k hornímu okraji – při column je hlavní osa svislá, tak
@@ -332,39 +332,30 @@ body {
     --board-size: min(70vh, calc(100vw - 1.5rem - 12px));
   }
 
+  /* Skořápka na plnou šířku a na střed (přebíjí desktopové align-items: flex-start,
+     ať je panel i deska vodorovně na střed). */
   .game {
-    flex-direction: column;
     align-items: center;
     width: 100%;
   }
 
-  /* Panel v toku nad deskou, na střed, roztažený na šířku desky. box-sizing:
-     border-box, ať se jeho padding (0.6rem 0.8rem) vejde DOVNITŘ width a panel
-     nevyčnívá za hranu desky ani nepřeteče viewport. */
-  .panel {
-    position: static;
-    box-sizing: border-box;
-    align-items: stretch;
-    max-width: none;
-    width: var(--board-size);
+  /* Indikátor strany na tahu je tu POD deskou, ne vpravo: řádek desky přepneme na
+     sloupec a vycentrujeme. */
+  .board-row {
+    flex-direction: column;
+    align-items: center;
   }
 
-  .status {
-    text-align: center;
+  /* Svislý oddělovač dává smysl jen v jednořádkovém ovládání (desktop). Na mobilu
+     se řádek zalomí a linka by visela mezi řádky, ne vedle nich → skrýt. */
+  .controls-divider {
+    display: none;
   }
 
-  /* Tlačítka vedle sebe. Menší padding/font + white-space: nowrap drží každý
-     popisek na jednom řádku (na běžných šířkách ~360 px a víc se tři vejdou;
-     flex: 1 rozdělí zbylé místo, ale kvůli nowrap se tlačítko nezmenší pod svůj
-     text, takže šířky nejsou úplně stejné). Na velmi úzkém displeji (~320 px)
-     se poslední tlačítko přes flex-wrap zalomí pod ostatní – radši 2+1 řádek než
-     přetečení panelu. */
-  .controls {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
+  /* Tlačítka jsou v řádku už globálně; na mobilu jen zmenšíme padding/font a
+     `flex: 1 1 0` je roztáhne na stejný díl. white-space: nowrap drží popisek na
+     jednom řádku; na velmi úzkém displeji (~320 px) se poslední tlačítko přes
+     flex-wrap zalomí pod ostatní – radši 2+1 řádek než přetečení panelu. */
   .controls button,
   .confirm button {
     flex: 1 1 0;
@@ -373,18 +364,7 @@ body {
     white-space: nowrap;
   }
 
-  /* Řádek potvrzení vzdání taky na střed, ať sedí do stejného sloupce. */
-  .confirm {
-    justify-content: center;
-  }
-
-  .offer-msg {
-    text-align: center;
-  }
-
-  /* Indikátor strany na tahu je na <768 px POD deskou (sloupec `.game` ho díky
-     pořadí v DOM řadí za desku), vodorovně na střed (`.game align-items: center`).
-     Přehodíme mezeru z levé strany (desktop) na horní. */
+  /* Indikátor pod deskou → mezeru přehodíme z levé strany (desktop) na horní. */
   .turn-indicator {
     margin-left: 0;
     margin-top: 0.6rem;

@@ -1,0 +1,47 @@
+{
+  "id": 40,
+  "title": "Oznamovací box natrvalo nad deskou",
+  "goal": "Panel se stavem a tlačítky posadit natrvalo do toku nad hrací desku na šířku desky i na desktopu (stejně jako na mobilu), odstranit text „kdo je na tahu“ (řeší barva kamene) i řádek se soupeřem .level-info (řeší přepínač).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "DOM: obalit desku a indikátor do .board-row",
+      "status": "done",
+      "detail": "V app-shell.ts vložit boardSlot + turnIndicator do nového <div class=\"board-row\">; .game má děti [pageBg, panel, board-row]. Panel se stává řádným sourozencem v toku, ne fixed prvkem."
+    },
+    {
+      "title": "CSS desktop: panel v toku nad deskou",
+      "status": "done",
+      "detail": "Zrušit .panel position:fixed, .game udělat sloupcem, panel width var(--board-size) nad deskou; .board-row flex řádek (deska + indikátor vpravo). Na širokém okně panel sedí nad deskou a nikde ji nepřekrývá."
+    },
+    {
+      "title": "CSS: svislé vejití panel + deska",
+      "status": "done",
+      "detail": "Upravit desktopový strop --board-size (vh člen) a/nebo povolit svislý scroll sloupce, aby přidaná výška panelu nezpůsobila přetečení desky na nízkém/landscape okně. Kritérium: deska nepřeteče dolů, nevznikne vodorovný scroll."
+    },
+    {
+      "title": "CSS mobil: pročistit @media (max-width:768px)",
+      "status": "done",
+      "detail": "Odstranit pravidla platná po sjednocení už globálně (position:static, width, align-items); ponechat jen mobilně specifické (indikátor POD deskou = .board-row sloupcem, tlačítka v řádku). Mobilní vzhled beze změny, žádné mrtvé CSS."
+    },
+    {
+      "title": "TS: vyčistit obsah panelu",
+      "status": "done",
+      "detail": "V statusText() zrušit větev „Jste na tahu / Počítač je na tahu\" (status za běhu prázdný, drží konec partie a chybu enginu); odstranit prvek .level-info (vytvoření, append i obě aktualizace v render()) a jeho CSS."
+    },
+    {
+      "title": "Testy + vizuální ověření",
+      "status": "done",
+      "detail": "Upravit app-shell.test.ts (pryč asserty na .level-info, doplnit že status za běhu neukazuje „na tahu\", konec/chyba se ukazují dál); projet v prohlížeči desktop i mobil – panel natrvalo nad deskou, nikde nepřekrývá, deska se vejde."
+    }
+  ],
+  "startedAt": "2026-07-06T03:29:48.383Z",
+  "resolvedVerify": [
+    "Vizuální kontrola v prohlížeči (desktop i mobil): deska vlevo, panel nikde nezasahuje do desky, přepínač+oddělovač+tlačítka v řádku"
+  ],
+  "completedAt": "2026-07-06T04:08:21.888Z",
+  "autoCommit": {
+    "preSha": "f1b61f144c65ec01d3022d1ad54585dbc1c4bdaf",
+    "subject": "Phase 40: Oznamovací box natrvalo nad deskou"
+  }
+}

@@ -7,6 +7,21 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-07-06
+
+### Changed
+
+- **Oznamovací panel (stav + ovládání) je natrvalo nad hrací deskou** na širokém
+  monitoru i na mobilu, roztažený na šířku desky. Dřív plaval v pravém horním
+  rohu a při některých šířkách okna zasahoval do desky – to už se neděje. Deska
+  zůstává u levého okraje.
+- **Přepínač úrovně je teď v jednom řádku s tlačítky**, vlevo od „Nabízím remízu",
+  oddělený od nich svislou čárou (na mobilu se čára při zalomení skryje). Popisek
+  „Nová hra proti:" byl odstraněn.
+- **Z panelu zmizel text „kdo je na tahu"** (koho se čeká, poznáte z barvy
+  svítícího kamene indikátoru) **i řádek se soupeřem** (proti komu hrajete ukazuje
+  přepínač úrovně). Konec partie a chybu enginu panel hlásí dál.
+
 ## [0.34.0] - 2026-07-06
 
 ### Added

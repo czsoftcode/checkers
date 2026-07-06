@@ -103,32 +103,24 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   pageBg.alt = '';
   element.append(pageBg);
 
-  // Panel (stav + tlačítka) je plovoucí v pravém horním rohu (CSS position:
-  // fixed), aby NEzabíral místo ve sloupci s deskou – jinak by se výška panelu
-  // přičetla k desce a plocha by přetekla dolů z obrazovky.
+  // Panel (stav + tlačítka) je v toku NAD deskou na obou layoutech (CSS: první
+  // dítě `.game`, nad `.board-row`), na šířku desky. Dřív plaval fixed v rohu a
+  // při některých šířkách zasahoval do desky; jeho výška se teď připočítává k
+  // desce, proto CSS počítá s rezervou ve `--board-size`.
   const panel = document.createElement('div');
   panel.className = 'panel';
 
   const status = document.createElement('p');
   status.className = 'status';
 
-  // Řádek se SKUTEČNOU úrovní rozehrané partie (autorita = server přes GameDto).
-  // Odděleno od přepínače schválně: přepínač je volba pro PŘÍŠTÍ hru, tohle je,
-  // proti čemu se hraje teď. Nastavuje se z odpovědi serveru, ne z přepínače.
-  const levelInfo = document.createElement('p');
-  levelInfo.className = 'level-info';
-
   // Výběr úrovně pro DALŠÍ novou hru. Musí vzniknout PŘED prvním `startNewGame()`
   // (na konci funkce), protože jeho hodnotu čte při zakládání partie. Výchozí je
   // Profesionál (první `<option>`). Během rozehrané partie je zamčený (mění se jen
   // když jde založit nová hra) – ať nevzniká dojem, že přepnutí mění běžící partii.
-  const levelRow = document.createElement('div');
-  levelRow.className = 'level-row';
-  const levelLabel = document.createElement('label');
-  levelLabel.className = 'level-label';
-  levelLabel.textContent = 'Nová hra proti:';
+  // Bez viditelného popisku (sedí v řádku tlačítek) → přístupnost drží aria-label.
   const levelSelect = document.createElement('select');
   levelSelect.className = 'level-select';
+  levelSelect.setAttribute('aria-label', 'Úroveň soupeře pro novou hru');
   // Pořadí = pořadí v `GAME_LEVELS` (Profesionál → Pokročilý → Začátečník);
   // první je výchozí. Jediný zdroj hodnot i pořadí, žádná druhá kopie seznamu.
   for (const value of GAME_LEVELS) {
@@ -144,16 +136,18 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   if (savedLevel !== null) {
     levelSelect.value = savedLevel;
   }
-  levelLabel.append(levelSelect);
-  levelRow.append(levelLabel);
 
-  // Řádek s hlavními tlačítky.
+  // Řádek s ovládáním: vlevo přepínač úrovně, pak svislý oddělovač, pak hlavní
+  // tlačítka. Přepínač je součást téhle řady (ne samostatný řádek nad ní).
   const controls = document.createElement('div');
   controls.className = 'controls';
+  const controlsDivider = document.createElement('span');
+  controlsDivider.className = 'controls-divider';
+  controlsDivider.setAttribute('aria-hidden', 'true');
   const offerDrawBtn = button('btn-offer-draw', 'Nabízím remízu');
   const resignBtn = button('btn-resign', 'Vzdávám hru');
   const newGameBtn = button('btn-newgame', 'Nová hra');
-  controls.append(offerDrawBtn, resignBtn, newGameBtn);
+  controls.append(levelSelect, controlsDivider, offerDrawBtn, resignBtn, newGameBtn);
 
   // Samostatný řádek pro verdikt nabídky remízy (řídí ho výhradně skořápka kolem
   // offerDraw, NE onState) – proud stavů z pollingu ho tak nepřepíše.
@@ -170,7 +164,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const noBtn = button('btn-confirm-no', 'Zrušit');
   confirm.append(confirmLabel, yesBtn, noBtn);
 
-  panel.append(status, levelInfo, levelRow, controls, confirm, offerMsg);
+  panel.append(status, controls, confirm, offerMsg);
 
   const boardSlot = document.createElement('div');
   boardSlot.className = 'board-slot';
@@ -178,7 +172,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // Indikátor strany na tahu: kruh v barvě tmavého pole desky se svítícím kamenem
   // barvy toho, kdo je na tahu (černý = člověk, bílý = počítač). Vzhled kamene sdílí
   // třídy `.piece.black/.white` s deskou (jeden zdroj vzhledu). Sourozenec desky
-  // ve `.game`: na desktopu (flex row) je vpravo od desky, na <768 (flex column)
+  // v `.board-row`: na desktopu (flex row) je vpravo od desky, na <768 (flex column)
   // pod ní. Řídí se výhradně z `render()` podle GameStatus – žádné vlastní volání
   // serveru. Startuje skrytý (`hidden`), zobrazí se až s prvním stavem partie.
   const turnIndicator = document.createElement('div');
@@ -187,7 +181,14 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   turnPiece.className = 'piece';
   turnIndicator.append(turnPiece);
 
-  element.append(panel, boardSlot, turnIndicator);
+  // Řádek desky: deska + indikátor strany na tahu vedle sebe. Panel je nad tímto
+  // řádkem (v toku, ne fixed), aby na žádné šířce nezasahoval do desky. `.game` je
+  // svislý sloupec [panel, board-row].
+  const boardRow = document.createElement('div');
+  boardRow.className = 'board-row';
+  boardRow.append(boardSlot, turnIndicator);
+
+  element.append(panel, boardRow);
 
   let controller: BoardController | null = null;
   // Poslední známý stav ze serveru – řídí stav tlačítek (result i turn a
@@ -218,7 +219,11 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     confirm.classList.toggle('hidden', !show);
   }
 
-  /** Text řádku stavu podle výsledku a strany na tahu. „Počítač" = bílý (engine). */
+  /**
+   * Text řádku stavu. Za běhu partie je prázdný – kdo je na tahu, signalizuje
+   * barva svítícího kamene (turn-indicator), ne text. Řádek nese jen konec partie
+   * a chybu enginu.
+   */
   function statusText(s: GameStatus): string {
     if (s.result === 'black-wins') {
       return 'Konec: vyhráli jste.';
@@ -232,7 +237,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     if (s.engineStatus === 'error') {
       return 'Počítač hlásí chybu – partie stojí.';
     }
-    return s.turn === 'black' ? 'Jste na tahu (černé).' : 'Počítač je na tahu…';
+    return '';
   }
 
   /** Nastaví stav všech tlačítek podle posledního stavu partie + běžících operací. */
@@ -377,8 +382,6 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       // ohlásí výchozí stav přes onState → render() a to čte `loading` do stavu
       // tlačítek. Kdyby tu bylo pořád true, tlačítka by zůstala zamčená.
       loading = false;
-      // Skutečná úroveň partie ze serveru (ne z přepínače – server je autorita).
-      levelInfo.textContent = `Soupeř: ${LEVEL_LABELS[game.level]}`;
       controller = makeController(client, game, {
         onState,
         ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
@@ -388,7 +391,6 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       loading = false;
       console.error('Nepodařilo se založit partii:', error);
       status.textContent = 'Partii se nepodařilo založit. Zkuste to znovu tlačítkem Nová hra.';
-      levelInfo.textContent = ''; // partie neběží → nemáme co hlásit jako soupeře
       // Chyba = partie „neběží": povol Novou hru k opakování, vzdání i nabídku zamkni.
       lastStatus = { result: 'white-wins', turn: 'white', engineStatus: 'idle' };
       resignBtn.disabled = true;

@@ -146,8 +146,55 @@ describe('app-shell – stav tlačítek podle výsledku', () => {
   });
 });
 
+describe('app-shell – panel nad deskou: obsah a struktura', () => {
+  it('za běhu partie je řádek stavu prázdný (kdo je na tahu = barva kamene), soupeř nikde', async () => {
+    const { shell } = await mountRunning();
+    // Výchozí ongoing stav (černý na tahu, idle): status nenese žádný text o tahu.
+    expect(q(shell.element, '.status').textContent).toBe('');
+    // Samostatný řádek se soupeřem (.level-info) jsme zrušili – v DOM není.
+    expect(shell.element.querySelector('.level-info')).toBeNull();
+  });
+
+  it('konec partie i chyba enginu se v řádku stavu pořád ukazují (status neztratil zuby)', async () => {
+    const { shell, created } = await mountRunning();
+    created[0]?.emit({ result: 'draw', turn: 'black', engineStatus: 'idle' });
+    expect(q(shell.element, '.status').textContent).toBe('Konec: remíza.');
+    created[0]?.emit({ result: 'ongoing', turn: 'black', engineStatus: 'error' });
+    expect(q(shell.element, '.status').textContent).toContain('chybu');
+  });
+
+  it('přepínač úrovně je v řádku ovládání vlevo od „Nabízím remízu", s oddělovačem mezi nimi', async () => {
+    const { shell } = await mountRunning();
+    const controls = q(shell.element, '.controls');
+    const select = q(controls, '.level-select'); // přepínač je UVNITŘ řádku ovládání
+    const divider = q(controls, '.controls-divider');
+    const offer = q(controls, '.btn-offer-draw');
+    // Pořadí v řádku: přepínač PŘED oddělovačem PŘED tlačítkem Nabízím remízu.
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(select.compareDocumentPosition(divider) & FOLLOWING).toBeTruthy();
+    expect(divider.compareDocumentPosition(offer) & FOLLOWING).toBeTruthy();
+    // Zrušený samostatný řádek/popisek úrovně („Nová hra proti:") v DOM není.
+    expect(shell.element.querySelector('.level-row')).toBeNull();
+    expect(shell.element.querySelector('.level-label')).toBeNull();
+  });
+
+  it('panel je v toku nad řádkem desky; deska i indikátor žijí uvnitř .board-row', async () => {
+    const { shell } = await mountRunning();
+    const panel = q(shell.element, '.panel');
+    const boardRow = q(shell.element, '.board-row');
+    // Panel i řádek desky jsou přímí sourozenci ve .game a panel je PŘED deskou
+    // (kdyby byl panel pořád fixed mimo tok / za deskou, tenhle pořádek by padl).
+    expect(panel.parentElement).toBe(shell.element);
+    expect(boardRow.parentElement).toBe(shell.element);
+    expect(panel.compareDocumentPosition(boardRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Deska (board-slot) i indikátor jsou uvnitř .board-row, ne přímo ve .game.
+    expect(boardRow.querySelector('.board-slot')).not.toBeNull();
+    expect(boardRow.querySelector('.turn-indicator')).not.toBeNull();
+  });
+});
+
 describe('app-shell – výběr úrovně', () => {
-  it('start: automatická hra na Profesionálovi, panel ho hlásí, přepínač ODEMČENÝ (před tahem)', async () => {
+  it('start: automatická hra na Profesionálovi, přepínač ho ukazuje a je ODEMČENÝ (před tahem)', async () => {
     const { factory } = fakeFactory();
     const { client, createGame } = levelEchoClient();
     const shell = createAppShell(client, { createController: factory });
@@ -156,15 +203,16 @@ describe('app-shell – výběr úrovně', () => {
 
     expect(createGame).toHaveBeenCalledWith('professional');
     const select = q(shell.element, '.level-select') as HTMLSelectElement;
-    expect(q(shell.element, '.level-info').textContent).toBe('Soupeř: Profesionál');
+    // Soupeř se hlásí přepínačem (samostatný řádek s úrovní partie jsme zrušili).
+    expect(select.value).toBe('professional');
     // Deska je hned (ne prázdná obrazovka) a úroveň jde měnit PŘED prvním tahem.
     expect(shell.element.querySelectorAll('.fake-board')).toHaveLength(1);
     expect(select.disabled).toBe(false);
   });
 
-  it('přepnutí PŘED tahem přehraje partii na novou úroveň a panel to ukáže', async () => {
+  it('přepnutí PŘED tahem přehraje partii na novou úroveň', async () => {
     // Zuby: kdyby přepnutí před tahem nepřehrálo partii, createGame by podruhé
-    // nedostalo 'beginner' a levelInfo by zůstal na Profesionálovi.
+    // nedostalo 'beginner'.
     const { factory } = fakeFactory();
     const { client, createGame } = levelEchoClient();
     const shell = createAppShell(client, { createController: factory });
@@ -177,7 +225,7 @@ describe('app-shell – výběr úrovně', () => {
     await tick();
 
     expect(createGame).toHaveBeenLastCalledWith('beginner');
-    expect(q(shell.element, '.level-info').textContent).toBe('Soupeř: Začátečník');
+    expect(select.value).toBe('beginner');
   });
 
   it('první tah zamkne přepínač; konec partie ho zas odemkne', async () => {
@@ -235,7 +283,6 @@ describe('app-shell – úroveň přežije reload (LocalStorage)', () => {
     const select = q(shell.element, '.level-select') as HTMLSelectElement;
     expect(select.value).toBe('intermediate');
     expect(createGame).toHaveBeenCalledWith('intermediate');
-    expect(q(shell.element, '.level-info').textContent).toBe('Soupeř: Pokročilý');
   });
 
   it('neplatná uložená hodnota → fallback na výchozí Profesionál (nepropustí se serveru)', async () => {

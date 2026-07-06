@@ -197,6 +197,11 @@
       "id": 39,
       "title": "Kámen strany na tahu",
       "status": "done"
+    },
+    {
+      "id": 40,
+      "title": "Oznamovací box natrvalo nad deskou",
+      "status": "done"
     }
   ]
 }
