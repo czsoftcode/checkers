@@ -207,6 +207,11 @@
       "id": 41,
       "title": "Výsledek partie jako modal",
       "status": "done"
+    },
+    {
+      "id": 42,
+      "title": "Drag & drop kamenů",
+      "status": "done"
     }
   ]
 }

@@ -29,6 +29,11 @@ const DWELL_MS = HOP_MS;
 /** Doba plynulého zmizení sebraného kamene v ms. */
 const CAPTURE_FADE_MS = 200;
 
+/** Doba návratu kamene na výchozí pole při neplatném/mezidopadovém puštění (ms). */
+const DRAG_RETURN_MS = 180;
+/** Zvětšení zvednutého kamene při tažení (scale). */
+const DRAG_LIFT_SCALE = 1.18;
+
 /** Stav k vykreslení: pozice, vybrané pole a cílová pole ke zvýraznění. */
 export interface RenderState {
   readonly position: Position;
@@ -36,6 +41,40 @@ export interface RenderState {
   /** Naklikané mezidopady rozpracovaného skoku (bez výchozího pole). */
   readonly path: readonly Square[];
   readonly targets: readonly Square[];
+}
+
+/**
+ * Výsledek puštění taženého kamene, který vydá controller z {@link DragCallbacks.onDrop}.
+ * Deska podle něj dotáhne vizuál (kámen sám nezná pravidla):
+ * - `return` – neplatné puštění: kámen se animovaně vrátí na výchozí pole (bez zvuku),
+ * - `hop` – potvrzený meziskok: kámen ZŮSTANE na poli `landing` a čeká na další skok,
+ *   zazní `land` a sebrané (`captured`) zmizí. Controller drží stav rozpracované
+ *   sekvence tak, aby zobrazení kamene na dopadu odvodil i každé další překreslení
+ *   (poll/tap) – sebraný kámen se proto „nevzkřísí".
+ * - `commit` – dokončený tah: kámen zůstane na poli `landing`, zazní `land`, sebrané
+ *   zmizí; controller mezitím posílá tah serveru a potvrzení desku dorovná (`settle`),
+ *   takže re-animace ani zvuk rozjezdu se už nepřehrají.
+ *
+ * `hop` i `commit` mají pro desku STEJNÝ vizuální efekt (usadit kámen na `landing`,
+ * `land`, zmizení sebraných); liší se jen tím, co dělá controller (hop pokračuje,
+ * commit odesílá tah).
+ */
+export type DropOutcome =
+  | { readonly kind: 'return' }
+  | { readonly kind: 'hop'; readonly landing: Square; readonly captured: readonly Square[] }
+  | { readonly kind: 'commit'; readonly landing: Square; readonly captured: readonly Square[] };
+
+/**
+ * Zpětná volání pro drag & drop. Deska řeší jen mechaniku (zvednutí, sledování
+ * ukazatele, trefa pole, návrat); CO je legální a co se stane rozhoduje controller.
+ */
+export interface DragCallbacks {
+  /** Smí se kámen na tomto poli právě teď táhnout? (vlastní kámen, na tahu člověk, ne busy). */
+  canDrag(square: Square): boolean;
+  /** Tažení začalo na `square` – controller nastaví výběr a zvýrazní cíle. */
+  onDragStart(square: Square): void;
+  /** Kámen tažený z `from` byl puštěn nad polem `to` (`null` = mimo hrací pole). */
+  onDrop(from: Square, to: Square | null): DropOutcome;
 }
 
 /** Deska napojená na DOM. */
@@ -49,6 +88,20 @@ export interface BoardView {
    * pohybu (např. zvuk konce partie až po posledním dopadu vítězného tahu).
    */
   update(state: RenderState): Promise<void>;
+  /**
+   * Srovná JEN zvýraznění (výběr, cesta, cíle) podle stavu – nesahá na kameny ani
+   * na `lastPosition`, takže nespustí žádnou animaci. Controller ho volá během
+   * rozpracované sekvence a při zahájení/potvrzení tažení, ať přepis zvýraznění
+   * nepřekreslí ručně přesunutý tažený kámen.
+   */
+  setHighlights(state: RenderState): void;
+  /**
+   * Usadí desku na `state.position` BEZ animace tahu a bez zvuku rozjezdu –
+   * jen srovná kameny a zvýraznění. Controller ho volá při potvrzení tahu, který
+   * člověk provedl tažením (kámen už je rukou na cíli), aby se pohyb nepřehrál
+   * podruhé jako sklouznutí. Dorovná i případnou proměnu a doběh sebraných.
+   */
+  settle(state: RenderState): void;
   /**
    * Ukončí případnou běžící animaci (zruší WAAPI i časovače). Volá controller
    * při `dispose()` / „Nová hra", ať doběhlá animace nemutuje zahozenou desku a
@@ -69,12 +122,15 @@ interface RunningAnimation {
 
 /**
  * Vytvoří desku. `onSquareClick` dostane číslo klilknutého hracího pole (1–32),
- * nebo `null` při kliknutí mimo hrací pole. `player` ozvučuje animaci tahu a
- * jde injektovat kvůli testu; výchozí je reálný přehrávač (no-op bez `Audio`).
+ * nebo `null` při kliknutí mimo hrací pole (ŤUKNUTÍ = tap, beze změny). `player`
+ * ozvučuje animaci tahu a jde injektovat kvůli testu; výchozí je reálný přehrávač
+ * (no-op bez `Audio`). `drag` (volitelné) zapne tažení kamenů (drag & drop);
+ * bez něj deska funguje jen na ťuknutí jako dřív (a testy bez drag callbacků projdou).
  */
 export function createBoardView(
   onSquareClick: (square: Square | null) => void,
   player: SoundPlayer = createSoundPlayer(),
+  drag?: DragCallbacks,
 ): BoardView {
   const element = document.createElement('div');
   element.className = 'board';
@@ -99,14 +155,182 @@ export function createBoardView(
     }
   }
 
+  // Ťuknutí (tap) zůstává na `click`: sémantika výběru/tahu je beze změny a
+  // stávající testy (i klik po AI tahu) fungují dál. Tažení jede přes Pointer
+  // Events NÍŽE; když drag proběhl, `suppressNextClick` spolkne `click`, který by
+  // prohlížeč po gestu ještě vyslal – jinak by se tažení navíc počítalo jako tap.
+  let suppressNextClick = false;
   element.addEventListener('click', (event) => {
+    if (suppressNextClick) {
+      suppressNextClick = false;
+      return; // tento klik patří právě doběhlému tažení – ignoruj
+    }
     // První klik na desku je uživatelský gest → odemkni audio (autoplay policy),
     // ať zvuk tahu funguje i po tazích AI, kterým žádné kliknutí nepředchází.
     player.unlock();
-    const target = event.target instanceof Element ? event.target.closest('.square') : null;
-    const raw = target instanceof HTMLElement ? target.dataset.square : undefined;
-    onSquareClick(raw === undefined ? null : Number(raw));
+    onSquareClick(squareOf(event.target));
   });
+
+  // Tažení kamene (drag & drop). Jen když volající předal `drag` callbacky.
+  if (drag !== undefined) {
+    attachDrag(drag);
+  }
+
+  /**
+   * Napojí Pointer Events pro tažení. Kámen se UCHOPÍ hned při stisku (`pointerdown`)
+   * nad vlastním tažitelným kamenem: zvedne se (zvětší), vybere se a zvýrazní cíle,
+   * kurzor se změní na „grabbing" (pěst). Následný pohyb kámen posouvá, `pointerup`
+   * ho pustí (drop). Puštění na stejném poli / mimo = kámen se vrátí, ale ZŮSTANE
+   * vybraný (jde pak doťukat cíl). Klik po uchopení se spolkne (`suppressNextClick`),
+   * ať se výběr neudělá podruhé přes `click`. Nad netažitelným polem se `pointerdown`
+   * neplete a ťuknutí (výběr cíle / zrušení) vyřídí `click` jako dřív.
+   */
+  function attachDrag(cb: DragCallbacks): void {
+    // Uchopený kámen (od pointerdown do pointerup/cancel), nebo null.
+    let gesture: {
+      pointerId: number;
+      origin: Square; // pole, kde kámen leží (odkud se zvedl)
+      mover: HTMLElement; // zvednutý kámen
+      startX: number;
+      startY: number;
+      lastDx: number; // POSLEDNÍ známý posun (z pointermove) – pro animaci návratu
+      lastDy: number;
+      anim: Animation | null; // WAAPI animace držící posun kamene (CSP: bez inline stylu)
+    } | null = null;
+
+    element.addEventListener('pointerdown', (event) => {
+      // Jen primární ukazatel a u myši jen levé tlačítko; sekundární doteky ignoruj.
+      if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) {
+        return;
+      }
+      suppressNextClick = false;
+      gesture = null;
+      const square = squareOf(event.target);
+      if (square === null || !cb.canDrag(square)) {
+        return; // netažitelné pole → výběr cíle / zrušení nechá `click` (tap)
+      }
+      const cell = squareEls.get(square);
+      const mover = cell?.querySelector<HTMLElement>('.piece') ?? null;
+      if (cell === undefined || mover === null) {
+        return;
+      }
+      // Zabraň NATIVNÍMU tažení prohlížeče / výběru textu na stisku – to jinak
+      // vystřelí `pointercancel`, uchopení se přeruší a kámen „odletí". `click` tím
+      // není dotčen (stejně ho po uchopení spolkneme přes suppressNextClick).
+      event.preventDefault();
+      // Uchop: zvedni kámen, vyber ho a zvýrazni cíle, změň kurzor na „grabbing".
+      player.unlock(); // uživatelský gest → odemkni audio
+      try {
+        element.setPointerCapture(event.pointerId);
+      } catch {
+        // Prostředí bez pointer capture (jsdom) – tažení jede i bez něj.
+      }
+      element.classList.add('grabbing'); // kurzor „pěst" po celou dobu držení
+      mover.classList.add('dragging');
+      cb.onDragStart(square); // výběr + zvýraznění cílů
+      gesture = {
+        pointerId: event.pointerId,
+        origin: square,
+        mover,
+        startX: event.clientX,
+        startY: event.clientY,
+        lastDx: 0,
+        lastDy: 0,
+        anim: startLift(mover, 0, 0), // zvednutí v místě (scale), posun přijde v move
+      };
+    });
+
+    element.addEventListener('pointermove', (event) => {
+      if (gesture?.pointerId !== event.pointerId) {
+        return;
+      }
+      gesture.lastDx = event.clientX - gesture.startX;
+      gesture.lastDy = event.clientY - gesture.startY;
+      updateLift(gesture.anim, gesture.lastDx, gesture.lastDy);
+    });
+
+    const endGesture = (event: PointerEvent, dropSquare: Square | null): void => {
+      if (gesture?.pointerId !== event.pointerId) {
+        return;
+      }
+      const g = gesture;
+      gesture = null;
+      element.classList.remove('grabbing');
+      suppressNextClick = true; // uchopení už výběr udělalo – následný `click` spolkni
+      try {
+        element.releasePointerCapture(g.pointerId);
+      } catch {
+        // viz setPointerCapture výše
+      }
+      const outcome = cb.onDrop(g.origin, dropSquare);
+      // Návrat animuj z POSLEDNÍHO známého posunu tažení, ne ze souřadnic tohoto
+      // eventu: `pointercancel` (i některá `pointerup`) chodí s clientX/Y = 0, což by
+      // kámen rozletělo z levého horního rohu.
+      finishDrag(g.mover, g.anim, g.lastDx, g.lastDy, outcome);
+    };
+
+    element.addEventListener('pointerup', (event) => {
+      // Pole pod bodem puštění (prst pole zakrývá → hit-test podle bodu, ne target).
+      const under = typeof document.elementFromPoint === 'function'
+        ? document.elementFromPoint(event.clientX, event.clientY)
+        : null;
+      endGesture(event, squareOf(under));
+    });
+
+    // Přerušení (systémové gesto, ztráta capture) = návrat kamene, žádný drop.
+    element.addEventListener('pointercancel', (event) => {
+      endGesture(event, null);
+    });
+  }
+
+  /**
+   * Dokončí tažení podle verdiktu controlleru. `commit` nechá kámen na cílovém
+   * poli (server potvrzení dorovná), `hop`/`return` ho vrátí na výchozí pole;
+   * `hop` a `commit` navíc přehrají `land` a nechají zmizet sebrané kameny.
+   */
+  function finishDrag(
+    mover: HTMLElement,
+    anim: Animation | null,
+    dx: number,
+    dy: number,
+    outcome: DropOutcome,
+  ): void {
+    if (outcome.kind === 'commit' || outcome.kind === 'hop') {
+      // Meziskok i dokončení: usaď kámen na `landing`, zazní dopad, sebrané zmizí.
+      // U meziskoku controller odvodí totéž zobrazení z rozpracovaného výběru, takže
+      // se sebraný kámen dalším překreslením „nevzkřísí" (server ho potvrdí až s tahem).
+      anim?.cancel();
+      const cell = squareEls.get(outcome.landing);
+      if (cell !== undefined) {
+        cell.append(mover); // přemísti element do cílové buňky
+      }
+      mover.classList.remove('dragging');
+      player.play('land');
+      for (const c of outcome.captured) {
+        removeCaptured(c);
+      }
+      return;
+    }
+    // `return` → neplatné puštění: kámen se beze zvuku vrátí na výchozí pole.
+    animateReturn(mover, anim, dx, dy);
+  }
+
+  /** Vrátí kámen z posunu `(dx,dy)` zpět do výchozí buňky a sundá „dragging". */
+  function animateReturn(mover: HTMLElement, anim: Animation | null, dx: number, dy: number): void {
+    const finalize = (): void => {
+      mover.classList.remove('dragging');
+    };
+    anim?.cancel();
+    if (typeof mover.animate !== 'function') {
+      finalize();
+      return;
+    }
+    const back = mover.animate(
+      [{ transform: liftTransform(dx, dy) }, { transform: 'translate(0px, 0px) scale(1)' }],
+      { duration: DRAG_RETURN_MS, easing: 'ease-out' },
+    );
+    back.finished.then(finalize, finalize);
+  }
 
   // Poslední vykreslená pozice – vstup pro diff při dalším update.
   let lastPosition: Position | null = null;
@@ -152,6 +376,28 @@ export function createBoardView(
   function instant(state: RenderState): void {
     applyHighlights(state);
     applyPieces(state.position, null);
+  }
+
+  /**
+   * Usadí desku na `state.position` bez animace a bez zvuku rozjezdu. Použití:
+   * potvrzení tahu, který člověk provedl tažením (kámen už je rukou na cíli).
+   * Případnou běžící animaci ukončí (přebíjí ji přímé srovnání) a `lastPosition`
+   * nastaví, aby DALŠÍ tah (třeba enginu) diffnul správně od této pozice.
+   */
+  function settle(state: RenderState): void {
+    if (running !== null) {
+      const previous = running;
+      running = null;
+      previous.cancel();
+    }
+    lastPosition = state.position;
+    applyHighlights(state);
+    applyPieces(state.position, null);
+  }
+
+  /** Srovná jen zvýraznění (výběr/cesta/cíle); nesahá na kameny ani `lastPosition`. */
+  function setHighlights(state: RenderState): void {
+    applyHighlights(state);
   }
 
   /** Nastaví jen zvýraznění polí (výběr, cesta, cíle) – nesahá na kameny. */
@@ -382,7 +628,47 @@ export function createBoardView(
     }
   }
 
-  return { element, update, dispose };
+  return { element, update, setHighlights, settle, dispose };
+}
+
+/** Číslo hracího pole pod prvkem (nejbližší `.square` s `data-square`), nebo `null`. */
+function squareOf(target: EventTarget | null): Square | null {
+  const cell = target instanceof Element ? target.closest('.square') : null;
+  const raw = cell instanceof HTMLElement ? cell.dataset.square : undefined;
+  return raw === undefined || raw === '' ? null : Number(raw);
+}
+
+/** Transform zvednutého kamene: posun za ukazatelem + zvětšení. */
+function liftTransform(dx: number, dy: number): string {
+  return `translate(${String(dx)}px, ${String(dy)}px) scale(${String(DRAG_LIFT_SCALE)})`;
+}
+
+/**
+ * Spustí „držící" animaci posunu kamene přes WAAPI (žádný inline styl kvůli CSP,
+ * stejně jako animace tahu). Dva shodné keyframy → výstup je tentýž transform pro
+ * jakýkoli čas; animaci pozastavíme, takže drží posun, dokud ji `updateLift`
+ * nepřepíše. Bez WAAPI (jsdom) vrací `null` a tažení běží bez vizuálního posunu.
+ */
+function startLift(mover: HTMLElement, dx: number, dy: number): Animation | null {
+  if (typeof mover.animate !== 'function') {
+    return null;
+  }
+  const t = liftTransform(dx, dy);
+  const anim = mover.animate([{ transform: t }, { transform: t }], { duration: 1000, fill: 'both' });
+  anim.pause();
+  return anim;
+}
+
+/** Přepíše držící animaci na nový posun (kámen sleduje ukazatel). */
+function updateLift(anim: Animation | null, dx: number, dy: number): void {
+  // `anim.effect` je obecný AnimationEffect; `setKeyframes` má až KeyframeEffect.
+  // `KeyframeEffect` nemusí v prostředí existovat (jsdom) → nejdřív ověř typ.
+  const effect = anim?.effect;
+  if (typeof KeyframeEffect !== 'function' || !(effect instanceof KeyframeEffect)) {
+    return;
+  }
+  const t = liftTransform(dx, dy);
+  effect.setKeyframes([{ transform: t }, { transform: t }]);
 }
 
 /** Lze v tomto prostředí animovat? (WAAPI k dispozici a nechce se redukovaný pohyb.) */

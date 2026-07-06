@@ -7,6 +7,25 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-07-06
+
+### Added
+
+- **Drag & drop kamenů.** Kámen jde uchopit myší nebo prstem: při stisku se zvedne
+  (zvětší), vybere a zvýrazní se pole, kam smí táhnout; pak ho přeneseš a upustíš na
+  cílové pole. Puštění mimo legální pole kámen animovaně vrátí a zmenší zpět. Při
+  tažení zní jen zvuk dopadu (ne rozjezdu). Kurzor myši je nad vlastním kamenem
+  „dlaň" (uchopení) a po dobu držení „pěst". Klasické klikání (ťuknutí) zůstává
+  funkční jako alternativa. U vícenásobného braní lze buď táhnout kámen rovnou na
+  koncové pole (celý řetěz najednou), nebo skákat po jednotlivých dopadech.
+
+### Changed
+
+- **Rozpracované vícenásobné braní zobrazuje kámen na posledním dopadu.** Během
+  braní kámen zůstává na poli, kam právě doskočil, a čeká na další skok; sebrané
+  kameny mizí průběžně. Nově to platí i pro ovládání klikáním – dřív kámen u
+  klikání stál na výchozím poli a celý řetěz se animoval až po dokončení tahu.
+
 ## [0.36.0] - 2026-07-06
 
 ### Added

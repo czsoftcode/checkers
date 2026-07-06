@@ -1,8 +1,16 @@
-import { initialPosition } from '@checkers/rules';
+import { initialPosition, legalMoves } from '@checkers/rules';
 import type { Cell, Color, Position } from '@checkers/rules';
 import { describe, expect, it } from 'vitest';
 
-import { nextTargets, resolveMove, selectableAt, targetsFor } from '../src/selection.js';
+import {
+  capturedOnHop,
+  capturesForPrefix,
+  nextTargets,
+  resolveChainTo,
+  resolveMove,
+  selectableAt,
+  targetsFor,
+} from '../src/selection.js';
 
 /** Postaví pozici z řídkého zápisu `{ pole: kámen }` (pole 1–32). */
 function position(turn: Color, pieces: Record<number, Cell>): Position {
@@ -128,5 +136,99 @@ describe('resolveMove – dokončení tahu', () => {
 
   it('neexistující tah vrací null', () => {
     expect(resolveMove(initialPosition(), 9, [99])).toBeNull();
+  });
+});
+
+describe('resolveChainTo – souvislé tažení na koncové pole', () => {
+  // Prostý dvojskok: černý 6 přeskočí 10 a 18, cesta [15, 22].
+  const dbl = (): Position => position('black', { 6: blackMan, 10: whiteMan, 18: whiteMan });
+
+  it('prostý tah dohledá jako řetěz délky 1', () => {
+    // Puštění rovnou na 13 z prázdné předpony = prostý tah 9→13.
+    expect(resolveChainTo(initialPosition(), 9, [], 13)).toEqual({
+      from: 9,
+      path: [13],
+      captures: [],
+    });
+  });
+
+  it('z prázdné předpony dohledá celý řetěz ke koncovému poli', () => {
+    expect(resolveChainTo(dbl(), 6, [], 22)).toEqual({ from: 6, path: [15, 22], captures: [10, 18] });
+  });
+
+  it('respektuje rozpracovanou předponu (endpoint za ní)', () => {
+    expect(resolveChainTo(dbl(), 6, [15], 22)).toEqual({ from: 6, path: [15, 22], captures: [10, 18] });
+  });
+
+  it('endpoint uvnitř/na úrovni předpony nevrací kratší tah', () => {
+    // Endpoint == poslední pole předpony (délka path == prefix) → null (musí být delší).
+    expect(resolveChainTo(dbl(), 6, [15, 22], 22)).toBeNull();
+  });
+
+  it('nejednoznačnost dvou řetězců na stejný endpoint vrací null', () => {
+    // Kruhové braní dámy: černá dáma na 2 sebere bílé 6, 7, 14, 15 a vrátí se na
+    // pole 2 DVĚMA směry (po/proti směru hodinových ručiček) – dva legální tahy se
+    // stejným koncovým polem (2). Souvislé tažení na takový endpoint je
+    // nejednoznačné → resolveChainTo vrací null (klient pak nechá hráče doskákat
+    // po hopech). Pozici našel brute-force přes rules; ověřujeme, že OPRAVDU vede
+    // dvěma cestami, ať test nezpráchniví, kdyby generátor tahů změnil chování.
+    const loop = position('black', { 2: blackKing, 6: whiteMan, 7: whiteMan, 14: whiteMan, 15: whiteMan });
+    const toStart = legalMoves(loop).filter((m) => m.from === 2 && m.path[m.path.length - 1] === 2);
+    expect(toStart.length).toBeGreaterThanOrEqual(2); // pojistka: dvojznačnost existuje
+
+    expect(resolveChainTo(loop, 2, [], 2)).toBeNull();
+  });
+
+  it('nelegální endpoint vrací null', () => {
+    expect(resolveChainTo(dbl(), 6, [], 99)).toBeNull();
+    expect(resolveChainTo(dbl(), 6, [], 13)).toBeNull(); // 13 není konec žádného tahu z 6
+  });
+});
+
+describe('capturedOnHop – sebraný kámen jednoho skoku', () => {
+  const dbl = (): Position => position('black', { 6: blackMan, 10: whiteMan, 18: whiteMan });
+
+  it('první hop sebere první kámen', () => {
+    expect(capturedOnHop(dbl(), 6, [], 15)).toEqual([10]);
+  });
+
+  it('druhý hop (po předponě) sebere druhý kámen', () => {
+    expect(capturedOnHop(dbl(), 6, [15], 22)).toEqual([18]);
+  });
+
+  it('prostý (nebrací) tah nesebere nic', () => {
+    expect(capturedOnHop(initialPosition(), 9, [], 13)).toEqual([]);
+  });
+
+  it('neexistující hop nesebere nic', () => {
+    expect(capturedOnHop(dbl(), 6, [], 99)).toEqual([]);
+  });
+});
+
+describe('capturesForPrefix – sebrané kameny dosavadní předpony', () => {
+  const dbl = (): Position => position('black', { 6: blackMan, 10: whiteMan, 18: whiteMan });
+
+  it('prázdná předpona nesebrala nic', () => {
+    expect(capturesForPrefix(dbl(), 6, [])).toEqual([]);
+  });
+
+  it('po prvním dopadu je sebraný první kámen', () => {
+    expect(capturesForPrefix(dbl(), 6, [15])).toEqual([10]);
+  });
+
+  it('po celé cestě jsou sebrané oba kameny v pořadí', () => {
+    expect(capturesForPrefix(dbl(), 6, [15, 22])).toEqual([10, 18]);
+  });
+
+  it('u větvení má sdílená předpona shodné sebrané, větev pak přidá svůj', () => {
+    // Dáma 1 skočí přes 6 na 10 (sdílené), pak přes 7 na 3, nebo přes 14 na 17.
+    const branch = position('black', { 1: blackKing, 6: whiteMan, 7: whiteMan, 14: whiteMan });
+    expect(capturesForPrefix(branch, 1, [10])).toEqual([6]); // sdílené
+    expect(capturesForPrefix(branch, 1, [10, 3])).toEqual([6, 7]);
+    expect(capturesForPrefix(branch, 1, [10, 17])).toEqual([6, 14]);
+  });
+
+  it('nesmyslná předpona nesebrala nic', () => {
+    expect(capturesForPrefix(dbl(), 6, [99])).toEqual([]);
   });
 });

@@ -223,17 +223,20 @@ describe('vícenásobný skok a odeslání tahu serveru', () => {
   const doubleJump = (): Position =>
     position('black', { 6: blackMan, 10: whiteMan, 18: whiteMan });
 
-  it('mezidopad se zvýrazní třídou path a nabídne další dopad', () => {
+  it('mezidopad: kámen doskočí na dopad a nabídne další', () => {
     const board = mount(doubleJump());
     click(squareEl(board, 6)); // vybere kámen, cíl 15
     expect(squareEl(board, 15).classList.contains('target')).toBe(true);
 
-    click(squareEl(board, 15)); // první dopad
-    expect(squareEl(board, 6).classList.contains('selected')).toBe(true);
-    expect(squareEl(board, 15).classList.contains('path')).toBe(true);
+    click(squareEl(board, 15)); // první dopad – kámen na něm ZŮSTANE a čeká
+    // Kámen je opticky na dopadu 15 (výběr tam), trasa (výchozí pole) je 'path',
+    // nabídne se další dopad 22. Tah ještě není odeslán (server nic nedostal).
+    expect(squareEl(board, 15).classList.contains('selected')).toBe(true);
+    expect(squareEl(board, 6).classList.contains('path')).toBe(true);
     expect(squareEl(board, 22).classList.contains('target')).toBe(true);
-    // Tah ještě není odeslán – kámen pořád stojí na výchozím poli.
-    expect(hasPiece(board, 6, 'black')).toBe(true);
+    expect(hasPiece(board, 15, 'black')).toBe(true); // kámen doskočil na 15
+    expect(isEmpty(board, 6)).toBe(true); // výchozí pole je prázdné
+    expect(isEmpty(board, 10)).toBe(true); // sebraný meziskoku opticky zmizel
   });
 
   it('dokončení sekvence odešle serveru celé from+path a překreslí desku', async () => {
@@ -287,13 +290,15 @@ describe('vícenásobný skok a odeslání tahu serveru', () => {
   it('klik na výchozí kámen uprostřed sekvence zruší rozpracovaný skok', () => {
     const board = mount(doubleJump());
     click(squareEl(board, 6));
-    click(squareEl(board, 15)); // rozpracovaná sekvence, mezidopad 15
-    expect(squareEl(board, 15).classList.contains('path')).toBe(true);
+    click(squareEl(board, 15)); // rozpracovaná sekvence, kámen doskočil na 15
+    expect(squareEl(board, 15).classList.contains('selected')).toBe(true);
 
-    click(squareEl(board, 6)); // klik zpět na výchozí kámen = úplný reset
+    click(squareEl(board, 6)); // klik na výchozí pole = úplný reset
     expect(board.querySelectorAll('.selected, .path, .target')).toHaveLength(0);
+    // Reset vrátí kámen na výchozí pole a sebrané kameny obnoví (server je pravda).
     expect(hasPiece(board, 6, 'black')).toBe(true);
     expect(hasPiece(board, 10, 'white')).toBe(true);
+    expect(isEmpty(board, 15)).toBe(true);
   });
 
   it('klik mimo zvýrazněná pole uprostřed sekvence zruší rozpracovaný skok', () => {

@@ -1,0 +1,50 @@
+{
+  "id": 42,
+  "title": "Drag & drop kamenů",
+  "goal": "Kámen člověka lze uchopit (pointer down → zvedne a zvětší se), táhnout za kurzorem/prstem a upustit: upuštění na legální pole tah provede (u víceskoku jeden drag = jeden hop), upuštění jinam kámen animovaně vrátí na výchozí pole a zmenší zpět; při drag & dropu zní jen zvuk dopadu (land), ne rozjezdu. Klikací (tap) ovládání zůstává funkční jako alternativa.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "selection.ts: dohledání celého řetězce k endpointu",
+      "status": "done",
+      "detail": "Nová čistá funkce (např. resolveChainTo(position, from, prefix, endpoint)): vrátí kompletní legální Move z from, jehož finální dopad == endpoint a path začíná prefix, jinak null (a null i při nejednoznačnosti dvou různých řetězců na stejný endpoint). Pokryto unit testy: jednoduchý tah, plný řetěz, nejednoznačnost → null, nelegální → null."
+    },
+    {
+      "title": "board-view: tap přepsán na Pointer Events",
+      "status": "done",
+      "detail": "Nahradit click listener pointer událostmi. Pointer down+up na stejném poli bez pohybu (pod prahem v px) volá onSquareClick se stejnou sémantikou jako dnes (číslo pole / null, player.unlock()). Klikací ovládání se nesmí chovat jinak; kryto úpravou stávajících testů + nový test rozlišení tap vs. pohyb."
+    },
+    {
+      "title": "board-view: drag mechanika, návrat, CSS",
+      "status": "done",
+      "detail": "Pointer down na tažitelném kameni (predikát canDrag(square) z controlleru) + pohyb nad práh: zvednout kámen (třída dragging – scale, z-index, stín), setPointerCapture, sledovat pointer transformem. Na pointerup hit-test pole pod bodem (rect/elementFromPoint). Výsledek vyhodnotí onDrop; návrat = animovaně vrátit kámen do buňky a zmenšit (bez zvuku). CSS touch-action: none na hracích polích (nescrollovat mobil). API rozšířeno o canDrag a onDrop."
+    },
+    {
+      "title": "controller: drop resolver + odeslání bez re-animace",
+      "status": "done",
+      "detail": "onDrop(from,to) rozhodne: nelegální → návrat; kompletní tah (jednoduchý nebo celý řetěz k endpointu z kroku 1) → pošle serveru a po potvrzení desku usadí bez sklouznutí a bez zvuku move (zazní jen land při dropu) přes explicitní signál do board-view (view.settle), ne přes chybějící element. Legalitu vždy ověří i server; nelegální drop se neposílá."
+    },
+    {
+      "title": "Sjednocení rozpracovaného braní (tap i drag)",
+      "status": "done",
+      "detail": "Během nedokončeného braní se pohyblivý kámen zobrazuje na posledním potvrzeném dopadu i pro tap; commit hopu fyzicky přesune element a odebere sebraný kámen, přehraje land (žádný move). Puštění dragu na meziskok = commit hopu, kámen tam zůstane, sekvence pokračuje (lze zvednout znovu i doťukat tapem). Ověřitelné: mix tap+drag v jednom braní nechá desku konzistentní."
+    },
+    {
+      "title": "Testy a ruční vizuální ověření",
+      "status": "done",
+      "detail": "Unit testy drop resolveru: výběr, hop po hopu, celý řetěz, nelegální → návrat, tap fallback, potlačení re-animace při potvrzení, žádný land při návratu. Plynulý vizuál (zvednutí, pohyb, návrat, zmenšení) a chování na mobilu ověří autor přes verify (jsdom nemá layout ani PointerEvent)."
+    }
+  ],
+  "startedAt": "2026-07-06T06:03:45.132Z",
+  "resolvedVerify": [
+    "Uchopení myší + kurzor (grab/grabbing) na desktopu",
+    "Chování na mobilu (dotyk)",
+    "Braní: kámen zůstává na dopadu (i sebraný zmizí) – i pro tap",
+    "Otočená deska + hit-test"
+  ],
+  "completedAt": "2026-07-06T07:44:39.754Z",
+  "autoCommit": {
+    "preSha": "4e58ef0bd82b6a6748579222276b8a36681252d3",
+    "subject": "Phase 42: Drag & drop kamenů"
+  }
+}

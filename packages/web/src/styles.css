@@ -261,6 +261,10 @@ body {
   height: var(--board-size);
   border: 6px solid var(--frame);
   box-sizing: content-box;
+  /* Tažení nesmí vybírat text (koruna dámy ♛) ani spouštět nativní drag prvku –
+     to by uchopení přerušilo (pointercancel) a kámen by „odletěl". */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .square {
@@ -277,6 +281,25 @@ body {
 .square.dark {
   background: var(--dark);
   cursor: pointer;
+  /* Tažení kamene prstem nesmí scrollovat/zoomovat stránku – vypni gesta na
+     hracích polích. Scroll zůstane možný z prázdné plochy mimo desku. Ťuknutí
+     (tap) tím dotčené není. */
+  touch-action: none;
+}
+
+/* Nad vlastním kamenem (člověk hraje černé) je kurzor „grab" = otevřená dlaň,
+   ať je vidět, že kámen jde uchopit a táhnout. Kámen má pointer-events: none, tak
+   kurzor sedí na poli pod ním – proto `:has()` na tmavém poli s černým kamenem. */
+.square.dark:has(.piece.black) {
+  cursor: grab;
+}
+
+/* Po dobu držení (uchopení až puštění) je kurzor „grabbing" = sevřená pěst na celé
+   desce. Třídu `grabbing` přepíná board-view při pointerdown/up. Přebíjí `grab`
+   i `pointer` na polích pod ukazatelem. */
+.board.grabbing,
+.board.grabbing .square {
+  cursor: grabbing;
 }
 
 /* Zvýraznění vybraného kamene: rámeček uvnitř pole. */
@@ -320,6 +343,16 @@ body {
 .piece.moving {
   position: relative;
   z-index: 5;
+}
+
+/* Zvednutý kámen při tažení (drag & drop): nad ostatními, se stínem pro dojem
+   „zvednutí nad deskou". Posun i zvětšení (scale) řídí Web Animations API
+   (transform) v board-view – žádný inline styl (CSP). Zbytek gesta (kurzor) sedí
+   na hracím poli, protože kámen má pointer-events: none. */
+.piece.dragging {
+  position: relative;
+  z-index: 10;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45));
 }
 
 .piece.black {

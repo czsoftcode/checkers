@@ -98,3 +98,92 @@ export function resolveMove(position: Position, from: Square, prefix: readonly S
 export function targetsFor(position: Position, square: Square): Square[] {
   return nextTargets(position, square, []);
 }
+
+/**
+ * Kompletní legální tah z `from`, jehož `path` začíná předponou `prefix` a jehož
+ * FINÁLNÍ dopad je `endpoint` – tj. celý zbývající řetěz skoků končící přesně v
+ * `endpoint`. Slouží „souvislému tažení" drag & dropu: hráč pustí kámen rovnou na
+ * koncové pole braní a klient dohledá celou cestu.
+ *
+ * Vrací `null`, když žádný takový tah neexistuje, i když jsou takové tahy DVA a
+ * víc (nejednoznačné – dva různé řetězce na stejný endpoint). `endpoint` musí ležet
+ * ZA aktuální předponou (delší cesta), jinak by prázdný prefix + `endpoint` uvnitř
+ * cesty propustil kratší tah. Bezprostřední jeden dopad řeší volající přes
+ * {@link nextTargets}; sem se dostane až pro vzdálenější koncová pole.
+ */
+export function resolveChainTo(
+  position: Position,
+  from: Square,
+  prefix: readonly Square[],
+  endpoint: Square,
+): Move | null {
+  let found: Move | null = null;
+  for (const move of legalMoves(position)) {
+    if (move.from !== from || move.path.length <= prefix.length) {
+      continue;
+    }
+    if (!pathStartsWith(move.path, prefix)) {
+      continue;
+    }
+    if (move.path[move.path.length - 1] !== endpoint) {
+      continue;
+    }
+    if (found !== null) {
+      return null; // dva různé řetězce končící v `endpoint` → nejednoznačné
+    }
+    found = move;
+  }
+  return found;
+}
+
+/**
+ * Pole SEBRANÉHO kamene při jednom skoku z předpony `prefix` na dopad `to`, tj.
+ * kámen přeskočený právě tímto hopem. Bere se z libovolného legálního tahu, jehož
+ * `path` začíná `[...prefix, to]`; `captures` je zarovnané s `path` (i-tý dopad
+ * bere `captures[i]`), takže sebraný tohoto hopu je `captures[prefix.length]`.
+ *
+ * Vrací prázdné pole u prostého (nebracího) tahu i když `[...prefix, to]` žádnému
+ * tahu neodpovídá. Vždy nejvýš jeden prvek – drag & drop ho předá desce k
+ * plynulému zmizení (`land` + fade) při potvrzení hopu.
+ */
+export function capturedOnHop(
+  position: Position,
+  from: Square,
+  prefix: readonly Square[],
+  to: Square,
+): Square[] {
+  const path = [...prefix, to];
+  for (const move of legalMoves(position)) {
+    if (move.from !== from || !pathStartsWith(move.path, path)) {
+      continue;
+    }
+    const captured = move.captures[prefix.length];
+    return captured === undefined ? [] : [captured];
+  }
+  return [];
+}
+
+/**
+ * Pole VŠECH kamenů sebraných v dosavadní předponě `prefix` (dopady bez výchozího
+ * pole). Bere se z libovolného legálního tahu, jehož `path` začíná touto předponou
+ * – `captures` je zarovnané s `path`, takže sebrané předpony jsou `captures[0..prefix.length)`.
+ * U větvení se sdíleným prefixem jsou tato pole shodná pro všechny větve.
+ *
+ * Slouží k „optimistickému" zobrazení rozpracovaného braní: dokud tah neskončí,
+ * klient zobrazí kámen na posledním dopadu a tato sebraná pole schová (server je
+ * potvrdí až s celým tahem). Prázdné pole u prosté (nebrací) předpony i když
+ * `prefix` ničemu neodpovídá.
+ */
+export function capturesForPrefix(
+  position: Position,
+  from: Square,
+  prefix: readonly Square[],
+): Square[] {
+  for (const move of legalMoves(position)) {
+    if (move.from !== from || !pathStartsWith(move.path, prefix)) {
+      continue;
+    }
+    return move.captures.slice(0, prefix.length);
+  }
+  return [];
+}

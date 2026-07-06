@@ -20,9 +20,17 @@
 import type { Color, GameResult, Position, Square } from '@checkers/rules';
 
 import { createBoardView } from './board-view.js';
+import type { DropOutcome, RenderState } from './board-view.js';
 import { createSoundPlayer } from './sound.js';
 import type { SoundEvent, SoundPlayer } from './sound.js';
-import { nextTargets, selectableAt } from './selection.js';
+import {
+  capturedOnHop,
+  capturesForPrefix,
+  nextTargets,
+  resolveChainTo,
+  resolveMove,
+  selectableAt,
+} from './selection.js';
 import type { EngineStatus, GameDto, ServerClient } from './server-client.js';
 
 /** Snímek stavu partie pro skořápku (řídí řádek stavu a stav tlačítek). */
@@ -156,12 +164,24 @@ export function createBoardController(
   // `performance.now()` okamžiku, kdy doanimoval poslední tah ČLOVĚKA – od něj se
   // měří rozmýšlecí pauza AI. 0 = ještě žádný tah člověka (pak se nečeká).
   let humanMoveAnimEndAt = 0;
+  // `true`, když další stav ze serveru potvrzuje tah, který člověk provedl TAŽENÍM
+  // (kámen už je rukou na cíli) → deska se má usadit BEZ animace a bez zvuku
+  // rozjezdu (`settle`), ne přehrát sklouznutí podruhé. Jednorázové: po použití se
+  // shodí. Klikací (tap) tahy ho nenastavují, ty se dál animují jako dřív.
+  let settleNext = false;
+  // `true` mezi zvednutím a puštěním kamene (kámen je „v ruce"). Po tuhle dobu se
+  // polling přeskočí, ať překreslení nesahá na ručně přesouvaný kámen.
+  let dragging = false;
 
   const aiMovePauseMs = options.aiMovePauseMs ?? AI_MOVE_PAUSE_MS;
   const onState = options.onState;
   const gameId = game.id;
   const player = options.soundPlayer ?? createSoundPlayer();
-  const view = createBoardView(handleClick, player);
+  const view = createBoardView(handleClick, player, {
+    canDrag,
+    onDragStart,
+    onDrop,
+  });
   const timer = setInterval(() => {
     void poll();
   }, options.pollIntervalMs ?? POLL_INTERVAL_MS);
@@ -186,7 +206,9 @@ export function createBoardController(
     } else {
       selection = null;
     }
-    void render();
+    // Statické překreslení (bez animace): u rozpracovaného braní kámen „doskočí" na
+    // poslední dopad, u výběru/zrušení jen srovná zvýraznění a případně kámen vrátí.
+    renderStatic();
   }
 
   /** `true`, pokud `square` je jedním z aktuálně nabízených dalších dopadů. */
@@ -206,13 +228,15 @@ export function createBoardController(
     const path = [...selection.path, square];
     if (nextTargets(position, selection.from, path).length > 0) {
       selection = { from: selection.from, path }; // ještě pokračuje (další dopad/větvení)
-      void render();
+      renderStatic(); // kámen doskočí na tento dopad (bez animace), sebrané zmizí
       return;
     }
     // Žádné pokračování → sekvence je úplná. Server dostane výchozí pole a CELOU
     // naklikanou cestu; `path` smí mít duplicity (kruhový skok dámy), proto se
-    // posílá tak, jak je – bez redukce přes Set. Legalitu ověří server.
-    sendMove(selection.from, path);
+    // posílá tak, jak je – bez redukce přes Set. Legalitu ověří server. Jednoduchý
+    // (jednodopadový) tah se animuje jako dřív; víceskok už kámen „doskákal", takže
+    // se jen usadí (settle), aby se nepřehrával podruhé.
+    submitMove(selection.from, path, path.length === 1);
   }
 
   /**
@@ -234,21 +258,28 @@ export function createBoardController(
 
   /**
    * Odešle tah serveru a desku nastaví na vrácený stav. Výběr se zruší hned
-   * (zvýraznění zmizí), kámen se přesune až po odpovědi serveru – bez
-   * optimistického předběhnutí. Selhání (odmítnutí, síť) neshodí desku: stav se
-   * dorovná z GET a klik se zase povolí.
+   * (zvýraznění zmizí bez sáhnutí na kameny). `animate` řídí, jak se potvrzení ze
+   * serveru vykreslí:
+   * - `true` (jednoduchý jednodopadový tah) – kámen se plynule přesune z výchozího
+   *   pole na cíl (animace tahu jako dřív),
+   * - `false` (víceskok, který už kámen „doskákal" po dopadech, i tah tažením) –
+   *   kámen je už na cíli, potvrzení se jen USADÍ (`settle`) bez animace a bez zvuku
+   *   rozjezdu, aby se pohyb nepřehrával podruhé.
+   * Selhání (odmítnutí, síť) neshodí desku: `settleNext` se shodí a stav se dorovná
+   * z GET (kámen se vrátí na výchozí pole, sebrané se obnoví).
    */
-  function sendMove(from: Square, path: readonly Square[]): void {
+  function submitMove(from: Square, path: readonly Square[], animate: boolean): void {
+    settleNext = !animate;
     selection = null;
-    void render();
+    view.setHighlights(currentRenderState()); // zhasni zvýraznění; kamenů se nedotýkej
     void runRequest(async () => {
       try {
         applyServerState(await client.postMove(gameId, from, path));
       } catch (error) {
         console.error('Server tah nepřijal, synchronizuji stav ze serveru:', error);
+        settleNext = false;
         await resync();
-      } finally {
-        void render();
+        renderStatic();
       }
     });
   }
@@ -258,8 +289,10 @@ export function createBoardController(
    * když už request běží (odesílá se tah / vzdání / běží jiný poll), tik se přeskočí.
    */
   async function poll(): Promise<void> {
-    if (busy) {
-      return; // jiný request běží – tenhle tik zahodíme (single-flight)
+    if (busy || dragging) {
+      // Jiný request běží (single-flight), nebo má člověk kámen „v ruce" (tažení) –
+      // překreslení by sáhlo na ručně přesouvaný kámen. Tik zahodíme.
+      return;
     }
     await runRequest(async () => {
       try {
@@ -405,8 +438,20 @@ export function createBoardController(
     }
     // `render()` spustí animaci tohoto tahu; jeho příslib se vyřeší až po jejím
     // dokončení. Zvuk konce partie na něj navážeme, ať fanfára/prohra zazní až
-    // PO posledním dopadu vítězného tahu, ne na jeho začátku.
-    const rendered = render();
+    // PO posledním dopadu vítězného tahu, ne na jeho začátku. USADÍME bez animace
+    // (settle), když: (a) tah člověk dokončil tažením / víceskokem (`settleNext`) –
+    // kámen je už na cíli, nebo (b) běží rozpracovaná sekvence (poll uprostřed
+    // braní) – to by jinak `update` animovalo „doskočení" kamene, který už na
+    // dopadu opticky je, a navíc přehrálo zvuk rozjezdu.
+    const useSettle = settleNext || (selection !== null && selection.path.length > 0);
+    settleNext = false;
+    let rendered: Promise<void>;
+    if (useSettle) {
+      view.settle(currentRenderState());
+      rendered = Promise.resolve();
+    } else {
+      rendered = render();
+    }
     lastRender = rendered;
     if (prevTurn === HUMAN_COLOR && dto.position.turn !== HUMAN_COLOR) {
       // Přechod tah ČLOVĚKA → na tahu engine, tj. člověk PRÁVĚ potáhl. Nastav se
@@ -461,22 +506,157 @@ export function createBoardController(
     });
   }
 
+  /** Pole, na kterém pohyblivý kámen právě opticky STOJÍ (poslední dopad, nebo výchozí). */
+  function lastHopOf(sel: Selection): Square {
+    return sel.path.length > 0 ? (sel.path[sel.path.length - 1] ?? sel.from) : sel.from;
+  }
+
   /**
-   * Překreslí desku. Vrací příslib od `view.update`, který se vyřeší po dokončení
-   * (nebo přerušení) animace tahu – využívá ho jen `applyServerState` pro zvuk
-   * konce partie; ostatní volající ho ignorují (`void render()`).
+   * „Optimistická" pozice pro ZOBRAZENÍ rozpracovaného braní: pohyblivý kámen je
+   * přesunutý z výchozího pole na poslední dopad a dosud sebrané kameny jsou
+   * schované. Server je potvrdí až s celým tahem, ale klient je ukazuje hned, aby
+   * kámen „zůstal" na dopadu a čekal na další skok. Proměna (man→king) se NEřeší –
+   * tu potvrdí server na konci tahu. Prázdné výchozí pole (obrana) → beze změny.
+   */
+  function effectivePosition(sel: Selection): Position {
+    const moving = position.board[sel.from - 1] ?? null;
+    if (moving === null) {
+      return position;
+    }
+    const captured = capturesForPrefix(position, sel.from, sel.path);
+    const landing = lastHopOf(sel);
+    const board = position.board.slice();
+    board[sel.from - 1] = null;
+    for (const c of captured) {
+      board[c - 1] = null;
+    }
+    board[landing - 1] = moving;
+    return { board, turn: position.turn };
+  }
+
+  /**
+   * Stav k vykreslení. Bez výběru = holá pozice. S vybraným kamenem bez dopadů =
+   * výběr výchozího kamene (zvýrazní cíle). S rozpracovaným braním = kámen opticky
+   * na posledním dopadu (`effectivePosition`), výběr na tom dopadu a trasa (výchozí
+   * pole + předchozí dopady) jako `path`; cíle se počítají z REÁLNÉ pozice.
+   */
+  function currentRenderState(): RenderState {
+    if (selection === null) {
+      return { position, selected: null, path: [], targets: [] };
+    }
+    if (selection.path.length === 0) {
+      return {
+        position,
+        selected: selection.from,
+        path: [],
+        targets: nextTargets(position, selection.from, []),
+      };
+    }
+    return {
+      position: effectivePosition(selection),
+      selected: lastHopOf(selection),
+      path: [selection.from, ...selection.path.slice(0, -1)],
+      targets: nextTargets(position, selection.from, selection.path),
+    };
+  }
+
+  /**
+   * Překreslí desku S ANIMACÍ tahu (`view.update`). Vrací příslib, který se vyřeší
+   * po dokončení/přerušení animace – využívá ho `applyServerState` pro zvuk konce
+   * partie. Pro tahy člověka provedené po dopadech/tažením se místo toho usazuje
+   * (`renderStatic`/`settle`), ať se pohyb nepřehrává podruhé.
    */
   function render(): Promise<void> {
-    return view.update(
-      selection === null
-        ? { position, selected: null, path: [], targets: [] }
-        : {
-            position,
-            selected: selection.from,
-            path: selection.path,
-            targets: nextTargets(position, selection.from, selection.path),
-          },
-    );
+    return view.update(currentRenderState());
+  }
+
+  /** Statické překreslení bez animace tahu (usadí kameny i zvýraznění na aktuální stav). */
+  function renderStatic(): void {
+    view.settle(currentRenderState());
+  }
+
+  /**
+   * Smí se kámen na `square` právě táhnout? Jen na tahu člověka, když neběží
+   * request a partie běží. Během rozpracované sekvence je tažitelný jen kámen na
+   * POSLEDNÍM dopadu (`lastHopOf`) – tam totiž kámen opticky stojí a odtud skáče
+   * dál; jinak libovolný vlastní kámen. `canDrag` je jen UX předfiltr, legalitu
+   * drží `onDrop` + server.
+   */
+  function canDrag(square: Square): boolean {
+    if (busy || dragging || position.turn !== HUMAN_COLOR || lastResult !== 'ongoing') {
+      return false;
+    }
+    if (selection !== null && selection.path.length > 0) {
+      return square === lastHopOf(selection);
+    }
+    return selectableAt(position, square);
+  }
+
+  /**
+   * Tažení začalo na `square`: nastav výběr (nebo pokračuj v rozpracované sekvenci,
+   * když se zvedá kámen na posledním dopadu) a zvýrazni cíle. Kameny se nepřekreslují
+   * (`setHighlights`, ne `render`) – tažený kámen je zvednutý deskou.
+   */
+  function onDragStart(square: Square): void {
+    if (!canDrag(square)) {
+      return;
+    }
+    dragging = true;
+    const continuing =
+      selection !== null && selection.path.length > 0 && square === lastHopOf(selection);
+    if (!continuing) {
+      selection = { from: square, path: [] };
+    }
+    view.setHighlights(currentRenderState());
+  }
+
+  /**
+   * Kámen zvednutý na poli `origin` (poslední dopad, nebo výchozí pole) byl puštěn
+   * nad polem `to`. Rozhodne, co se stane, a vrátí verdikt desce (viz
+   * {@link DropOutcome}). Legalitu čerpá z `rules` (`selection`); dokončený tah
+   * rovnou pošle serveru (`submitMove`). Nelegální/mimo puštění vrací kámen beze
+   * změny – ověření navíc dělá i server.
+   */
+  function onDrop(origin: Square, to: Square | null): DropOutcome {
+    dragging = false;
+    // Konzistenční pojistka: bez odpovídajícího výběru, mimo tah, nebo když se zvedlo
+    // z jiného pole než kde kámen opticky stojí → kámen jen vrať.
+    if (busy || position.turn !== HUMAN_COLOR || selection === null || origin !== lastHopOf(selection)) {
+      return { kind: 'return' };
+    }
+    if (to === null) {
+      return { kind: 'return' };
+    }
+    const from = selection.from;
+    const prefix = selection.path;
+    if (nextTargets(position, from, prefix).includes(to)) {
+      const newPath = [...prefix, to];
+      const captured = capturedOnHop(position, from, prefix, to);
+      if (nextTargets(position, from, newPath).length > 0) {
+        // Meziskok: kámen ZŮSTANE na `to` a čeká na další skok. Výběr se posune,
+        // zvýraznění se srovná; kámen na dopad usadí deska (`hop` níže). Další
+        // překreslení (poll/tap) odvodí totéž zobrazení z výběru (effectivePosition),
+        // takže se sebraný kámen „nevzkřísí".
+        selection = { from, path: newPath };
+        view.setHighlights(currentRenderState());
+        return { kind: 'hop', landing: to, captured };
+      }
+      // Tento dopad tah dokončí.
+      const move = resolveMove(position, from, newPath);
+      if (move === null) {
+        return { kind: 'return' }; // obrana: nemělo by nastat (dopad bez pokračování = hotový tah)
+      }
+      submitMove(move.from, move.path, false); // tažením → usadit bez animace
+      return { kind: 'commit', landing: to, captured };
+    }
+    // `to` není bezprostřední dopad → zkus celý řetěz končící v `to` (souvislé tažení).
+    const chain = resolveChainTo(position, from, prefix, to);
+    if (chain !== null) {
+      submitMove(chain.from, chain.path, false);
+      return { kind: 'commit', landing: to, captured: chain.captures.slice(prefix.length) };
+    }
+    // Nelegální puštění → vrať kámen; rozpracovanou sekvenci nech být (jde zkusit znovu).
+    return { kind: 'return' };
   }
 
   void render();
