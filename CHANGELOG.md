@@ -7,6 +7,15 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-07-06
+
+### Changed
+
+- **Hrací deska je otočená tak, že kameny hráče (černé) jsou dole** a kameny
+  soupeře nahoře – přirozenější pohled, hráč sedí „u své strany". Jde čistě o
+  vizuální otočení o 180°; číslování polí, pravidla, validace tahů ani server se
+  nemění.
+
 ### Added
 
 - Kořenový **README.md** s ověřeným návodem: požadavky (Node 24, pnpm 10.33.0),

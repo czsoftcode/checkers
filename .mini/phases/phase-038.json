@@ -1,0 +1,34 @@
+{
+  "id": 38,
+  "title": "Otočení desky: člověk dole",
+  "goal": "V klientu vizuálně zrcadlit desku (obrátit pořadí vykreslení řad i sloupců), aby kameny člověka (černé) byly dole a soupeře nahoře, beze změny číslování polí, logiky tahů a serveru.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Otočit vykreslení mřížky o 180°",
+      "status": "done",
+      "detail": "V createBoardView (board-view.ts ~ř. 83-95) iterovat řady 7->0 a sloupce 7->0; data-square dál přes coordsToSquare(row, col) beze změny -> černé (člověk) skončí dole. Čísla polí i .dark/.light třídy zůstávají vázané na reálné souřadnice."
+    },
+    {
+      "title": "Srovnat test orientace s novým stavem",
+      "status": "done",
+      "detail": "V board-view.test.ts (test orientace) obrátit očekávání: prvních 8 buněk = pole 29-32 (horní řada, soupeř), posledních 8 = 1-4 (dolní řada, člověk). Test data-square 1-32 zůstává beze změny."
+    },
+    {
+      "title": "Ověřit netknutou logiku klik/výběr/animace",
+      "status": "done",
+      "detail": "Spustit celou web test sadu (výběr, highlight, move-diff, animace, zvuky) zeleně - ověří, že logika stojí na data-square a getBoundingClientRect, ne na pořadí buněk."
+    },
+    {
+      "title": "Vizuální ověření v prohlížeči",
+      "status": "done",
+      "detail": "Reálně spustit klienta a potvrdit: černé kameny člověka dole, bílé nahoře, černé hrací pole v levém dolním rohu z pohledu hráče, animace tahu správným směrem."
+    }
+  ],
+  "startedAt": "2026-07-06T02:27:31.655Z",
+  "completedAt": "2026-07-06T02:39:53.700Z",
+  "autoCommit": {
+    "preSha": "3462e548431ebea8e64f0875d7ef1e5fd10cfed0",
+    "subject": "Phase 38: Otočení desky: člověk dole"
+  }
+}

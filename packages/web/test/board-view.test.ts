@@ -144,7 +144,7 @@ describe('render desky', () => {
     expect(numbers).toEqual(Array.from({ length: 32 }, (_, i) => i + 1));
   });
 
-  it('má správnou orientaci: pole 1–4 v horní řadě, 29–32 v dolní', () => {
+  it('má otočenou orientaci: pole 29–32 v horní řadě, 1–4 v dolní', () => {
     const board = mount();
     const cells = [...board.querySelectorAll<HTMLElement>('.square')];
     expect(cells).toHaveLength(64);
@@ -157,8 +157,10 @@ describe('render desky', () => {
         .map(Number)
         .sort((a, b) => a - b);
 
-    expect(numbersIn(0, 8)).toEqual([1, 2, 3, 4]); // horní řada = strana černého
-    expect(numbersIn(56, 64)).toEqual([29, 30, 31, 32]); // dolní řada = strana bílého
+    // Deska je otočená o 180°: strana soupeře (bílý) nahoře, strana člověka
+    // (černý, pole 1–12) dole.
+    expect(numbersIn(0, 8)).toEqual([29, 30, 31, 32]); // horní řada = strana bílého
+    expect(numbersIn(56, 64)).toEqual([1, 2, 3, 4]); // dolní řada = strana černého (člověk)
   });
 
   it('vykreslí výchozí rozestavění: 12 černých a 12 bílých kamenů', () => {

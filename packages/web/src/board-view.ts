@@ -80,8 +80,13 @@ export function createBoardView(
   element.className = 'board';
 
   const squareEls = new Map<Square, HTMLElement>();
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
+  // Deska je otočená o 180° (řady i sloupce od nejvyššího indexu k nule), aby
+  // kameny člověka (černé, pole 1–12) ležely DOLE a soupeř nahoře. Otáčí se jen
+  // POŘADÍ vkládání do DOM (grid plní buňky v pořadí appendu); `data-square` i
+  // třídy .dark/.light se dál počítají z reálných souřadnic (row, col), takže
+  // číslování polí, klikání i validace tahů zůstávají netknuté.
+  for (let row = BOARD_SIZE - 1; row >= 0; row--) {
+    for (let col = BOARD_SIZE - 1; col >= 0; col--) {
       const cell = document.createElement('div');
       const dark = isDarkSquare(row, col);
       cell.className = dark ? 'square dark' : 'square light';
