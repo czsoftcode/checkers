@@ -15,7 +15,7 @@ import { formatGamePdn, writeGamePdn } from './archive.js';
 import { findLegalMove, gameToDto, legalMoveDtos, moveToDto } from './dto.js';
 import { ERROR_CODES, sendError } from './errors.js';
 import { LEVELS, STRENGTH_BY_LEVEL } from './levels.js';
-import { GameStore, effectiveResult } from './store.js';
+import { GameStore, effectiveResult, opposite } from './store.js';
 import type { GameRecord } from './store.js';
 import type { EngineMover } from './engine-client.js';
 
@@ -26,25 +26,34 @@ const moveBodySchema = z.object({
 });
 
 /**
- * Tělo POST /games: volitelná úroveň obtížnosti. Chybí-li `level` (nebo přijde
- * prázdné tělo), platí výchozí Profesionál → zpětně kompatibilní se starým
- * klientem i testy, které tělo neposílají. Neznámá hodnota → chyba (400).
+ * Tělo POST /games: volitelná úroveň obtížnosti a barva člověka. Chybí-li `level`
+ * (nebo přijde prázdné tělo), platí výchozí Profesionál; chybí-li `humanColor`,
+ * platí `'black'` (dnešek: člověk černý, engine bílý) → zpětně kompatibilní se
+ * starým klientem i testy, které tělo neposílají. Neznámá hodnota → chyba (400).
  */
 const createGameBodySchema = z.object({
   level: z.enum(LEVELS).default('professional'),
+  humanColor: z.enum(['black', 'white']).default('black'),
 });
 
-/** Barvu enginu držíme napevno: člověk je černý (začíná), engine bílý. */
-const ENGINE_COLOR: Color = 'white';
+/**
+ * Barva enginu v konkrétní partii = opačná než barva člověka (`opposite`).
+ * Barva člověka je uložená u partie (`GameRecord.humanColor`), engine je vždy
+ * druhá strana. Dřívější napevno `'white'` je jen výchozí případ (člověk černý).
+ */
+function engineColorOf(record: GameRecord): Color {
+  return opposite(record.humanColor);
+}
 
 /**
- * Práh přijetí nabídky remízy: engine (bílý) remízu přijme, právě když skóre
- * pozice Z POHLEDU BÍLÉHO není kladné (≤ 0), tj. bílý pozici nehodnotí jako svou
+ * Práh přijetí nabídky remízy: engine remízu přijme, právě když skóre pozice
+ * Z POHLEDU ENGINU není kladné (≤ 0), tj. engine pozici nehodnotí jako svou
  * výhru. Když vede, hraje dál a trestá – sedí s cílem kalibrace (silnému hráči
- * vzdorovat, ne vždy vyhrát). Číslo je vědomě laditelné; skutečné doladění chce
- * odehrané partie (poziční evaluace dává i v remízových pozicích nenulové skóre).
+ * vzdorovat, ne vždy vyhrát). Pohled je enginu (ne napevno bílého), aby práh
+ * platil i když engine hraje černou. Číslo je vědomě laditelné; skutečné doladění
+ * chce odehrané partie (poziční evaluace dává i v remízových pozicích nenulové skóre).
  */
-export const DRAW_ACCEPT_MAX_WHITE_SCORE = 0;
+export const DRAW_ACCEPT_MAX_ENGINE_SCORE = 0;
 
 export interface BuildAppOptions {
   /**
@@ -120,6 +129,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       record.level,
       record.ballotIndex,
       ballotMoves,
+      record.humanColor,
     );
   }
 
@@ -132,20 +142,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         reply,
         400,
         ERROR_CODES.invalidRequest,
-        `Neplatné tělo: očekávám { level: ${LEVELS.join(' | ')} }`,
+        `Neplatné tělo: očekávám { level: ${LEVELS.join(' | ')}, humanColor: black | white }`,
       );
     }
-    const record = store.create(parsed.data.level);
+    const record = store.create(parsed.data.level, parsed.data.humanColor);
     // Mistrovství: partie začíná vylosovaným ballotem → jednorázový záznam KTERÉ
     // zahájení padlo (ověřitelnost losu, debug férovosti). Ballot je zároveň
     // prvními třemi tahy v historii; index je navíc.
     if (record.ballotIndex !== null) {
       console.log(`[games] Mistrovství: partie ${record.id} začíná ballotem #${record.ballotIndex}`);
     }
-    // Po ballotu je na tahu BÍLÝ = engine → musí táhnout PRVNÍ. Na rozdíl od
-    // ostatních úrovní (černý/člověk začíná) se tu engine spouští už při založení.
-    // `maybeTriggerEngine` si sám hlídá `turn === ENGINE_COLOR`, takže pro
-    // neballotové partie (černý na tahu) je to no-op → zpětně kompatibilní.
+    // Engine musí táhnout PRVNÍ, kdykoli je na tahu jeho barva hned po založení:
+    // (a) Mistrovství s ballotem, po němž je na tahu bílý a bílý = engine;
+    // (b) běžná partie, kde je člověk bílý → engine je černý a začíná. Obojí
+    // pokryje `maybeTriggerEngine`: sám hlídá `turn === engineColorOf(record)`,
+    // takže pro partii, kde na tahu začíná člověk, je to no-op → zpětně kompatibilní.
     maybeTriggerEngine(record);
     // Čerstvý záznam: `maybeTriggerEngine` mohl přepnout engineStatus na
     // `thinking`; odpověď to má ukázat (engine dotáhne na pozadí, klient dopolluje).
@@ -161,7 +172,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return reply.send(dtoFor(record));
   });
 
-  // Vzdání partie: člověk (černý) se vzdává → vyhrává bílý (počítač). Vynucený
+  // Vzdání partie: člověk se vzdává → vyhrává engine (druhá barva). Barvu výhry
+  // určí store podle uložené `humanColor` (nikoli natvrdo bílý). Vynucený
   // výsledek žije MIMO pravidla (pozice zůstává rozehraná), proto ho drží store.
   // Bez kontroly, kdo je na tahu – vzdát lze kdykoli za běhu, i když engine
   // zrovna přemýšlí (jeho běžící job po probuzení uvidí terminál a nezahraje).
@@ -173,14 +185,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (outcome === 'already-over') {
       return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
     }
-    // Partie je teď terminální (white-wins) → archivuj právě jednou (markArchived).
+    // Partie je teď terminální (výhra enginu) → archivuj právě jednou (markArchived).
     await maybeArchive(outcome);
     return reply.send(dtoFor(outcome));
   });
 
-  // Nabídka remízy: člověk (černý) nabídne remízu, engine (bílý) o ní rozhodne.
+  // Nabídka remízy: člověk nabídne remízu, engine (druhá barva) o ní rozhodne.
   // Rozhodnutí přichází VÝHRADNĚ z enginu (skóre pozice); práh přijetí drží
-  // server (DRAW_ACCEPT_MAX_WHITE_SCORE). Synchronní: handler počká na engine a
+  // server (DRAW_ACCEPT_MAX_ENGINE_SCORE). Synchronní: handler počká na engine a
   // vrátí { accepted, game }. Bez enginu nabídka nedostupná (není decidér).
   app.post<{ Params: { id: string } }>('/games/:id/offer-draw', async (req, reply) => {
     if (engine === undefined) {
@@ -199,7 +211,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (effectiveResult(record) !== 'ongoing') {
       return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
     }
-    // Engine přemýšlí (na tahu je bílý) → nabídku teď nepřijímáme: engine by
+    // Engine přemýšlí (je na tahu) → nabídku teď nepřijímáme: engine by
     // dostal druhý souběžný požadavek do sériové fronty a člověk by čekal až za
     // jeho tah. Klient tlačítko v tomhle stavu ani nenabízí; tohle je pojistka.
     if (record.engineStatus === 'thinking') {
@@ -212,13 +224,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     // Rozhodnutí enginu. Skóre je z pohledu STRANY NA TAHU (negamax) → přepočet
-    // na pohled bílého: na tahu bílý = beze změny, na tahu černý = obrácené
-    // znaménko. Selhání enginu (timeout/pád/protokol) NENÍ „engine řekl ne":
+    // na pohled ENGINU: na tahu engine = beze změny, na tahu člověk = obrácené
+    // znaménko. Pohled je enginu (ne napevno bílého), ať práh platí i když engine
+    // hraje černou. Selhání enginu (timeout/pád/protokol) NENÍ „engine řekl ne":
     // nabídka spadne jako 503 a partie zůstane beze změny.
-    let whiteScore: number;
+    const engineColor = engineColorOf(record);
+    let engineScore: number;
     try {
       const { score } = await engine.evaluate(record.state.position);
-      whiteScore = record.state.position.turn === ENGINE_COLOR ? score : -score;
+      engineScore = record.state.position.turn === engineColor ? score : -score;
     } catch (error) {
       console.error(`Engine selhal při vyhodnocení nabídky remízy pro partii ${req.params.id}:`, error);
       return sendError(
@@ -229,7 +243,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       );
     }
 
-    const accepted = whiteScore <= DRAW_ACCEPT_MAX_WHITE_SCORE;
+    const accepted = engineScore <= DRAW_ACCEPT_MAX_ENGINE_SCORE;
     if (!accepted) {
       // Odmítnuto: stav se nemění, jen se dorovná čerstvý záznam (engine mohl
       // mezitím na svém tahu začít – ale to sem přes guard výš nepustíme).
@@ -275,15 +289,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (effectiveResult(record) !== 'ongoing') {
       return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
     }
-    // Na tahu je engine (bílý) → není co radit člověku; navíc by se druhý souběžný
+    // Na tahu je engine → není co radit člověku; navíc by se druhý souběžný
     // požadavek zařadil do sériové fronty enginu. Klient nápovědu v tomhle stavu
     // ani nežádá; tohle je pojistka (a symetrie s guardem v /moves).
-    if (record.state.position.turn === ENGINE_COLOR) {
+    if (record.state.position.turn === engineColorOf(record)) {
       return sendError(
         reply,
         409,
         ERROR_CODES.notYourTurn,
-        'Na tahu je engine (bílý), nápověda je jen na tvém tahu.',
+        'Na tahu je počítač, nápověda je jen na tvém tahu.',
       );
     }
 
@@ -344,16 +358,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     // Autorita barvy: když je zapojený engine, člověk smí táhnout JEN svou
-    // stranou (černou). Bez téhle kontroly by klient mohl zahrát legální BÍLÝ
-    // tah, zatímco engine přemýšlí – a přepsat mu pozici pod rukama (autorita
+    // stranou. Bez téhle kontroly by klient mohl zahrát legální tah ENGINU,
+    // zatímco engine přemýšlí – a přepsat mu pozici pod rukama (autorita
     // serveru by se rozjela s tím, co engine počítá). `findLegalMove` sám tuhle
-    // díru nezavře: pro stranu na tahu (bílou) legální tah najde a přijme.
-    if (engine !== undefined && record.state.position.turn === ENGINE_COLOR) {
+    // díru nezavře: pro stranu na tahu (enginovu) legální tah najde a přijme.
+    if (engine !== undefined && record.state.position.turn === engineColorOf(record)) {
       return sendError(
         reply,
         409,
         ERROR_CODES.notYourTurn,
-        'Na tahu je engine (bílý), počkej na jeho tah.',
+        'Na tahu je počítač, počkej na jeho tah.',
       );
     }
 
@@ -393,7 +407,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (effectiveResult(record) !== 'ongoing') {
       return;
     }
-    if (record.state.position.turn !== ENGINE_COLOR) {
+    if (record.state.position.turn !== engineColorOf(record)) {
       return;
     }
     store.setEngineStatus(record.id, 'thinking');
@@ -441,7 +455,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       }
       if (
         effectiveResult(record) !== 'ongoing' ||
-        record.state.position.turn !== ENGINE_COLOR
+        record.state.position.turn !== engineColorOf(record)
       ) {
         return; // stav se změnil / engine není na tahu – defenzivně nic nedělej
       }
@@ -465,7 +479,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       // zastaví: nezahraje tah do vzdané partie ani ji znovu nearchivuje.
       if (
         effectiveResult(current) !== 'ongoing' ||
-        current.state.position.turn !== ENGINE_COLOR
+        current.state.position.turn !== engineColorOf(current)
       ) {
         store.setEngineStatus(id, 'idle');
         return;

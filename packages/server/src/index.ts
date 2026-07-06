@@ -9,7 +9,7 @@ export const DEFAULT_PORT = 3000;
 export { buildApp } from './app.js';
 export type { BuildAppOptions } from './app.js';
 export { formatGamePdn, writeGamePdn } from './archive.js';
-export { GameStore, effectiveResult } from './store.js';
+export { GameStore, effectiveResult, opposite } from './store.js';
 export type { GameRecord, EngineStatus } from './store.js';
 export { moveToDto, legalMoveDtos, gameToDto, findLegalMove } from './dto.js';
 export type { MoveDto, GameDto } from './dto.js';

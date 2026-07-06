@@ -16,9 +16,19 @@ import {
   initialGameState,
   playBallot,
 } from '@checkers/rules';
-import type { GameResult, GameState, Move } from '@checkers/rules';
+import type { Color, GameResult, GameState, Move } from '@checkers/rules';
 import { DEFAULT_LEVEL } from './levels.js';
 import type { GameLevel } from './levels.js';
+
+/**
+ * Opačná barva. Barvu enginu si server dopočítává z uložené barvy člověka
+ * (`opposite(humanColor)`) – barva je JEDEN pojem (barva člověka), engine je
+ * vždy druhá strana. Čistá funkce (`Color` je jen `'black' | 'white'`), ne do
+ * `rules`: je to serverová logika autority, ne pravidlo hry.
+ */
+export function opposite(color: Color): Color {
+  return color === 'black' ? 'white' : 'black';
+}
 
 /**
  * Stav tahu enginu na pozadí:
@@ -64,6 +74,14 @@ export interface GameRecord {
    * pozná KTERÉ zahájení padlo bez zpětného dohledávání proti decku.
    */
   readonly ballotIndex: number | null;
+  /**
+   * Barva ČLOVĚKA v této partii (fáze 50). Fixní po celou partii. Engine hraje
+   * druhou stranu = `opposite(humanColor)`. Výchozí `'black'` = dosavadní chování
+   * (člověk černý začíná, engine bílý), takže partie bez volby zůstávají beze
+   * změny. Autoritou o barvě je server; řídí podle ní spouštění tahu enginu,
+   * guardy „nejsi na tahu" i barvu výhry při vzdání.
+   */
+  readonly humanColor: Color;
 }
 
 interface StoredGame {
@@ -74,6 +92,7 @@ interface StoredGame {
   forcedResult: GameResult | null;
   level: GameLevel;
   ballotIndex: number | null;
+  humanColor: Color;
 }
 
 /**
@@ -123,6 +142,7 @@ export class GameStore {
       forcedResult: game.forcedResult,
       level: game.level,
       ballotIndex: game.ballotIndex,
+      humanColor: game.humanColor,
     };
   }
 
@@ -173,8 +193,13 @@ export class GameStore {
    * v historii. Pro ostatní úrovně platí výchozí rozestavění (černý na tahu),
    * `ballotIndex` je `null`. `level` řídí sílu enginu; výchozí je Profesionál
    * (dnešní chování), takže volání bez argumentu zůstává zpětně kompatibilní.
+   *
+   * `humanColor` je barva člověka (engine hraje `opposite`); výchozí `'black'`
+   * = dnešek. Barvu volí klient, na losování ballotu ani na rozestavění nemá
+   * vliv – ballot vždy udělá tři půltahy (černý-bílý-černý). Kdo z nich je engine,
+   * řeší až app při spouštění tahu (podle `opposite(humanColor)`).
    */
-  create(level: GameLevel = DEFAULT_LEVEL): GameRecord {
+  create(level: GameLevel = DEFAULT_LEVEL, humanColor: Color = 'black'): GameRecord {
     const id = randomUUID();
     const seeded = level === 'championship' ? this.seedBallot() : null;
     const game: StoredGame = {
@@ -185,6 +210,7 @@ export class GameStore {
       forcedResult: null,
       level,
       ballotIndex: seeded?.index ?? null,
+      humanColor,
     };
     this.games.set(id, game);
     return this.toRecord(id, game);
@@ -214,11 +240,13 @@ export class GameStore {
   }
 
   /**
-   * Vzdání partie: nastaví vynucený výsledek `white-wins` (člověk = černý se
-   * vzdal → vyhrává bílý / počítač). Provede se JEN když je partie ještě
-   * rozehraná podle efektivního výsledku – vzdát skončenou (přirozeně i už
-   * vzdanou) partii nejde. Node je jednovláknový a mezi kontrolou a zápisem
-   * není `await`, takže je to atomický check-and-set.
+   * Vzdání partie: člověk se vzdá → vyhrává ENGINE (druhá barva). Výsledek je
+   * proto barva enginu = `opposite(humanColor)`: člověk černý → `white-wins`
+   * (dnešek), člověk bílý → `black-wins`. NEsmí být natvrdo `white-wins`, jinak by
+   * při obrácené barvě vzdání připsalo výhru straně, která se vzdala. Provede se
+   * JEN když je partie ještě rozehraná podle efektivního výsledku – vzdát skončenou
+   * (přirozeně i už vzdanou) partii nejde. Node je jednovláknový a mezi kontrolou
+   * a zápisem není `await`, takže je to atomický check-and-set.
    *
    * Vrací nový záznam při úspěchu; `'not-found'` když partie neexistuje;
    * `'already-over'` když už byla terminální. Řetězcové signály (ne `undefined`)
@@ -232,7 +260,7 @@ export class GameStore {
     if (effectiveResult(game) !== 'ongoing') {
       return 'already-over';
     }
-    game.forcedResult = 'white-wins';
+    game.forcedResult = opposite(game.humanColor) === 'white' ? 'white-wins' : 'black-wins';
     return this.toRecord(id, game);
   }
 

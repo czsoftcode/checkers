@@ -2,7 +2,7 @@
  * Integrační testy nabídky remízy (fáze 25) přes `app.inject`.
  *
  * Nabídku dává člověk (černý) na svém tahu; rozhoduje engine (bílý) svým skórem,
- * práh přijetí drží server (`DRAW_ACCEPT_MAX_WHITE_SCORE = 0`: bílý přijme, jen
+ * práh přijetí drží server (`DRAW_ACCEPT_MAX_ENGINE_SCORE = 0`: engine přijme, jen
  * když pozici nehodnotí jako svou výhru). Testy fixují:
  *  - ZNAMÉNKO: skóre je z pohledu strany na tahu; server ho na tahu černého
  *    obrací na pohled bílého. Dvojice testů (odmítnutí × přijetí) má zuby –

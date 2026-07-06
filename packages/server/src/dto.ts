@@ -7,7 +7,7 @@
  */
 
 import { legalMoves } from '@checkers/rules';
-import type { GameResult, GameState, Move, Position, Square } from '@checkers/rules';
+import type { Color, GameResult, GameState, Move, Position, Square } from '@checkers/rules';
 import type { GameLevel } from './levels.js';
 import type { EngineStatus } from './store.js';
 
@@ -52,6 +52,13 @@ export interface GameDto {
    * nedopočítává. Nenulové je jen u Mistrovství, kde `ballotIndex !== null`.
    */
   readonly ballotMoves: MoveDto[] | null;
+  /**
+   * Barva ČLOVĚKA v této partii (fáze 50). Engine hraje druhou stranu. Klient z
+   * ní ve fázi 51 zorientuje desku (člověk vždy dole) a rozhodne, čí je tah.
+   * Výchozí `'black'` = dnešek (člověk černý, engine bílý); partie bez volby ho
+   * mají také `'black'`. Autoritou o barvě je server.
+   */
+  readonly humanColor: Color;
 }
 
 /** Přepis `Move` z `rules` do drátového tvaru (kopie polí, ne readonly odkaz). */
@@ -80,6 +87,7 @@ export function gameToDto(
   level: GameLevel,
   ballotIndex: number | null,
   ballotMoves: MoveDto[] | null,
+  humanColor: Color,
 ): GameDto {
   return {
     id,
@@ -90,6 +98,7 @@ export function gameToDto(
     level,
     ballotIndex,
     ballotMoves,
+    humanColor,
   };
 }
 

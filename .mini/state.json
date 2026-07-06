@@ -247,6 +247,11 @@
       "id": 49,
       "title": "Animace losovaného ballotu",
       "status": "done"
+    },
+    {
+      "id": 50,
+      "title": "Server: barva hráče parametrem partie",
+      "status": "done"
     }
   ]
 }

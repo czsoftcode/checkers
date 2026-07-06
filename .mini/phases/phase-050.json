@@ -1,0 +1,39 @@
+{
+  "id": 50,
+  "title": "Server: barva hráče parametrem partie",
+  "goal": "Server při POST /games přijme barvu člověka (bílá/černá), uloží ji k partii a engine hraje druhou barvu — spouštění tahu enginu (i po nasazení ballotu v Mistrovství), validace tahů i skóre remízy jdou podle uložené barvy, ne podle napevno 'white'; chybějící barva v požadavku = dnešní default (člověk černý, engine bílý). Zpětná kompatibilita: stávající klient bez barvy funguje beze změny.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Store: humanColor v záznamu + resign podle barvy",
+      "status": "done",
+      "detail": "GameRecord/StoredGame dostanou readonly humanColor; create(level, humanColor='black') ho uloží. Serverový helper opposite(color) (ne do rules). resign() nastaví forcedResult na výhru enginu = opposite(humanColor)+'-wins' (black→white-wins, white→black-wins). Test v store.test: human=white → resign → black-wins; human=black → white-wins."
+    },
+    {
+      "title": "POST /games: přijmout a předat humanColor",
+      "status": "done",
+      "detail": "createGameBodySchema rozšířit o humanColor: z.enum(['white','black']).default('black'); předat do store.create. Neznámá hodnota → 400 (jako level), prázdné tělo → black. Test: {humanColor:'white'} → partie s bílým člověkem; neznámá → 400; bez těla → black."
+    },
+    {
+      "title": "app.ts: engine podle uložené barvy na všech místech",
+      "status": "done",
+      "detail": "Nahradit konstantu ENGINE_COLOR odvozením engineColor=opposite(record.humanColor) v maybeTriggerEngine, runEngineMove (2 guardy), guard /moves, guard /hint. Nabídku remízy přepočítat z pohledu enginu (turn===engineColor ? score : -score) a přejmenovat DRAW_ACCEPT_MAX_WHITE_SCORE → DRAW_ACCEPT_MAX_ENGINE_SCORE. Chybové hlášky '(bílý)' zobecnit na 'počítač'. Test: human=white normální partie → POST /games → engine (černý) hned thinking; člověk pošle černý tah → 409 not_your_turn."
+    },
+    {
+      "title": "DTO: humanColor v GameDto",
+      "status": "done",
+      "detail": "Přidat humanColor do GameDto + parametr gameToDto(); dtoFor() předá record.humanColor. Aditivně (starý klient extra pole ignoruje). Test: DTO nese humanColor; default black u partií bez volby."
+    },
+    {
+      "title": "Integrační test human=white end-to-end + regrese",
+      "status": "done",
+      "detail": "Ucelený test obrácené barvy (create→engine tah→lidský bílý tah→vzdání/remíza→PDN výsledek black-wins). Ověřit, že všechny stávající serverové testy (bez barvy v těle) zůstávají zelené = default black. Read-only kontrola, že klientský isGameDto nové pole neodmítne (bez úpravy klienta = fáze 51)."
+    }
+  ],
+  "startedAt": "2026-07-06T23:08:54.084Z",
+  "completedAt": "2026-07-06T23:40:44.713Z",
+  "autoCommit": {
+    "preSha": "c8bd2ce3f38ed1880b2ed7e4e107298f434c7928",
+    "subject": "Phase 50: Server: barva hráče parametrem partie"
+  }
+}

@@ -103,6 +103,35 @@ describe('GameStore – vzdání (forcedResult)', () => {
     expect(rec.state.position.turn).toBe('black');
   });
 
+  it('resign u obrácené barvy (člověk bílý) → black-wins, ne white-wins', () => {
+    // Zuby: kdyby resign zůstal natvrdo na white-wins, tenhle test padne –
+    // člověk bílý se vzdá → vyhrává engine (černý) → black-wins.
+    const store = new GameStore();
+    const { id } = store.create('professional', 'white');
+    const rec = store.resign(id);
+    if (rec === 'not-found' || rec === 'already-over') {
+      throw new Error('resign měl uspět');
+    }
+    expect(rec.humanColor).toBe('white');
+    expect(rec.forcedResult).toBe('black-wins');
+    expect(effectiveResult(rec)).toBe('black-wins');
+  });
+
+  it('resign u výchozí barvy (člověk černý) → white-wins', () => {
+    const store = new GameStore();
+    const { id } = store.create('professional', 'black');
+    const rec = store.resign(id);
+    if (rec === 'not-found' || rec === 'already-over') {
+      throw new Error('resign měl uspět');
+    }
+    expect(rec.forcedResult).toBe('white-wins');
+  });
+
+  it('create() bez barvy → humanColor "black" (zpětná kompatibilita)', () => {
+    const store = new GameStore();
+    expect(store.create().humanColor).toBe('black');
+  });
+
   it('druhé vzdání už vrací "already-over" a výsledek se nemění', () => {
     const store = new GameStore();
     const { id } = store.create();

@@ -25,7 +25,7 @@ const BLACK_KING: Cell = { color: 'black', kind: 'king' };
 
 describe('gameToDto', () => {
   it('výchozí pozice: ongoing, černý na tahu, 7 prostých tahů', () => {
-    const dto = gameToDto('abc', initialGameState(), 'idle', 'ongoing', 'beginner', null, null);
+    const dto = gameToDto('abc', initialGameState(), 'idle', 'ongoing', 'beginner', null, null, 'black');
     expect(dto.id).toBe('abc');
     expect(dto.position.turn).toBe('black');
     expect(dto.result).toBe('ongoing');
@@ -33,6 +33,7 @@ describe('gameToDto', () => {
     expect(dto.level).toBe('beginner');
     expect(dto.ballotIndex).toBeNull();
     expect(dto.ballotMoves).toBeNull();
+    expect(dto.humanColor).toBe('black');
     expect(dto.legalMoves).toHaveLength(7);
     // Kontrakt tvaru tahu na drátě: { from, path, captures }, prostý tah bez braní.
     for (const move of dto.legalMoves) {
@@ -45,16 +46,18 @@ describe('gameToDto', () => {
   it('result se PŘEDÁVÁ zvenčí (efektivní výsledek), DTO ho neodvozuje z pozice', () => {
     // Rozehraná pozice (černý na tahu), ale výsledek je vnucený white-wins –
     // simuluje vzdanou partii. DTO musí vrátit předaný výsledek, ne 'ongoing'.
-    const dto = gameToDto('xyz', initialGameState(), 'idle', 'white-wins', 'professional', null, null);
+    const dto = gameToDto('xyz', initialGameState(), 'idle', 'white-wins', 'professional', null, null, 'white');
     expect(dto.result).toBe('white-wins');
     expect(dto.position.turn).toBe('black');
+    // humanColor projde do drátu tak, jak ho volající předá (identita).
+    expect(dto.humanColor).toBe('white');
   });
 
   it('ballotMoves se PŘEDÁVAJÍ zvenčí (identita, DTO je jen serializuje)', () => {
     // gameToDto ballot NEODVOZUJE (slicing historie dělá dtoFor v app.ts) – jen
     // proláme, že pole projde do drátu tak, jak ho volající předá.
     const moves = [{ from: 9, path: [14], captures: [] }];
-    const dto = gameToDto('m', initialGameState(), 'idle', 'ongoing', 'championship', 3, moves);
+    const dto = gameToDto('m', initialGameState(), 'idle', 'ongoing', 'championship', 3, moves, 'black');
     expect(dto.ballotIndex).toBe(3);
     expect(dto.ballotMoves).toEqual(moves);
   });
