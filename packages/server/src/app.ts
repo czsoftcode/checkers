@@ -105,6 +105,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   /** GameDto ze záznamu: `result` je EFEKTIVNÍ výsledek (vzdání > pozice). */
   function dtoFor(record: GameRecord): ReturnType<typeof gameToDto> {
+    // Ballot tahy: JEN u Mistrovství (`ballotIndex !== null`). Ballot je vždy tři
+    // půltahy, které store nasadil jako první tři položky historie (viz store
+    // `seedBallot`) – klient je na startu jednou přehraje (animace zahájení).
+    // Mimo Mistrovství `null`, ať se drát zbytečně nenafukuje a klient pozná, že
+    // žádné intro není. Kopie do drátového tvaru přes `moveToDto`.
+    const ballotMoves =
+      record.ballotIndex === null ? null : record.moves.slice(0, 3).map(moveToDto);
     return gameToDto(
       record.id,
       record.state,
@@ -112,6 +119,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       effectiveResult(record),
       record.level,
       record.ballotIndex,
+      ballotMoves,
     );
   }
 

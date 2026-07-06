@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 function gameDto(position: Position, result: GameDto['result'] = 'ongoing'): GameDto {
-  return { id: 'g1', position, result, legalMoves: [], engineStatus: 'idle', level: 'professional' };
+  return { id: 'g1', position, result, legalMoves: [], engineStatus: 'idle', level: 'professional', ballotMoves: null };
 }
 
 function fakePlayer(): {

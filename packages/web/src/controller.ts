@@ -22,6 +22,7 @@
  */
 
 import type { Color, GameResult, Position, Square } from '@checkers/rules';
+import { applyMove, initialPosition } from '@checkers/rules';
 
 import { createBoardView } from './board-view.js';
 import type { DropOutcome, RenderState } from './board-view.js';
@@ -71,6 +72,22 @@ const END_SOUND_DELAY_MS = 500;
  * pauza tenhle problém neřeší: běží souběžně s animací tahu člověka na klientu.
  */
 const AI_MOVE_PAUSE_MS = 600;
+
+/**
+ * Délka jednoho půltahu animovaného ballotu v ms. Ballot běží POMALEJI než tahy
+ * ve hře (výchozí ~300 ms/skok v `board-view`), ať je vylosované zahájení dobře
+ * sledovatelné – jeden tah trvá zhruba vteřinu. Předává se do `board-view.update`
+ * jako přepis délky skoku; globální rychlost hry (tah člověka/enginu) nemění.
+ */
+const BALLOT_HOP_MS = 500;
+
+/**
+ * Pauza mezi jednotlivými půltahy animovaného ballotu v ms. Samotný pohyb kamene
+ * trvá {@link BALLOT_HOP_MS}; tahle krátká mezera navíc oddělí tři půltahy, ať
+ * jsou rozeznatelné jako tři tahy, ne jeden slitý pohyb. Injektovatelná kvůli
+ * testům (dají si malou hodnotu, ať nečekají).
+ */
+const BALLOT_INTRO_GAP_MS = 150;
 
 /** Odloží běh o `ms`. */
 function sleep(ms: number): Promise<void> {
@@ -123,6 +140,11 @@ export interface BoardControllerOptions {
    */
   readonly aiMovePauseMs?: number;
   /**
+   * Pauza mezi půltahy animace ballotu v ms (viz {@link BALLOT_INTRO_GAP_MS}).
+   * Injektovatelná kvůli testům – ty si dávají malou hodnotu, ať intro nezdržuje.
+   */
+  readonly ballotIntroGapMs?: number;
+  /**
    * Volá se po každém převzetí stavu ze serveru (z pollu i z odpovědí na tah /
    * vzdání) a jednou na začátku s výchozím stavem. Skořápka podle něj kreslí
    * řádek stavu a povoluje/zakazuje tlačítka.
@@ -163,6 +185,13 @@ export function createBoardController(
   // nesmí ale překreslit desku ani ohlásit stav (jinak by přepsal stav už
   // vyměněné partie po „Nová hra").
   let disposed = false;
+  // `true`, dokud běží úvodní animace vylosovaného zahájení (ballot, jen Mistrovství).
+  // Po tu dobu se POLLING PŘESKAKUJE: engine sice na pozadí přemýšlí a poll by vracel
+  // nezměněnou popballotovou pozici s bílým na tahu (`engineJustMoved` false → gate
+  // `await lastRender` se NEuplatní), takže `applyServerState → render()` by uprostřed
+  // intra překreslil desku na post-ballot pozici a rozbil běžící animaci. Flag drží
+  // desku výhradně v rukou `runBallotIntro`, dokud intro nedoběhne.
+  let introPlaying = false;
   // Naplánovaný (zpožděný) zvuk konce partie – ruší se při dispose (nová hra).
   let endSoundTimer: ReturnType<typeof setTimeout> | null = null;
   // Promise animace posledního převzatého tahu (vyřeší se po jejím doběhnutí nebo
@@ -191,6 +220,7 @@ export function createBoardController(
   let hintRequested = false;
 
   const aiMovePauseMs = options.aiMovePauseMs ?? AI_MOVE_PAUSE_MS;
+  const ballotIntroGapMs = options.ballotIntroGapMs ?? BALLOT_INTRO_GAP_MS;
   const onState = options.onState;
   const gameId = game.id;
   const player = options.soundPlayer ?? createSoundPlayer();
@@ -321,9 +351,11 @@ export function createBoardController(
    * když už request běží (odesílá se tah / vzdání / běží jiný poll), tik se přeskočí.
    */
   async function poll(): Promise<void> {
-    if (busy || dragging) {
-      // Jiný request běží (single-flight), nebo má člověk kámen „v ruce" (tažení) –
-      // překreslení by sáhlo na ručně přesouvaný kámen. Tik zahodíme.
+    if (busy || dragging || introPlaying) {
+      // Jiný request běží (single-flight), člověk má kámen „v ruce" (tažení), nebo
+      // běží úvodní animace ballotu – ve všech případech by překreslení sáhlo na
+      // rozanimovanou/přesouvanou desku. Tik zahodíme (tah enginu dorazí dalším
+      // pollem po doběhnutí intra).
       return;
     }
     await runRequest(async () => {
@@ -675,6 +707,92 @@ export function createBoardController(
     view.settle(currentRenderState());
   }
 
+  /** Bare render state = holá deska bez výběru/zvýraznění (pro animaci ballotu). */
+  function bareState(pos: Position): RenderState {
+    return { position: pos, selected: null, path: [], targets: [] };
+  }
+
+  /**
+   * Počáteční vykreslení desky. U úrovně Mistrovství s vylosovaným zahájením
+   * (`ballotMoves` neprázdné) místo přímého vykreslení popballotové pozice
+   * nejdřív ukáže výchozí rozestavění a pak animuje tři půltahy ballotu (viz
+   * {@link runBallotIntro}); introanimace se navěsí na `lastRender`, takže první
+   * tah enginu z pollu počká, až ballot doběhne. Jinak (ostatní úrovně, chybějící
+   * / neodehratelné `ballotMoves`) se deska vykreslí rovnou na aktuální pozici –
+   * animace zahájení je čistě kosmetika a nikdy nesmí partii zablokovat.
+   */
+  function startInitialRender(): void {
+    const ballotMoves = game.ballotMoves;
+    // Intro jen pro Mistrovství s právě třemi ballot tahy (server jich nasadí přesně
+    // 3). Jiná délka = drift kontraktu: raději žádné intro než rozjetá deska po
+    // handoffu (deska by pak neseděla na `game.position`).
+    if (game.level !== 'championship' || ballotMoves?.length !== 3) {
+      void render();
+      return;
+    }
+    const positions = reconstructBallotPositions(ballotMoves);
+    if (positions === null) {
+      void render(); // ballot nešel odehrát → fallback na přímé vykreslení post-ballot pozice
+      return;
+    }
+    // Po dobu intra drží desku výhradně `runBallotIntro`; polling se přeskakuje
+    // (viz `introPlaying`). Flag se shodí AŽ po doběhnutí/přerušení intra, ať první
+    // poll s tahem enginu diffuje z popballotové pozice, ne z půlky animace.
+    introPlaying = true;
+    lastRender = runBallotIntro(positions).finally(() => {
+      introPlaying = false;
+    });
+  }
+
+  /**
+   * Z `initialPosition` odehraje poslané ballot tahy reálnou cestou rules
+   * (`resolveMove` + `applyMove`) a vrátí posloupnost pozic PO každém půltahu.
+   * `null`, když některý tah z dané pozice není legální (rozbité/neodpovídající
+   * `ballotMoves`) – volající pak intro přeskočí. Nemutuje stav controlleru.
+   */
+  function reconstructBallotPositions(moves: readonly MoveDto[]): Position[] | null {
+    const positions: Position[] = [];
+    let pos = initialPosition();
+    for (const move of moves) {
+      const resolved = resolveMove(pos, move.from, move.path);
+      if (resolved === null) {
+        console.error('Ballot tah nejde odehrát z výchozí pozice, animace zahájení se přeskočí:', move);
+        return null;
+      }
+      pos = applyMove(pos, resolved);
+      positions.push(pos);
+    }
+    return positions;
+  }
+
+  /**
+   * Animuje vylosované zahájení: usadí výchozí rozestavění a pak po jednom
+   * přehraje půltahy, PŘED KAŽDÝM (i prvním) {@link ballotIntroGapMs} pauza. Každý
+   * `view.update` si sám odvodí pohyb i braní z rozdílu proti minule vykreslené
+   * pozici a přehraje zvuky – proto MUSÍ jako první přijít `settle(initialPosition)`,
+   * jinak by se první tah diffoval proti popballotové pozici. `position` (stav
+   * controlleru) zůstává na popballotové pozici, takže detekce tahu enginu v pollu
+   * je nedotčená. Guard na `disposed`: „Nová hra" uprostřed intra animaci zastaví
+   * (view.dispose ukončí i běžící WAAPI), controller se dál nedotkne vyměněné partie.
+   *
+   * Pauza PŘED prvním tahem není jen kosmetika: `runBallotIntro` běží synchronně
+   * z továrny controlleru, DŘÍV než app-shell připne desku do stránky. První
+   * `view.update` bez odkladu by tak počítal souřadnice z `getBoundingClientRect()`
+   * na neukotvené desce (samé nuly) → kámen by na cíl „skočil" bez animace. `sleep`
+   * odloží první tah za připnutí desky (append je synchronní hned po vzniku
+   * controlleru, tj. proběhne během prvního `sleep`), takže i první tah animuje.
+   */
+  async function runBallotIntro(positions: readonly Position[]): Promise<void> {
+    view.settle(bareState(initialPosition()));
+    for (const pos of positions) {
+      await sleep(ballotIntroGapMs);
+      if (disposed) {
+        return;
+      }
+      await view.update(bareState(pos), BALLOT_HOP_MS);
+    }
+  }
+
   /**
    * Smí se kámen na `square` právě táhnout? Jen na tahu člověka, když neběží
    * request a partie běží. Během rozpracované sekvence je tažitelný jen kámen na
@@ -759,7 +877,7 @@ export function createBoardController(
     return { kind: 'return' };
   }
 
-  void render();
+  startInitialRender();
   // Výchozí stav ohlásíme hned, ať skořápka nakreslí řádek stavu a nastaví
   // tlačítka správně ještě před prvním pollem.
   onState?.({ result: game.result, turn: game.position.turn, engineStatus: game.engineStatus });

@@ -242,6 +242,11 @@
       "id": 48,
       "title": "Klient: úroveň Mistrovství",
       "status": "done"
+    },
+    {
+      "id": 49,
+      "title": "Animace losovaného ballotu",
+      "status": "done"
     }
   ]
 }

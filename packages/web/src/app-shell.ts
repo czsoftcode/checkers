@@ -19,6 +19,8 @@ import type {
 } from './controller.js';
 import { GAME_LEVELS } from './server-client.js';
 import type { GameDto, GameLevel, ServerClient } from './server-client.js';
+import { createSoundPlayer } from './sound.js';
+import type { SoundPlayer } from './sound.js';
 
 /**
  * České popisky úrovní pro UI (interní hodnoty zůstávají anglické na drátě).
@@ -77,6 +79,14 @@ export interface AppShellOptions {
   readonly createController?: ControllerFactory;
   /** Perioda pollingu předaná controlleru. */
   readonly pollIntervalMs?: number;
+  /**
+   * Sdílený přehrávač zvuků. Skořápka ho vlastní a předává KAŽDÉMU controlleru
+   * (napříč partiemi), aby ho šlo odemknout (`unlock`) na uživatelském gestu
+   * (výběr úrovně / „Nová hra") ještě než controller vůbec vznikne. To je jediná
+   * cesta, jak u Mistrovství rozeznít ballot i první tah enginu, které hrají DŘÍV,
+   * než se hráč dotkne desky (autoplay policy prohlížeče). Injektovatelný kvůli testu.
+   */
+  readonly soundPlayer?: SoundPlayer;
 }
 
 /** Ovládaná aplikace. `dispose` uklidí i běžící controller (polling). */
@@ -92,6 +102,11 @@ export interface AppShell {
  */
 export function createAppShell(client: ServerClient, options: AppShellOptions = {}): AppShell {
   const makeController = options.createController ?? createBoardController;
+  // Sdílený přehrávač: jedna instance na celou appku, předávaná každému controlleru.
+  // Odemyká se na gestu (viz `unlockAudio`), takže odemčení přežije i výměnu partie
+  // za „Nová hra" – kdyby si player vytvářel každý controller sám, gesto by odemklo
+  // jen tu instanci, co v tu chvíli neexistuje (nová partie se zakládá až po awaitu).
+  const soundPlayer = options.soundPlayer ?? createSoundPlayer();
 
   const element = document.createElement('div');
   element.className = 'game';
@@ -427,6 +442,15 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   }
 
   /**
+   * Probudí sdílený přehrávač zvuků na uživatelském gestu (idempotentní). Volá se
+   * ze synchronního těla obsluhy gesta („Nová hra" / výběr úrovně), aby odemčení
+   * proběhlo v rámci user-activation okna prohlížeče (autoplay policy).
+   */
+  function unlockAudio(): void {
+    soundPlayer.unlock();
+  }
+
+  /**
    * Zahodí starý controller (VČETNĚ jeho pollingu přes `dispose`) a založí novou
    * partii. `dispose` PŘED `createGame` je klíčové: jinak by po založení běžely
    * dva pollery na dvou partiích. Chyba zakládání se jen zobrazí, appka žije dál.
@@ -483,6 +507,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       loading = false;
       controller = makeController(client, game, {
         onState,
+        soundPlayer,
         ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
       });
       boardSlot.append(controller.element);
@@ -523,6 +548,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     void offerDraw();
   });
   newGameBtn.addEventListener('click', () => {
+    unlockAudio(); // uživatelské gesto → probuď audio (ať zní i ballot / první tah AI)
     void startNewGame();
   });
 
@@ -551,6 +577,10 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   levelSelect.addEventListener('change', () => {
     const over = lastStatus.result !== 'ongoing';
     if (!over && !firstMoveMade && !loading) {
+      // Výběr úrovně je uživatelské gesto: odemkni audio SYNCHRONNĚ (ještě v rámci
+      // gesta, před await v `startNewGame`), jinak by u Mistrovství ballot a první
+      // tah enginu zahrály potichu – oba běží dřív, než hráč klikne do desky.
+      unlockAudio();
       void startNewGame();
     }
   });

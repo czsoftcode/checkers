@@ -7,6 +7,19 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-07-06
+
+### Added
+
+- **Animace vylosovaného zahájení (Mistrovství).** Na úrovni Mistrovství se teď
+  vylosované třítahové zahájení před tvýma očima přehraje: deska nejdřív ukáže
+  výchozí rozestavění a pak po jednom sehraje tři půltahy zahájení (včetně
+  případného braní) se zvuky pohybu a dopadu kamene. Ballot běží záměrně o něco
+  pomaleji než tahy ve hře (~půl vteřiny na tah), ať je dobře sledovatelný; teprve
+  po jeho dohrání odehraje počítač (bílý) svůj první tah. Zvuk se probudí výběrem
+  úrovně, takže zahájení opravdu zní (po znovunačtení stránky s uloženou volbou
+  Mistrovství zůstane kvůli pravidlům prohlížeče potichu, dokud do stránky neťukneš).
+
 ## [0.39.0] - 2026-07-06
 
 ### Added

@@ -24,7 +24,7 @@ function gameDto(
   engineStatus: GameDto['engineStatus'] = 'idle',
   result: GameResult = 'ongoing',
 ): GameDto {
-  return { id: 'g1', position, result, legalMoves: [], engineStatus, level: 'professional' };
+  return { id: 'g1', position, result, legalMoves: [], engineStatus, level: 'professional', ballotMoves: null };
 }
 
 function position(turn: Color, pieces: Record<number, Cell>): Position {

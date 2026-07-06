@@ -43,6 +43,15 @@ export interface GameDto {
    * ukázat bez změny drátu.
    */
   readonly ballotIndex: number | null;
+  /**
+   * Tři vynucené půltahy vylosovaného zahájení (3-move ballot) v drátovém tvaru,
+   * nebo `null` když partie žádné vynucené zahájení nemá. Jsou to reálné tahy,
+   * které server při zakládání nasadil (první tři položky historie) – klient je
+   * na startu partie jednou vizuálně přehraje (animace ballotu, úroveň
+   * Mistrovství). Zdroj pravdy o TĚCH tazích je server; klient si je z indexu
+   * nedopočítává. Nenulové je jen u Mistrovství, kde `ballotIndex !== null`.
+   */
+  readonly ballotMoves: MoveDto[] | null;
 }
 
 /** Přepis `Move` z `rules` do drátového tvaru (kopie polí, ne readonly odkaz). */
@@ -70,6 +79,7 @@ export function gameToDto(
   result: GameResult,
   level: GameLevel,
   ballotIndex: number | null,
+  ballotMoves: MoveDto[] | null,
 ): GameDto {
   return {
     id,
@@ -79,6 +89,7 @@ export function gameToDto(
     engineStatus,
     level,
     ballotIndex,
+    ballotMoves,
   };
 }
 

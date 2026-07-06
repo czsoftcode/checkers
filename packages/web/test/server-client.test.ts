@@ -24,6 +24,7 @@ const sampleDto: GameDto = {
   legalMoves: [],
   engineStatus: 'idle',
   level: 'professional',
+  ballotMoves: null,
 };
 
 /** Minimální `Response`-like objekt, ať test nezávisí na globálním `Response`. */
@@ -69,6 +70,11 @@ describe('createHttpClient', () => {
       legalMoves: [],
       engineStatus: 'thinking',
       level: 'championship',
+      ballotMoves: [
+        { from: 9, path: [13], captures: [] },
+        { from: 22, path: [18], captures: [] },
+        { from: 11, path: [16], captures: [] },
+      ],
     };
     const client = createHttpClient(okFetch(championshipDto, 201));
 
@@ -77,6 +83,38 @@ describe('createHttpClient', () => {
     expect(result).toEqual(championshipDto);
     expect(result.level).toBe('championship');
     expect(result.position.turn).toBe('white');
+    expect(result.ballotMoves).toHaveLength(3);
+  });
+
+  it('isGameDto: rozbité ballotMoves (číslo místo pole / prvek bez tvaru MoveDto) → ServerError', async () => {
+    // ZUB guardu tvaru: klient z `ballotMoves` skládá animaci ballotu (applyMove),
+    // takže rozbité pole musí spadnout hned při parsování odpovědi, ne až v renderu.
+    const base = {
+      id: 'g1',
+      position: { board: Array.from({ length: 32 }, () => null), turn: 'white' },
+      result: 'ongoing',
+      legalMoves: [],
+      engineStatus: 'thinking',
+      level: 'championship',
+    };
+
+    // ballotMoves je číslo, ne pole ani null.
+    const numberBallot = await createHttpClient(okFetch({ ...base, ballotMoves: 3 }, 201))
+      .createGame('championship')
+      .catch((e: unknown) => e);
+    expect(numberBallot).toBeInstanceOf(ServerError);
+
+    // ballotMoves je pole, ale prvek nemá tvar MoveDto (chybí path/captures).
+    const badElement = await createHttpClient(okFetch({ ...base, ballotMoves: [{ from: 9 }] }, 201))
+      .createGame('championship')
+      .catch((e: unknown) => e);
+    expect(badElement).toBeInstanceOf(ServerError);
+
+    // Chybějící pole úplně (undefined) je taky drift → odmítnout.
+    const missing = await createHttpClient(okFetch(base, 201))
+      .createGame('championship')
+      .catch((e: unknown) => e);
+    expect(missing).toBeInstanceOf(ServerError);
   });
 
   it('getGame posílá GET /games/:id s enkódovaným id', async () => {

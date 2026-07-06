@@ -23,7 +23,7 @@ function gameDto(
   engineStatus: GameDto['engineStatus'] = 'idle',
   result: GameResult = 'ongoing',
 ): GameDto {
-  return { id: 'g1', position, result, legalMoves: [], engineStatus, level: 'professional' };
+  return { id: 'g1', position, result, legalMoves: [], engineStatus, level: 'professional', ballotMoves: null };
 }
 
 /** Postaví pozici z řídkého zápisu `{ pole: kámen }` (pole 1–32). */

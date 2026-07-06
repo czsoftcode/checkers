@@ -7,7 +7,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../src/index.js';
+import { applyMove, initialPosition } from '@checkers/rules';
+import { buildApp, findLegalMove, mulberry32 } from '../src/index.js';
 import type { GameDto, MoveDto } from '../src/index.js';
 
 let app: FastifyInstance;
@@ -46,6 +47,53 @@ describe('POST /games', () => {
     const a = await createGame();
     const b = await createGame();
     expect(a.id).not.toBe(b.id);
+  });
+
+  it('neballotová partie: ballotMoves je null', async () => {
+    const game = await createGame();
+    expect(game.ballotIndex).toBeNull();
+    expect(game.ballotMoves).toBeNull();
+  });
+});
+
+describe('POST /games – Mistrovství: ballotMoves v DTO', () => {
+  it('championship DTO nese tři ballot tahy, jejichž odehrání z výchozí desky dá servírovanou pozici', async () => {
+    // Seedovaný rng → deterministický ballot; engine chybí, takže se nespustí a
+    // pozice zůstane popballotová (bílý na tahu). Zub cross-module kontraktu
+    // server↔klient: klient z `ballotMoves` skládá mezipozice od `initialPosition`
+    // a MUSÍ skončit přesně na `dto.position`. Kdyby dtoFor poslal jiné tahy než
+    // ty, které nasadil (špatný slice historie), odehrání by na `position` nedošlo.
+    const seeded = buildApp({ rng: mulberry32(7) });
+    try {
+      const res = await seeded.inject({ method: 'POST', url: '/games', payload: { level: 'championship' } });
+      expect(res.statusCode).toBe(201);
+      const game = res.json<GameDto>();
+      expect(game.level).toBe('championship');
+      expect(game.ballotIndex).not.toBeNull();
+      expect(game.ballotMoves).not.toBeNull();
+      const ballotMoves = game.ballotMoves;
+      if (ballotMoves === null) {
+        throw new Error('championship partie musí mít ballotMoves');
+      }
+      expect(ballotMoves).toHaveLength(3);
+      for (const move of ballotMoves) {
+        expect(Object.keys(move).sort()).toEqual(['captures', 'from', 'path']);
+      }
+      // Odehraj tři ballot tahy z výchozího rozestavění reálnou cestou rules.
+      let position = initialPosition();
+      for (const move of ballotMoves) {
+        const resolved = findLegalMove(position, move.from, move.path);
+        expect(resolved).toBeDefined();
+        if (resolved === undefined) {
+          throw new Error(`ballot tah ${move.from}->${move.path.join(',')} není legální`);
+        }
+        position = applyMove(position, resolved);
+      }
+      expect(position).toEqual(game.position);
+      expect(position.turn).toBe('white');
+    } finally {
+      await seeded.close();
+    }
   });
 });
 

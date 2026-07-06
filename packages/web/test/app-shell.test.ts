@@ -12,6 +12,7 @@ import type {
   GameStatus,
 } from '../src/controller.js';
 import type { GameDto, GameLevel, ServerClient } from '../src/server-client.js';
+import type { SoundPlayer } from '../src/sound.js';
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -27,7 +28,7 @@ afterEach(() => {
 });
 
 function gameDto(position: Position, result: GameDto['result'] = 'ongoing'): GameDto {
-  return { id: 'g1', position, result, legalMoves: [], engineStatus: 'idle', level: 'professional' };
+  return { id: 'g1', position, result, legalMoves: [], engineStatus: 'idle', level: 'professional', ballotMoves: null };
 }
 
 /** Fake controller: neřídí desku, jen zaznamenává dispose/resign a umí emitovat stav. */
@@ -312,6 +313,7 @@ describe('app-shell – výběr úrovně', () => {
       legalMoves: [],
       engineStatus: 'thinking',
       level: 'championship',
+      ballotMoves: null,
     };
     const createGame = vi.fn<(level: GameLevel) => Promise<GameDto>>((level) =>
       Promise.resolve(level === 'championship' ? champStart : { ...gameDto(initialPosition()), level }),
@@ -333,6 +335,68 @@ describe('app-shell – výběr úrovně', () => {
     // bílý-na-tahu startu nezamkl, select by zůstal odemčený a hráč by mohl
     // rozehranou Mistrovství partii přepnout jinam.
     expect(select.disabled).toBe(true);
+  });
+});
+
+describe('app-shell – odemknutí zvuku na gestu', () => {
+  it('výběr úrovně odemkne SDÍLENÝ přehrávač synchronně a předá ho controlleru', async () => {
+    // Fake přehrávač (vi.fn na unlock/play) + lokální factory, která si zapíše,
+    // jaký soundPlayer controller dostal. Zub autoplay: bez odemčení na gestu by u
+    // Mistrovství ballot i první tah enginu zahrály potichu (hrají dřív, než hráč
+    // klikne do desky).
+    // Mocky drž v samostatných proměnných (ne `player.unlock`) – reference na
+    // metodu objektu spouští eslint `unbound-method`.
+    const unlock = vi.fn();
+    const player: SoundPlayer = { unlock, play: vi.fn() };
+    const receivedPlayers: (SoundPlayer | undefined)[] = [];
+    const factory = (
+      _client: ServerClient,
+      game: GameDto,
+      opts: BoardControllerOptions,
+    ): BoardController => {
+      receivedPlayers.push(opts.soundPlayer);
+      opts.onState?.({ result: game.result, turn: game.position.turn, engineStatus: game.engineStatus });
+      return {
+        element: document.createElement('div'),
+        resign: vi.fn(),
+        offerDraw: vi.fn().mockResolvedValue('declined'),
+        dispose: vi.fn(),
+      };
+    };
+    const { client } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory, soundPlayer: player });
+    document.body.append(shell.element);
+    await tick(); // automatická první hra (Profesionál) – NENÍ gesto
+
+    // Auto-start bez gesta audio NEODEMYKÁ (browser by to stejně nedovolil).
+    expect(unlock).not.toHaveBeenCalled();
+
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    select.value = 'championship';
+    change(select);
+    // SYNCHRONNĚ v obsluze gesta, ještě NEŽ se dořeší createGame (await v startNewGame).
+    expect(unlock).toHaveBeenCalledTimes(1);
+
+    await tick(); // championship partie se založí
+
+    // Každý controller dostal TU SAMOU sdílenou instanci → gesto odemklo přesně
+    // ten přehrávač, na kterém pak controller přehrává ballot i tah enginu.
+    expect(receivedPlayers.length).toBeGreaterThanOrEqual(1);
+    expect(receivedPlayers.every((p) => p === player)).toBe(true);
+  });
+
+  it('tlačítko „Nová hra" odemkne přehrávač', async () => {
+    const unlock = vi.fn();
+    const player: SoundPlayer = { unlock, play: vi.fn() };
+    const { factory } = fakeFactory();
+    const { client } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory, soundPlayer: player });
+    document.body.append(shell.element);
+    await tick();
+    expect(unlock).not.toHaveBeenCalled();
+
+    click(q(shell.element, '.btn-newgame'));
+    expect(unlock).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -50,6 +50,13 @@ export interface GameDto {
   readonly engineStatus: EngineStatus;
   /** Úroveň, proti které se partie HRAJE (autorita = server, ne přepínač v UI). */
   readonly level: GameLevel;
+  /**
+   * Tři vynucené půltahy vylosovaného zahájení (3-move ballot), nebo `null` když
+   * partie žádné vynucené zahájení nemá. Nenulové je jen u Mistrovství. Klient je
+   * na startu jednou vizuálně přehraje (animace ballotu) a jinak se jich nedotkne
+   * – zdroj pravdy o tazích i výsledné pozici je server.
+   */
+  readonly ballotMoves: MoveDto[] | null;
 }
 
 /**
@@ -281,6 +288,16 @@ function isGameDto(value: unknown): value is GameDto {
   if (
     typeof record.level !== 'string' ||
     !(GAME_LEVELS as readonly string[]).includes(record.level)
+  ) {
+    return false;
+  }
+  // `ballotMoves`: buď `null` (partie bez zahájení), nebo pole tahů drátového
+  // tvaru. Klient z něj skládá animaci ballotu, takže se ověřuje do hloubky
+  // (jinak by rozbité pole spadlo až v `applyMove`). `undefined` (starý/rozbitý
+  // server bez pole) je taky drift → odmítni, ať se nezobrazí nesmysl.
+  if (
+    record.ballotMoves !== null &&
+    !(Array.isArray(record.ballotMoves) && record.ballotMoves.every(isMoveDto))
   ) {
     return false;
   }

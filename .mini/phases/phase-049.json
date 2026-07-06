@@ -1,0 +1,44 @@
+{
+  "id": 49,
+  "title": "Animace losovaného ballotu",
+  "goal": "U úrovně Mistrovství klient po startu partie nejdřív vykreslí výchozí rozestavění a pak klasickou rychlostí hry po jednom animuje tři půltahy vylosovaného ballotu (včetně případného braní) se zvuky pohybu a dopadu, a teprve po doběhnutí ballotu nechá naskočit první tah enginu.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Server: ballotMoves do GameDto",
+      "status": "done",
+      "detail": "dto.ts + gameToDto dostanou pole ballotMoves: MoveDto[] | null; dtoFor (app.ts) u championship predava prvni 3 tahy historie (record.moves.slice(0,3)) pres moveToDto, jinak null. Serverove testy: championship DTO nese 3 tahy shodne s historii, ostatni urovne null."
+    },
+    {
+      "title": "Klient: kontrakt server-client (ballotMoves)",
+      "status": "done",
+      "detail": "GameDto + isGameDto v server-client.ts prijmou ballotMoves (pole MoveDto nebo null, reuse isMoveDto). Test: guard prijme championship DTO s polem, odmitne spatny tvar (napr. cislo misto pole)."
+    },
+    {
+      "title": "Klient: intro animace ballotu v controlleru",
+      "status": "done",
+      "detail": "Na startu kdyz level==='championship' a ballotMoves neprazdne: view.settle(initialPosition), pak pro kazdy tah odvodit cilovou pozici (resolveMove + applyMove z rules) a view.update s ~250 ms pauzou mezi tahy. introPromise -> lastRender (gate pred tahem enginu); position zustava na post-ballot; ve smycce guard na disposed; fallback na prime vykresleni post-ballot pozice kdyz ballotMoves chybi/nesedi."
+    },
+    {
+      "title": "Test controlleru: intro probehne pred tahem enginu",
+      "status": "done",
+      "detail": "Fake klient vrati championship DTO (ballotMoves + post-ballot position); overit ze se animuji prave ty 3 tahy, deska skonci na dto.position, a prvni tah enginu (z nasledneho getGame) se aplikuje AZ po intru. Rozejiti tahu a pozice test shodi."
+    },
+    {
+      "title": "Klient: odemknuti zvuku na gestu vyberu urovne",
+      "status": "done",
+      "detail": "app-shell vytvori jeden sdileny SoundPlayer, na change/Nova hra gestu synchronne zavola unlock() (pred await createGame) a preda ho controlleru pres options.soundPlayer. Test: vyber urovne odemkne audio (fake player) nezavisle na dokonceni createGame."
+    },
+    {
+      "title": "Verifikace + nezavisly self-review",
+      "status": "done",
+      "detail": "Build/typecheck/testy zelene; rucni e2e v prohlizeci s realnym enginem (Mistrovstvi -> ballot se animuje herni rychlosti se zvuky, pak engine legalne tahne bileho); nezavisly sub-agent self-review v cerstvem kontextu (faze saha na kontrakt mezi moduly + vstupni sekvenci)."
+    }
+  ],
+  "startedAt": "2026-07-06T21:56:49.786Z",
+  "completedAt": "2026-07-06T22:45:47.618Z",
+  "autoCommit": {
+    "preSha": "b96fc3b8228bff85726f106b683e1017a6a32497",
+    "subject": "Phase 49: Animace losovaného ballotu"
+  }
+}

@@ -18,14 +18,8 @@ import { diffMove } from './move-diff.js';
 import { createSoundPlayer } from './sound.js';
 import type { SoundPlayer } from './sound.js';
 
-/** Doba jednoho skoku v ms (trojskok ≈ 3× tolik + prodlevy na mezidopadech). */
+/** Výchozí doba jednoho skoku v ms (trojskok ≈ 3× tolik + prodlevy na mezidopadech). */
 const HOP_MS = 300;
-/**
- * Prodleva na mezidopadu vícenásobného skoku (kámen čeká na další skok). Záměrně
- * shodná s délkou skoku – čekání i skok jsou u víceskoku stejně dlouhé, ať zvuky
- * rozjezd/dopad drží rytmus.
- */
-const DWELL_MS = HOP_MS;
 /** Doba plynulého zmizení sebraného kamene v ms. */
 const CAPTURE_FADE_MS = 200;
 
@@ -93,8 +87,12 @@ export interface BoardView {
    * příslib, který se vyřeší, AŽ animace tohoto tahu doběhne (nebo hned, když se
    * neanimuje / animace se přeruší). Volající tak může navázat akci na konec
    * pohybu (např. zvuk konce partie až po posledním dopadu vítězného tahu).
+   *
+   * `hopMs` volitelně přepíše délku jednoho skoku pro TENTO tah (výchozí
+   * {@link HOP_MS}). Používá ho animace ballotu, která běží pomaleji než tahy ve
+   * hře, aniž by měnila globální rychlost. Prostředí bez WAAPI ho ignoruje.
    */
-  update(state: RenderState): Promise<void>;
+  update(state: RenderState, hopMs?: number): Promise<void>;
   /**
    * Srovná JEN zvýraznění (výběr, cesta, cíle) podle stavu – nesahá na kameny ani
    * na `lastPosition`, takže nespustí žádnou animaci. Controller ho volá během
@@ -355,7 +353,7 @@ export function createBoardView(
   // Právě běžící animace tahu, nebo null.
   let running: RunningAnimation | null = null;
 
-  function update(state: RenderState): Promise<void> {
+  function update(state: RenderState, hopMs?: number): Promise<void> {
     // Opakovaný poll během animace vrací tutéž pozici → animaci nepřerušuj, jen
     // srovnej zvýraznění a nech ji doběhnout (jinak by 250ms poll usekl trojskok).
     // Vrať promise BĚŽÍCÍ animace (ne hned vyřešený): kdyby stejná pozice dorazila
@@ -387,7 +385,7 @@ export function createBoardView(
       instant(state);
       return Promise.resolve();
     }
-    return startAnimation(state, move);
+    return startAnimation(state, move, hopMs);
   }
 
   /** Okamžité překreslení bez animace (dnešní chování). */
@@ -448,7 +446,11 @@ export function createBoardView(
    * tentýž element – neshodí klikání) a vizuálně ho po diagonále „provede" přes
    * mezidopady pomocí WAAPI. Sebrané kameny mizí postupně, jak je kámen míjí.
    */
-  function startAnimation(state: RenderState, move: ReturnType<typeof diffMove>): Promise<void> {
+  function startAnimation(
+    state: RenderState,
+    move: ReturnType<typeof diffMove>,
+    hopMs?: number,
+  ): Promise<void> {
     // `done` se vyřeší, až animace skončí (finalize) NEBO se přeruší (cancel) –
     // volající (controller) na něj věší zvuk konce partie až po posledním dopadu.
     let resolveDone: () => void = () => undefined;
@@ -481,14 +483,20 @@ export function createBoardView(
       return `translate(${String(rect.left - toRect.left)}px, ${String(rect.top - toRect.top)}px)`;
     };
 
+    // Délka skoku pro TENTO tah: volitelný přepis (`hopMs`, používá ho pomalejší
+    // animace ballotu), jinak globální {@link HOP_MS}. Prodleva na mezidopadu
+    // (`dwell`) drží záměrně stejnou dobu jako skok, ať zvuky rozjezd/dopad u
+    // víceskoku drží rytmus.
+    const hop = hopMs ?? HOP_MS;
+    const dwell = hop;
     const numHops = move.hops.length;
-    // Časová osa: každý skok trvá HOP_MS, na každém MEZIdopadu se kámen zdrží
-    // DWELL_MS – v keyframech dvě stejné pozice s časovou mezerou, ať je vidět,
+    // Časová osa: každý skok trvá `hop`, na každém MEZIdopadu se kámen zdrží
+    // `dwell` – v keyframech dvě stejné pozice s časovou mezerou, ať je vidět,
     // kudy skok šel, a ne jen souvislý sklouz od startu k cíli.
     const dwells = Math.max(0, numHops - 1);
-    const totalMs = numHops * HOP_MS + dwells * DWELL_MS;
+    const totalMs = numHops * hop + dwells * dwell;
     // Čas příletu na dopad i-tého skoku (0-indexováno): i+1 pohybů + i prodlev.
-    const hopArrivalMs = (i: number): number => (i + 1) * HOP_MS + i * DWELL_MS;
+    const hopArrivalMs = (i: number): number => (i + 1) * hop + i * dwell;
 
     const keyframes: Keyframe[] = [
       { transform: translateOf(move.from), offset: 0, easing: 'ease-in-out' },
@@ -501,7 +509,7 @@ export function createBoardView(
         const arrival = hopArrivalMs(i - 1);
         // Přílet na mezidopad → prodleva (stejná pozice) → odlet dál.
         keyframes.push({ transform, offset: arrival / totalMs, easing: 'linear' });
-        keyframes.push({ transform, offset: (arrival + DWELL_MS) / totalMs, easing: 'ease-in-out' });
+        keyframes.push({ transform, offset: (arrival + dwell) / totalMs, easing: 'ease-in-out' });
       }
     }
 
@@ -525,10 +533,10 @@ export function createBoardView(
     };
 
     // Zvuk ROZJEZDU dalších skoků (i ≥ 1): kámen se po mezidopadu znovu rozjede až
-    // po prodlevě, tj. v čase `hopArrivalMs(i-1) + DWELL_MS = i*(HOP_MS+DWELL_MS)`.
+    // po prodlevě, tj. v čase `hopArrivalMs(i-1) + dwell = i*(hop+dwell)`.
     // Bez toho by mezi dopadem a dalším dopadem bylo hluché místo.
     for (let i = 1; i < numHops; i++) {
-      const at = i * (HOP_MS + DWELL_MS);
+      const at = i * (hop + dwell);
       timers.push(
         setTimeout(() => {
           if (cancelled) {

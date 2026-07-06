@@ -24,7 +24,7 @@ function gameDto(
   engineStatus: GameDto['engineStatus'] = 'idle',
   result: GameResult = 'ongoing',
 ): GameDto {
-  return { id: 'g1', position, result, legalMoves: [], engineStatus, level };
+  return { id: 'g1', position, result, legalMoves: [], engineStatus, level, ballotMoves: null };
 }
 
 /** První legální (prostý) tah černého ve výchozí pozici – použije se jako nápověda. */
