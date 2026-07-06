@@ -7,14 +7,17 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-07-06
+
 ### Added
 
-- **Server umí poradit nejlepší tah (základ módu Výuka).** Nový endpoint
-  `GET /games/:id/hint` vrátí pro pozici, kde je na tahu člověk, tah doporučený
-  enginem – vždy plnou silou, bez ohledu na zvolenou úroveň, aby nápověda učila
-  objektivně nejlepší tah. Server partii nijak nemění (jen poradí) a doporučený
-  tah si ověří jako legální, takže nikdy nepodá nesmysl. Zobrazení nápovědy na
-  desce a samotný přepínač „Výuka" přijdou v navazující fázi.
+- **Nový režim Výuka (nápověda tahů).** Ve výběru obtížnosti přibyla čtvrtá volba
+  „Výuka". Když ji zvolíš, počítač hraje jako soupeř plnou silou a k tomu ti na
+  každém tvém tahu sám ukáže na desce doporučený tah – zvýrazní modře kámen, kterým
+  máš táhnout, i pole, kam. Nápověda jede vždy plnou silou (učí objektivně nejlepší
+  tah, ne mělký podle úrovně); než se spočítá, deska chvíli (~1 s) počká. V ostatních
+  úrovních (Profesionál, Pokročilý, Začátečník) se žádná nápověda neukazuje. Server
+  zůstává autoritou – doporučený tah ověří jako legální a partii jím nijak nemění.
 
 ### Changed
 

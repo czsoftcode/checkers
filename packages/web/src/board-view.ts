@@ -41,6 +41,13 @@ export interface RenderState {
   /** Naklikané mezidopady rozpracovaného skoku (bez výchozího pole). */
   readonly path: readonly Square[];
   readonly targets: readonly Square[];
+  /**
+   * Nápověda tahu (režim Výuka): zvýrazní výchozí kámen (`from`) a cílové pole
+   * (`to`, poslední dopad doporučeného tahu). Vizuálně ODLIŠENÉ od výběru hráče
+   * (vlastní CSS třídy). Chybí (undefined) → nic se nekreslí (zpětně kompatibilní).
+   * Zvýraznění polí jde přes čísla 1–32, takže respektuje otočení desky samo.
+   */
+  readonly hint?: { readonly from: Square; readonly to: Square };
 }
 
 /**
@@ -411,14 +418,18 @@ export function createBoardView(
     applyHighlights(state);
   }
 
-  /** Nastaví jen zvýraznění polí (výběr, cesta, cíle) – nesahá na kameny. */
+  /** Nastaví jen zvýraznění polí (výběr, cesta, cíle, nápověda) – nesahá na kameny. */
   function applyHighlights(state: RenderState): void {
     const targetSet = new Set(state.targets);
     const pathSet = new Set(state.path);
+    const hintFrom = state.hint?.from ?? null;
+    const hintTo = state.hint?.to ?? null;
     for (const [square, cell] of squareEls) {
       cell.classList.toggle('selected', state.selected === square);
       cell.classList.toggle('path', pathSet.has(square));
       cell.classList.toggle('target', targetSet.has(square));
+      cell.classList.toggle('hint-from', hintFrom === square);
+      cell.classList.toggle('hint-to', hintTo === square);
     }
   }
 

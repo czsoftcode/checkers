@@ -14,7 +14,7 @@
 import type { Strength } from './engine-client.js';
 
 /** Úroveň obtížnosti. Interní hodnoty (drát/kód); v UI se lokalizují do češtiny. */
-export const LEVELS = ['professional', 'intermediate', 'beginner'] as const;
+export const LEVELS = ['professional', 'intermediate', 'beginner', 'education'] as const;
 
 /** Typ úrovně odvozený ze seznamu – přidání úrovně = jediná změna v `LEVELS`. */
 export type GameLevel = (typeof LEVELS)[number];
@@ -59,4 +59,12 @@ export const STRENGTH_BY_LEVEL: Record<GameLevel, Strength | undefined> = {
   professional: undefined,
   intermediate: { maxDepth: 3, carelessness: 0.2 },
   beginner: { maxDepth: 1, carelessness: 0.5 },
+  // `education` → `undefined`: soupeř hraje PLNOU silou, stejně jako Profesionál.
+  // Dvě úrovně tak mají záměrně shodnou sílu soupeře – rozdíl Výuky je JEN klientský
+  // (na tahu člověka se ukazuje nápověda, endpoint /hint). Server o „výukovosti"
+  // nerozhoduje jinak než touto úrovní; nápověda samotná jede vždy plnou silou
+  // nezávisle na úrovni. Plná síla je zvolená vědomě: nápověda ukáže vždy nejlepší
+  // tah (držíš-li se jí, hraješ optimálně; odchýlíš-li se, engine chybu potrestá =
+  // učení). Slabší soupeř by chyby netrestal tak, aby se hráč poučil.
+  education: undefined,
 };

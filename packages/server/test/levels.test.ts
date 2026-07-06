@@ -40,6 +40,13 @@ describe('úrovně obtížnosti', () => {
     expect(intermediate?.carelessness).toBeLessThan(beginner?.carelessness ?? 1);
   });
 
+  it('Výuka hraje soupeře plnou silou (undefined) – rozdíl je jen v klientské nápovědě', () => {
+    expect(LEVELS).toContain('education');
+    // Shodná síla jako Profesionál: soupeř plnou silou, žádné páky. Výukovost je
+    // čistě klientská (zobrazení nápovědy), server ji do síly soupeře nepromítá.
+    expect(STRENGTH_BY_LEVEL.education).toBeUndefined();
+  });
+
   it('každá úroveň v LEVELS má záznam v mapě síly', () => {
     for (const level of LEVELS) {
       expect(level in STRENGTH_BY_LEVEL).toBe(true);

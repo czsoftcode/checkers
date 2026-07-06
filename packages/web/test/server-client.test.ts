@@ -1,7 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createHttpClient, ServerError } from '../src/server-client.js';
-import type { GameDto } from '../src/server-client.js';
+import type { GameDto, ServerClient } from '../src/server-client.js';
+
+/**
+ * Vytáhne `getHint` z reálného klienta a ověří, že ho implementuje. `getHint` je
+ * na kontraktu VOLITELNÝ (stubovat ho nemusí každý fake), ale reálný HTTP klient
+ * ho mít MUSÍ – tenhle guard je zub: kdyby ho `createHttpClient` přestal vracet,
+ * testy spadnou tady, ne tichým „nápověda nikdy nejde".
+ */
+function hintOf(client: ServerClient): (id: string) => Promise<unknown> {
+  const getHint = client.getHint;
+  if (getHint === undefined) {
+    throw new Error('reálný HTTP klient musí implementovat getHint');
+  }
+  return getHint;
+}
 
 const sampleDto: GameDto = {
   id: 'g1',
@@ -208,6 +222,52 @@ describe('createHttpClient', () => {
     const client = createHttpClient(fetchMock);
 
     const error = await client.offerDraw('g1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ServerError);
+  });
+
+  it('getHint posílá GET /games/:id/hint bez těla a vrací samotný MoveDto', async () => {
+    const move = { from: 11, path: [15], captures: [] };
+    const fetchMock = okFetch({ move });
+    const client = createHttpClient(fetchMock);
+
+    const result = await hintOf(client)('a b');
+
+    expect(result).toEqual(move);
+    const call = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call?.[0]).toBe('/games/a%20b/hint');
+    expect(call?.[1]).toMatchObject({ method: 'GET' });
+    expect((call?.[1] as RequestInit).body).toBeUndefined();
+  });
+
+  it('getHint non-2xx (503 engine_unavailable) vyhodí ServerError se status a kódem', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        fakeResponse({
+          ok: false,
+          status: 503,
+          body: { error: { code: 'engine_unavailable', message: 'Počítač teď nedokáže poradit' } },
+        }),
+      ),
+    ) as unknown as typeof fetch;
+    const client = createHttpClient(fetchMock);
+
+    await expect(hintOf(client)('g1')).rejects.toMatchObject({ status: 503, code: 'engine_unavailable' });
+  });
+
+  it('getHint se špatným tvarem (chybí move) vyhodí ServerError', async () => {
+    // Drift kontraktu: bez guardu by nápověda protekla jako undefined a zvýraznila nesmysl.
+    const fetchMock = okFetch({ notMove: 1 });
+    const client = createHttpClient(fetchMock);
+
+    const error = await hintOf(client)('g1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ServerError);
+  });
+
+  it('getHint s move špatného tvaru (from není číslo) vyhodí ServerError', async () => {
+    const fetchMock = okFetch({ move: { from: 'x', path: [15], captures: [] } });
+    const client = createHttpClient(fetchMock);
+
+    const error = await hintOf(client)('g1').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ServerError);
   });
 });

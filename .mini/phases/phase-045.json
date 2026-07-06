@@ -1,0 +1,44 @@
+{
+  "id": 45,
+  "title": "Úroveň Výuka: nápověda na desce",
+  "goal": "Přidat Výuku jako čtvrtou úroveň (server LEVELS + klientský GAME_LEVELS + přepínač v UI) a ve Výuce na tahu člověka načíst z /hint doporučený tah a zvýraznit ho na desce; rozehraný/zahraný tah, nová hra i začátek tahu enginu běžící nápovědu bezpečně zruší, aby se nezvýraznil tah do neplatné pozice.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Server: úroveň Výuka (plná síla) + test",
+      "status": "done",
+      "detail": "levels.ts – přidat 'education' do LEVELS a STRENGTH_BY_LEVEL['education']=undefined (soupeř plnou silou jako Profesionál) + komentář, proč dvě úrovně sdílejí sílu. Test: education→undefined v mapě; POST /games {level:'education'} projde (zod enum) a GET vrací level education."
+    },
+    {
+      "title": "Web kontrakt: getHint + GAME_LEVELS + popisek",
+      "status": "done",
+      "detail": "server-client.ts – 'education' do GAME_LEVELS (professional zůstává první!), metoda getHint(id): Promise<MoveDto> do ServerClient + HTTP impl + parse funkce ověřující tvar {move: MoveDto} (jako parseDrawOffer, rozbité tělo → ServerError). app-shell.ts – popisek 'Výuka' do LEVEL_LABELS. Test: getHint dobrý tvar × rozbité tělo → ServerError."
+    },
+    {
+      "title": "board-view: kanál zvýraznění nápovědy",
+      "status": "done",
+      "detail": "RenderState dostane pole hint?: { from, path }; applyHighlights ho vykreslí vlastní CSS třídou (výchozí kámen + cíl), vizuálně ODLIŠENÉ od výběru hráče. Respektuje otočení desky. Bez hintu se nic nekreslí (zpětně kompatibilní). Ověřit vykreslením/testem."
+    },
+    {
+      "title": "controller: životní cyklus nápovědy (auto, single-flight)",
+      "status": "done",
+      "detail": "Ve Výuce (game.level==='education') na přechodu na tah člověka načíst hint přes runRequest, ODPOJENĚ od běžícího requestu (ne zanořit → nerozbít busy/inflight) a jen jednou za tah (vlajka, ne na každý 250ms poll). hintMove držet a vkládat do currentRenderState, když selection===null && turn===HUMAN_COLOR && ongoing. Zahodit při odeslání tahu, přechodu na tah enginu a dispose. Chyba getHint (ServerError) → nápovědu neukázat, nezaseknout."
+    },
+    {
+      "title": "Testy controlleru se zuby",
+      "status": "done",
+      "detail": "Ve Výuce se hint načte a zvýrazní na tahu člověka; MIMO Výuku (jiná úroveň) se getHint vůbec nevolá; dispose/změna tahu hint zahodí; chyba /hint degraduje bez zaseknutí desky; hint se nefetchuje opakovaně každým pollem. Injektovaný fake ServerClient s getHint – ověřit reálnou cestu, ne jen mock."
+    },
+    {
+      "title": "Verifikace: testy, lint, typecheck, ruční e2e",
+      "status": "done",
+      "detail": "Celá sada zelená + lint + typecheck. Ruční v prohlížeči: založit Výuku → nápověda se sama ukáže na desce (výchozí kámen + cíl), po zahrání tahu zmizí a po tahu enginu přijde nová; mimo Výuku žádná nápověda; ověřit, že ~1,6s pauza po tahu enginu nepůsobí jako zaseklá deska."
+    }
+  ],
+  "startedAt": "2026-07-06T16:18:46.134Z",
+  "completedAt": "2026-07-06T17:09:55.168Z",
+  "autoCommit": {
+    "preSha": "0f5efa2771d023c74c3ddc54e99346d0ce3c0aaf",
+    "subject": "Phase 45: Úroveň Výuka: nápověda na desce"
+  }
+}

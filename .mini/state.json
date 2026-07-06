@@ -222,6 +222,11 @@
       "id": 44,
       "title": "Server: endpoint nápovědy tahu",
       "status": "done"
+    },
+    {
+      "id": 45,
+      "title": "Úroveň Výuka: nápověda na desce",
+      "status": "done"
     }
   ]
 }

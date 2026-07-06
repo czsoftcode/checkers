@@ -29,6 +29,7 @@ const LEVEL_LABELS: Record<GameLevel, string> = {
   professional: 'Profesionál',
   intermediate: 'Pokročilý',
   beginner: 'Začátečník',
+  education: 'Výuka',
 };
 
 /** Klíč v LocalStorage pro zapamatovanou volbu úrovně (přežije reload stránky). */

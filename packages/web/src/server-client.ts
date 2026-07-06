@@ -29,7 +29,7 @@ export type EngineStatus = 'idle' | 'thinking' | 'error';
  * `DEFAULT_LEVEL` (jinak by se automatická úvodní partie a serverový default
  * tiše rozešly).
  */
-export const GAME_LEVELS = ['professional', 'intermediate', 'beginner'] as const;
+export const GAME_LEVELS = ['professional', 'intermediate', 'beginner', 'education'] as const;
 
 /** Úroveň obtížnosti posílaná do POST /games. Odvozeno z `GAME_LEVELS`. */
 export type GameLevel = (typeof GAME_LEVELS)[number];
@@ -76,6 +76,22 @@ export interface ServerClient {
    * se strojovým `code` – volající je odliší od přijetí/odmítnutí.
    */
   offerDraw(id: string): Promise<DrawOffer>;
+  /**
+   * Vyžádá si od enginu doporučený tah pro aktuální pozici (režim Výuka). Vrací
+   * jen tah (`MoveDto`), stav partie NEMĚNÍ – server jen radí. Selhání (bez enginu,
+   * není tah člověka, konec hry, timeout/pád enginu, síť) přijde jako `ServerError`
+   * se strojovým `code`; volající pak nápovědu prostě neukáže a nezasekne se.
+   *
+   * VOLITELNÁ schopnost: controller ji volá JEN ve Výuce (`level==='education'`),
+   * jinak se jí nedotkne. Optional proto, aby ji nemusel stubovat každý klient,
+   * který nápovědu nepoužívá (testovací fakey ostatních režimů). Reálný HTTP klient
+   * (`createHttpClient`) ji vždy implementuje – hlídá to `server-client.test`.
+   *
+   * Deklarovaná jako pole s arrow-typem (ne metoda): controller si ji smí uložit
+   * do lokální proměnné (kvůli zúžení optional) bez `unbound-method` varování –
+   * `this` stejně nepoužívá (je to closure nad `fetch`).
+   */
+  getHint?: (id: string) => Promise<MoveDto>;
 }
 
 /**
@@ -144,6 +160,10 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
       const url = `/games/${encodeURIComponent(id)}/offer-draw`;
       return parseDrawOffer(await send('POST', url, undefined), url);
     },
+    getHint: async (id) => {
+      const url = `/games/${encodeURIComponent(id)}/hint`;
+      return parseHint(await send('GET', url), url);
+    },
   };
 }
 
@@ -168,6 +188,44 @@ async function parseDrawOffer(response: Response, url: string): Promise<DrawOffe
     throw new ServerError(response.status, undefined, `Odpověď POST ${url} nemá očekávaný tvar nabídky remízy`);
   }
   return { accepted: record.accepted, game: record.game };
+}
+
+/**
+ * Přečte a ověří odpověď nápovědy `{ move: MoveDto }`. Tvar `move` se prověří
+ * (jinak by rozbitá odpověď protekla jako „nápověda" a zvýraznila nesmysl na
+ * desce). Selhání parsování → `ServerError`, který volající pozná a nápovědu
+ * neukáže. Vrací jen samotný tah.
+ */
+async function parseHint(response: Response, url: string): Promise<MoveDto> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (cause) {
+    throw new ServerError(response.status, undefined, `Odpověď GET ${url} nešla přečíst jako JSON: ${describe(cause)}`);
+  }
+  if (typeof body !== 'object' || body === null || !isMoveDto((body as Record<string, unknown>).move)) {
+    throw new ServerError(response.status, undefined, `Odpověď GET ${url} nemá očekávaný tvar nápovědy { move }`);
+  }
+  return (body as { move: MoveDto }).move;
+}
+
+/**
+ * Lehký runtime guard tvaru `MoveDto`: `from` číslo, `path` a `captures` pole
+ * čísel. Nekontroluje rozsah 1–32 (to je věc serveru/pravidel), jen tvar, ať se
+ * do vykreslení nedostane `undefined`/cizí struktura.
+ */
+function isMoveDto(value: unknown): value is MoveDto {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.from === 'number' &&
+    Array.isArray(record.path) &&
+    record.path.every((n) => typeof n === 'number') &&
+    Array.isArray(record.captures) &&
+    record.captures.every((n) => typeof n === 'number')
+  );
 }
 
 /**

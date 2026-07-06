@@ -31,7 +31,7 @@ import {
   resolveMove,
   selectableAt,
 } from './selection.js';
-import type { EngineStatus, GameDto, ServerClient } from './server-client.js';
+import type { EngineStatus, GameDto, MoveDto, ServerClient } from './server-client.js';
 
 /** Snímek stavu partie pro skořápku (řídí řádek stavu a stav tlačítek). */
 export interface GameStatus {
@@ -172,6 +172,15 @@ export function createBoardController(
   // `true` mezi zvednutím a puštěním kamene (kámen je „v ruce"). Po tuhle dobu se
   // polling přeskočí, ať překreslení nesahá na ručně přesouvaný kámen.
   let dragging = false;
+  // Režim Výuka (nese ho úroveň partie ze serveru, fixní po celou partii). Jen
+  // tady se hráči na jeho tahu ukazuje nápověda enginu; jinde se hint nedotkne.
+  const educationMode = game.level === 'education';
+  // Doporučený tah pro AKTUÁLNÍ tah člověka (režim Výuka), nebo null. Ukazuje se jen
+  // když člověk zrovna nemá rozpracovaný vlastní výběr (ten má přednost).
+  let hintMove: MoveDto | null = null;
+  // `true`, když se pro tenhle tah člověka nápověda už načetla / načítá – ať ji poll
+  // (à 250 ms) nespouští znovu a znovu. Shazuje se při změně tahu a odeslání tahu.
+  let hintRequested = false;
 
   const aiMovePauseMs = options.aiMovePauseMs ?? AI_MOVE_PAUSE_MS;
   const onState = options.onState;
@@ -183,8 +192,18 @@ export function createBoardController(
     onDrop,
   });
   const timer = setInterval(() => {
-    void poll();
+    void tickLoop();
   }, options.pollIntervalMs ?? POLL_INTERVAL_MS);
+
+  /**
+   * Jeden tik smyčky: nejdřív poll (uvidí tah enginu), pak případně načte nápovědu.
+   * Hint se spouští AŽ po pollu (ne uvnitř `applyServerState`), aby se jeho
+   * `runRequest` nezanořil do právě běžícího requestu a nerozbil `busy`/`inflight`.
+   */
+  async function tickLoop(): Promise<void> {
+    await poll();
+    maybeRequestHint();
+  }
 
   function handleClick(square: Square | null): void {
     // Když běží request nebo není na tahu člověk (engine přemýšlí), klik zahodíme.
@@ -271,6 +290,11 @@ export function createBoardController(
   function submitMove(from: Square, path: readonly Square[], animate: boolean): void {
     settleNext = !animate;
     selection = null;
+    // Člověk potáhl → nápověda dosloužila: zhasni ji hned (ne až dorazí stav ze
+    // serveru) a povol novou. Když server tah odmítne a člověk zůstane na tahu,
+    // `tickLoop` mu nápovědu zase načte (hintRequested=false).
+    hintMove = null;
+    hintRequested = false;
     view.setHighlights(currentRenderState()); // zhasni zvýraznění; kamenů se nedotýkej
     void runRequest(async () => {
       try {
@@ -325,6 +349,48 @@ export function createBoardController(
         applyServerState(dto);
       } catch (error) {
         console.error('Dotaz na stav partie selhal:', error);
+      }
+    });
+  }
+
+  /**
+   * Načte nápovědu enginu pro AKTUÁLNÍ tah člověka (režim Výuka) a zvýrazní ji.
+   * Jde přes stejný single-flight `runRequest` (busy) jako ostatní dotazy: po dobu
+   * ~1 s výpočtu deska nepustí klik/tažení, takže „překryv" nápovědy a tahu vůbec
+   * nevznikne. Volá se JEN mimo běžící request (z `tickLoop` po pollu / při startu),
+   * ať se `runRequest` nezanoří. Fetchne nejvýš JEDNOU za tah člověka (`hintRequested`).
+   *
+   * Selhání (`/hint` 503 timeout/pád enginu, síť) se spolkne: nápověda se prostě
+   * neukáže, deska se odblokuje (`runRequest` finally) a hraje se bez rady.
+   */
+  function maybeRequestHint(): void {
+    const getHint = client.getHint;
+    if (
+      !educationMode ||
+      getHint === undefined ||
+      disposed ||
+      busy ||
+      dragging ||
+      hintRequested ||
+      lastResult !== 'ongoing' ||
+      position.turn !== HUMAN_COLOR ||
+      selection !== null
+    ) {
+      return;
+    }
+    hintRequested = true;
+    void runRequest(async () => {
+      try {
+        const move = await getHint(gameId);
+        // Po awaitu ověř, že rada pořád platí pro AKTUÁLNÍ stav: nová hra (disposed),
+        // změna tahu, konec partie nebo rozjetý vlastní výběr → radu zahoď.
+        if (disposed || position.turn !== HUMAN_COLOR || lastResult !== 'ongoing' || selection !== null) {
+          return;
+        }
+        hintMove = move;
+        view.setHighlights(currentRenderState());
+      } catch (error) {
+        console.error('Nápovědu se nepodařilo načíst, hraje se bez ní:', error);
       }
     });
   }
@@ -431,6 +497,13 @@ export function createBoardController(
     position = dto.position;
     const prevResult = lastResult;
     lastResult = dto.result;
+    if (educationMode && prevTurn !== dto.position.turn) {
+      // Tah se změnil (engine potáhl / člověk potáhl) → stará nápověda už neplatí.
+      // Zahoď ji a povol načtení nové; samotný fetch spustí `tickLoop` (ne odsud –
+      // jsme uvnitř běžícího requestu a `runRequest` by se zanořil).
+      hintMove = null;
+      hintRequested = false;
+    }
     if (dto.engineStatus === 'error') {
       // Engine selhal – partie stojí na tahu člověka nebo čeká; skořápka to podle
       // engineStatus může zobrazit. Tady jen nezaseknout a nechat stopu v konzoli.
@@ -540,9 +613,28 @@ export function createBoardController(
    * na posledním dopadu (`effectivePosition`), výběr na tom dopadu a trasa (výchozí
    * pole + předchozí dopady) jako `path`; cíle se počítají z REÁLNÉ pozice.
    */
+  /**
+   * Nápověda k vykreslení (režim Výuka): výchozí pole + poslední dopad doporučeného
+   * tahu. Ukáže se JEN když člověk nemá rozpracovaný vlastní výběr (ten má přednost)
+   * a nápověda pro tenhle tah existuje. Bez ní `undefined` → deska nic nekreslí.
+   */
+  function currentHint(): { from: Square; to: Square } | undefined {
+    // `lastResult !== 'ongoing'`: na skončené partii radu NEUKAZUJ. Konec bez změny
+    // tahu (vzdání, přijatá remíza – mění výsledek, ne pozici) reset v
+    // `applyServerState` (jen na změnu tahu) nechytí; guard tady pokryje i takové
+    // terminální cesty na jediném místě, kde se o zobrazení rozhoduje.
+    if (hintMove === null || selection !== null || lastResult !== 'ongoing') {
+      return undefined;
+    }
+    const to = hintMove.path[hintMove.path.length - 1];
+    return to === undefined ? undefined : { from: hintMove.from, to };
+  }
+
   function currentRenderState(): RenderState {
     if (selection === null) {
-      return { position, selected: null, path: [], targets: [] };
+      const hint = currentHint();
+      // exactOptionalPropertyTypes: `hint` se přidá jen když existuje (ne `undefined`).
+      return { position, selected: null, path: [], targets: [], ...(hint === undefined ? {} : { hint }) };
     }
     if (selection.path.length === 0) {
       return {
@@ -663,6 +755,9 @@ export function createBoardController(
   // Výchozí stav ohlásíme hned, ať skořápka nakreslí řádek stavu a nastaví
   // tlačítka správně ještě před prvním pollem.
   onState?.({ result: game.result, turn: game.position.turn, engineStatus: game.engineStatus });
+  // Ve Výuce s člověkem na tahu (typicky první tah partie – černý začíná) načti
+  // nápovědu hned, ať se nečeká až na první tik pollu. Mimo Výuku no-op.
+  maybeRequestHint();
   return {
     element: view.element,
     resign,

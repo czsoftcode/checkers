@@ -5,8 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createBoardController } from '../src/controller.js';
 import { createBoardView } from '../src/board-view.js';
+import type { SoundPlayer } from '../src/sound.js';
 import type { GameDto, ServerClient } from '../src/server-client.js';
 import { ServerError } from '../src/server-client.js';
+
+/** Tichý přehrávač pro přímé testy view (bez ozvučení). */
+const silentPlayer: SoundPlayer = { play: () => undefined, unlock: () => undefined };
 
 /** Perioda, při které se polling v běžných testech nespustí. */
 const HUGE_INTERVAL = 1_000_000;
@@ -167,6 +171,60 @@ describe('render desky', () => {
     const board = mount();
     expect(board.querySelectorAll('.piece.black')).toHaveLength(12);
     expect(board.querySelectorAll('.piece.white')).toHaveLength(12);
+  });
+});
+
+describe('zvýraznění nápovědy (Výuka)', () => {
+  it('hint zvýrazní výchozí pole (hint-from) a cíl (hint-to), každé právě jednou', () => {
+    const view = createBoardView(() => undefined, silentPlayer);
+    document.body.append(view.element);
+    disposers.push(() => {
+      view.dispose();
+    });
+
+    view.setHighlights({
+      position: initialPosition(),
+      selected: null,
+      path: [],
+      targets: [],
+      hint: { from: 9, to: 13 },
+    });
+
+    expect(squareEl(view.element, 9).classList.contains('hint-from')).toBe(true);
+    expect(squareEl(view.element, 13).classList.contains('hint-to')).toBe(true);
+    // Právě jedno pole každé třídy – nezvýrazní se navíc jiná.
+    expect(view.element.querySelectorAll('.hint-from')).toHaveLength(1);
+    expect(view.element.querySelectorAll('.hint-to')).toHaveLength(1);
+  });
+
+  it('bez hintu se žádné pole nezvýrazní jako nápověda (zpětně kompatibilní)', () => {
+    const view = createBoardView(() => undefined, silentPlayer);
+    document.body.append(view.element);
+    disposers.push(() => {
+      view.dispose();
+    });
+
+    view.setHighlights({ position: initialPosition(), selected: null, path: [], targets: [] });
+
+    expect(view.element.querySelectorAll('.hint-from, .hint-to')).toHaveLength(0);
+  });
+
+  it('nová nápověda přepíše starou (třídy z předchozího hintu zmizí)', () => {
+    const view = createBoardView(() => undefined, silentPlayer);
+    document.body.append(view.element);
+    disposers.push(() => {
+      view.dispose();
+    });
+
+    const base = { position: initialPosition(), selected: null, path: [] as number[], targets: [] as number[] };
+    view.setHighlights({ ...base, hint: { from: 9, to: 13 } });
+    view.setHighlights({ ...base, hint: { from: 10, to: 15 } });
+
+    expect(squareEl(view.element, 9).classList.contains('hint-from')).toBe(false);
+    expect(squareEl(view.element, 10).classList.contains('hint-from')).toBe(true);
+    expect(squareEl(view.element, 15).classList.contains('hint-to')).toBe(true);
+    expect(view.element.querySelectorAll('.hint-from')).toHaveLength(1);
+    expect(view.element.querySelectorAll('.hint-to')).toHaveLength(1);
   });
 });
 
