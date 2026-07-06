@@ -29,7 +29,7 @@ export type EngineStatus = 'idle' | 'thinking' | 'error';
  * `DEFAULT_LEVEL` (jinak by se automatická úvodní partie a serverový default
  * tiše rozešly).
  */
-export const GAME_LEVELS = ['professional', 'intermediate', 'beginner', 'education'] as const;
+export const GAME_LEVELS = ['professional', 'championship', 'intermediate', 'beginner', 'education'] as const;
 
 /** Úroveň obtížnosti posílaná do POST /games. Odvozeno z `GAME_LEVELS`. */
 export type GameLevel = (typeof GAME_LEVELS)[number];

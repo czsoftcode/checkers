@@ -237,6 +237,11 @@
       "id": 47,
       "title": "Serverový los ballotu: Mistrovství",
       "status": "done"
+    },
+    {
+      "id": 48,
+      "title": "Klient: úroveň Mistrovství",
+      "status": "done"
     }
   ]
 }

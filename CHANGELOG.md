@@ -7,15 +7,17 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-07-06
+
 ### Added
 
-- **Serverový základ úrovně Mistrovství (vynucené zahájení).** Server umí novou
-  úroveň, kde partie nezačíná od výchozího rozestavění, ale vylosovaným třítahovým
-  zahájením (3-move ballot) z kurátorovaného seznamu 156 zahájení – jako na
-  turnajích. Po nasazení zahájení je na tahu počítač (bílý), takže táhne první.
-  Zatím **jde vyvolat jen přes API, ve výběru obtížnosti se úroveň objeví až
-  v navazující fázi.** Síla počítače je stejná jako u Profesionála; liší se jen
-  vynucené zahájení.
+- **Nová úroveň Mistrovství (vynucené zahájení).** Ve výběru obtížnosti přibyla
+  volba „Mistrovství". Když ji zvolíš, partie nezačíná od výchozího rozestavění, ale
+  vylosovaným třítahovým zahájením (3-move ballot) z kurátorovaného seznamu 156
+  zahájení – jako na turnajích. Po nasazení zahájení je na tahu počítač (bílý), takže
+  **táhne první** (indikátor svítí bíle, počítač přemýšlí). Síla počítače je stejná
+  jako u Profesionála; liší se jen vynucené zahájení. Server zůstává autoritou –
+  každé nasazené zahájení je ověřeně legální.
 
 ## [0.38.0] - 2026-07-06
 

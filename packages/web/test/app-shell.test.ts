@@ -283,6 +283,57 @@ describe('app-shell – výběr úrovně', () => {
     created[0]?.emit(OVER); // konec partie → zas odemčený
     expect(select.disabled).toBe(false);
   });
+
+  it('nabídka obsahuje „Mistrovství"; Profesionál zůstává první (výchozí)', async () => {
+    const { factory } = fakeFactory();
+    const { client } = levelEchoClient();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    const opts = [...select.querySelectorAll('option')];
+    const values = opts.map((o) => o.value);
+    // Profesionál MUSÍ být první <option> (výchozí soupeř = serverový DEFAULT_LEVEL).
+    expect(values[0]).toBe('professional');
+    expect(values).toContain('championship');
+    // Český popisek.
+    const champ = opts.find((o) => o.value === 'championship');
+    expect(champ?.textContent).toBe('Mistrovství');
+  });
+
+  it('výběr Mistrovství založí championship partii; počítač na tahu → přepínač se zamkne', async () => {
+    // Popballotový stav ze serveru: bílý (engine) na tahu, thinking. Fake
+    // createGame ho vrátí jen pro championship (jinak běžný černý+idle start).
+    const champStart: GameDto = {
+      id: 'g1',
+      position: { board: Array.from({ length: 32 }, () => null), turn: 'white' },
+      result: 'ongoing',
+      legalMoves: [],
+      engineStatus: 'thinking',
+      level: 'championship',
+    };
+    const createGame = vi.fn<(level: GameLevel) => Promise<GameDto>>((level) =>
+      Promise.resolve(level === 'championship' ? champStart : { ...gameDto(initialPosition()), level }),
+    );
+    const client: ServerClient = { ...fakeClient(gameDto(initialPosition())), createGame };
+    const { factory } = fakeFactory();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick(); // auto první hra (Profesionál)
+
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    select.value = 'championship';
+    change(select); // výběr Mistrovství PŘED tahem přehraje partii na championship
+    await tick();
+
+    expect(createGame).toHaveBeenLastCalledWith('championship');
+    // Po založení Mistrovství je na tahu počítač (bílý + thinking) → latch
+    // `firstMoveMade` se zamkne HNED, přepínač se zamkne. Zuby: kdyby se latch u
+    // bílý-na-tahu startu nezamkl, select by zůstal odemčený a hráč by mohl
+    // rozehranou Mistrovství partii přepnout jinam.
+    expect(select.disabled).toBe(true);
+  });
 });
 
 describe('app-shell – úroveň přežije reload (LocalStorage)', () => {

@@ -57,6 +57,28 @@ describe('createHttpClient', () => {
     );
   });
 
+  it('přijme GameDto s úrovní Mistrovství (championship) – bílý na tahu, engine přemýšlí', async () => {
+    // ZUB: než se `championship` přidalo do GAME_LEVELS, `isGameDto` by tuhle
+    // odpověď ODMÍTL (level mimo povolené) a partie Mistrovství by v prohlížeči
+    // spadla na „neočekávaný tvar GameDto". Popballotový stav = bílý (engine) na
+    // tahu, engineStatus 'thinking'.
+    const championshipDto: GameDto = {
+      id: 'g1',
+      position: { board: Array.from({ length: 32 }, () => null), turn: 'white' },
+      result: 'ongoing',
+      legalMoves: [],
+      engineStatus: 'thinking',
+      level: 'championship',
+    };
+    const client = createHttpClient(okFetch(championshipDto, 201));
+
+    const result = await client.createGame('championship');
+
+    expect(result).toEqual(championshipDto);
+    expect(result.level).toBe('championship');
+    expect(result.position.turn).toBe('white');
+  });
+
   it('getGame posílá GET /games/:id s enkódovaným id', async () => {
     const fetchMock = okFetch(sampleDto);
     const client = createHttpClient(fetchMock);

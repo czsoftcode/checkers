@@ -9,7 +9,11 @@
  * jediným zdrojem pravdy o stavu partie je server.
  *
  * Člověk hraje ČERNÉ (server má napevno engine = bílý). Vybírat a táhnout jde
- * jen když je na tahu člověk (`position.turn === 'black'`).
+ * jen když je na tahu člověk (`position.turn === 'black'`). POZOR: „černý táhne
+ * první" NEplatí univerzálně – na úrovni Mistrovství server nasadí vylosované
+ * zahájení a partie startuje s BÍLÝM na tahu, takže engine táhne první (jeho tah
+ * chytí první poll stejně jako každý jiný). Interakce člověka „jen na tahu černého"
+ * tím ale zůstává v platnosti.
  *
  * Single-flight: v jednu chvíli běží jen jeden request (POST tahu i GET poll).
  * `GameDto` nenese pořadové číslo, takže dva souběžné snímky nejde spolehlivě
@@ -77,6 +81,10 @@ function sleep(ms: number): Promise<void> {
  * Engine (bílý) právě potáhl: dřív byl na tahu on (`prev.turn !== HUMAN_COLOR`) a
  * teď je zpět člověk (`next.turn === HUMAN_COLOR`). Vzdání během přemýšlení tohle
  * nespustí – mění výsledek, ne pozici, takže `prev.turn` zůstane bílý.
+ *
+ * Platí i pro PRVNÍ tah enginu u Mistrovství: počáteční pozice je tam bílý-na-tahu
+ * (engine táhne první), takže první poll vidí přechod bílý→černý stejně jako
+ * kterýkoli pozdější tah enginu. Žádný předchozí tah člověka není potřeba.
  */
 function engineJustMoved(prev: Position, next: Position): boolean {
   return prev.turn !== HUMAN_COLOR && next.turn === HUMAN_COLOR;

@@ -1,0 +1,42 @@
+{
+  "id": 48,
+  "title": "Klient: úroveň Mistrovství",
+  "goal": "Web klient nabídne ve výběru obtížnosti úroveň Mistrovství (český popisek, professional zůstává výchozí), pošle championship na server a korektně zvládne partii, kde po vylosovaném zahájení táhne první počítač (bílý): kontrakt GAME_LEVELS/isGameDto zná championship, oznamovací box i deska ukazují správný stav od začátku (počítač přemýšlí) a člověk nezasáhne, dokud není na tahu. Mimo rozsah: zobrazení jména zahájení, volba barvy, zotavení z error.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "championship do kontraktu + popisek Mistrovství",
+      "status": "done",
+      "detail": "server-client.ts: přidat 'championship' do GAME_LEVELS na index 1 (hned za professional, ten zůstává první = výchozí). app-shell.ts: LEVEL_LABELS.championship = 'Mistrovství' (typecheck to vynutí). Výstup: <select> nabízí Mistrovství, isGameDto přijme level:'championship', typecheck zelený."
+    },
+    {
+      "title": "Srovnat komentáře s realitou bílý táhne první",
+      "status": "done",
+      "detail": "Přepsat zavádějící odůvodnění: controller.ts:11-12 a okolí engineJustMoved (u Mistrovství táhne první bílý/engine), app-shell.ts:342-343 (latch firstMoveMade se u bílý+thinking zamkne hned - kód správně, premisa člověk táhne první ne). Bez změny chování."
+    },
+    {
+      "title": "Test controlleru: počítač táhne první od bílé pozice",
+      "status": "done",
+      "detail": "Inicializovat controller DTO s turn:white, engineStatus:thinking; fake klient na getGame vrátí stav po tahu enginu (turn:black) → první poll ho aplikuje, onState ohlásí přechod bílý→černý (engine táhl první). Zub: kdyby se polling nespouštěl na startu / engineJustMoved selhal z bílé pozice, test padne. Reálný controller, ne mock."
+    },
+    {
+      "title": "Testy kontraktu a skořápky (championship)",
+      "status": "done",
+      "detail": "server-client: isGameDto PŘIJME DTO s level:championship (před fází by odmítl - zub). app-shell (jsdom): <select> obsahuje Mistrovství; jeho výběr (change) volá createGame('championship'); po startu championship je levelSelect.disabled (latch). Proti reálnému DOM, ne mock."
+    },
+    {
+      "title": "Verifikace + nezávislý self-review",
+      "status": "done",
+      "detail": "Lint/typecheck/celá web test sada zelená; zpětná kompatibilita ostatních úrovní (professional první = výchozí, tok černý-první nedotčen). Fáze sahá na kontrakt web↔server (GAME_LEVELS/isGameDto) → nezávislý sub-agent (čerstvý kontext) jako self-review dle CLAUDE.md. Do reportu přenést ruční e2e verify (reálný engine v prohlížeči odehraje tah po ballotu)."
+    }
+  ],
+  "startedAt": "2026-07-06T21:09:28.192Z",
+  "resolvedVerify": [
+    "Reálný engine v prohlížeči: po výběru Mistrovství počítač táhne první"
+  ],
+  "completedAt": "2026-07-06T21:37:32.897Z",
+  "autoCommit": {
+    "preSha": "b4b5757653ad11671edbc695d3f830b7c0a3adb6",
+    "subject": "Phase 48: Klient: úroveň Mistrovství"
+  }
+}

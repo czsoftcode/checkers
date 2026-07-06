@@ -27,6 +27,7 @@ import type { GameDto, GameLevel, ServerClient } from './server-client.js';
  */
 const LEVEL_LABELS: Record<GameLevel, string> = {
   professional: 'Profesionál',
+  championship: 'Mistrovství',
   intermediate: 'Pokročilý',
   beginner: 'Začátečník',
   education: 'Výuka',
@@ -126,8 +127,9 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const levelSelect = document.createElement('select');
   levelSelect.className = 'level-select';
   levelSelect.setAttribute('aria-label', 'Úroveň soupeře pro novou hru');
-  // Pořadí = pořadí v `GAME_LEVELS` (Profesionál → Pokročilý → Začátečník);
-  // první je výchozí. Jediný zdroj hodnot i pořadí, žádná druhá kopie seznamu.
+  // Pořadí = pořadí v `GAME_LEVELS` (Profesionál → Mistrovství → Pokročilý →
+  // Začátečník → Výuka); první je výchozí. Jediný zdroj hodnot i pořadí, žádná
+  // druhá kopie seznamu.
   for (const value of GAME_LEVELS) {
     const opt = document.createElement('option');
     opt.value = value;
@@ -339,8 +341,11 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     // Jakmile stav přestane být „výchozí" (černý na tahu, engine idle, hra běží),
     // padl první tah → zamkni výběr úrovně. Latch (jen nahoru): i když se stav
     // po tahu enginu vrátí na černý+idle, přepínač zůstane zamčený až do konce
-    // partie / nové hry. Člověk je černý a táhne první, takže dřív než jeho
-    // prvním tahem se sem nedostane nic než výchozí stav.
+    // partie / nové hry. U běžných úrovní se sem dřív než prvním tahem člověka
+    // (černý) nedostane nic než výchozí stav. U Mistrovství je počáteční stav
+    // rovnou bílý+thinking (engine táhne první z nasazeného zahájení), takže se
+    // latch zamkne HNED při založení – to je správně: ballot už partii „rozehrál",
+    // úroveň se pro rozehranou partii měnit nemá.
     if (s.result !== 'ongoing' || s.turn !== 'black' || s.engineStatus !== 'idle') {
       firstMoveMade = true;
     }
