@@ -400,3 +400,48 @@ describe('app-shell – selhání při zakládání partie', () => {
     expect(newBtn.disabled).toBe(false);
   });
 });
+
+describe('app-shell – indikátor strany na tahu', () => {
+  it('svítí barvou strany na tahu za běhu, po konci partie zmizí', async () => {
+    const { shell, created } = await mountRunning();
+    const ind = q(shell.element, '.turn-indicator');
+    const piece = q(ind, '.piece');
+    // Výchozí stav: člověk (černý) je na tahu → viditelný černý kámen.
+    expect(ind.classList.contains('hidden')).toBe(false);
+    expect(piece.classList.contains('black')).toBe(true);
+    expect(piece.classList.contains('white')).toBe(false);
+    // Počítač na tahu → přebarví na bílý, pořád viditelný.
+    created[0]?.emit({ result: 'ongoing', turn: 'white', engineStatus: 'thinking' });
+    expect(ind.classList.contains('hidden')).toBe(false);
+    expect(piece.classList.contains('white')).toBe(true);
+    expect(piece.classList.contains('black')).toBe(false);
+    // Konec partie → indikátor zmizí (nesvítí na dohranou partii).
+    created[0]?.emit(OVER);
+    expect(ind.classList.contains('hidden')).toBe(true);
+  });
+
+  it('nová hra skryje indikátor i když založení selže (chybová cesta nevolá render)', async () => {
+    // 1. volání createGame projde (mount), 2. selže (nová hra). Ověří, že skrytí
+    // indikátoru drží i na chybové cestě, kde se render() nevolá.
+    let calls = 0;
+    const dto = gameDto(initialPosition());
+    const client: ServerClient = {
+      ...fakeClient(dto),
+      createGame: () => {
+        calls += 1;
+        return calls === 1 ? Promise.resolve(dto) : Promise.reject(new Error('síť dole'));
+      },
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { factory } = fakeFactory();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick(); // první hra běží → indikátor viditelný
+    const ind = q(shell.element, '.turn-indicator');
+    expect(ind.classList.contains('hidden')).toBe(false);
+    // Přepnutí úrovně před prvním tahem spustí novou hru; její createGame selže.
+    change(q(shell.element, '.level-select'));
+    await tick();
+    expect(ind.classList.contains('hidden')).toBe(true);
+  });
+});

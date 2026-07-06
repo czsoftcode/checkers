@@ -1,0 +1,39 @@
+{
+  "id": 39,
+  "title": "Kámen strany na tahu",
+  "goal": "Vedle desky (na šířce <768 px pod deskou) zobrazit svítící kámen barvy strany, která je na tahu – posazený na černém průhledném kruhu a o 30 % větší než hrací kámen. Bez blikání, jen zvýrazněný (svítící) kámen; mimo běžící partii se skryje.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Indikátor: DOM prvek + řízení ze stavu (app-shell.ts)",
+      "status": "done",
+      "detail": "V createAppShell přidat do .game prvek .turn-indicator (černý kruh s vnitřním .piece). V render() přepnout třídu barvy podle s.turn (black/white) a viditelnost: zobrazit jen když result === 'ongoing', jinak skrýt. Čte se stávající GameStatus, žádné nové volání serveru."
+    },
+    {
+      "title": "CSS: černý kruh + kámen 1,3× + svícení (desktop vpravo)",
+      "status": "done",
+      "detail": ".turn-indicator = černý průhledný kruh (rgba ~0,5), vnitřní kámen průměr calc(var(--square) * 0.72 * 1.3), reuse .piece.black/.white, statický glow (box-shadow), bez blikání. Na desktopu vpravo od desky, svisle vycentrovaný. Ošetřit, aby při desce ~94vw nevznikl vodorovný scroll."
+    },
+    {
+      "title": "CSS <768: indikátor pod deskou",
+      "status": "done",
+      "detail": "V @media (max-width: 768px) zařadit indikátor do sloupce pod desku, vodorovně vycentrovaný."
+    },
+    {
+      "title": "Test app-shellu se zuby",
+      "status": "done",
+      "detail": "emit turn=black → indikátor viditelný s třídou černého kamene; turn=white → bílý; result !== 'ongoing' (OVER) → skrytý. Test padne, když se řízení barvy/viditelnosti rozbije."
+    },
+    {
+      "title": "Vizuální ověření v prohlížeči",
+      "status": "done",
+      "detail": "Desktop (vpravo od desky) i úzká šířka <768 (pod deskou); barva sedí se stranou na tahu; po konci partie indikátor zmizí."
+    }
+  ],
+  "startedAt": "2026-07-06T02:49:00.989Z",
+  "completedAt": "2026-07-06T03:18:16.230Z",
+  "autoCommit": {
+    "preSha": "087b61f2e64a348b81479c154a3e7fc0d16180d2",
+    "subject": "Phase 39: Kámen strany na tahu"
+  }
+}

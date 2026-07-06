@@ -1,6 +1,11 @@
 :root {
-  /* Skoro celá výška okna; na úzkých oknech omezeno šířkou, ať se deska vejde. */
-  --board-size: min(90vh, 94vw);
+  /* Skoro celá výška okna; na úzkých oknech omezeno šířkou, ať se deska vejde.
+     Odečtená rezerva (9rem) drží vpravo místo pro indikátor strany na tahu, aby
+     na vysokém/úzkém okně (kde je aktivní člen 94vw) nevznikl vodorovný scroll.
+     Na běžném širokém monitoru je aktivní 90vh, takže rezerva desku nezmenší.
+     POZOR: na <768 px je --board-size přepsané v @media (indikátor je tam POD
+     deskou, ne vpravo), takže se rezerva na mobilu neuplatní. */
+  --board-size: min(90vh, calc(94vw - 9rem));
   --square: calc(var(--board-size) / 8);
   --light: #e8d3a1;
   --dark: #8a5a2b;
@@ -24,10 +29,13 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* Skořápka: deska u levého okraje ve své plné velikosti, panel plave nad ní. */
+/* Skořápka: deska u levého okraje ve své plné velikosti, panel plave nad ní.
+   `align-items: center` svisle vycentruje indikátor strany na tahu vedle desky
+   (deska je vyšší, takže se indikátor zarovná na její střed). */
 .game {
   display: flex;
   justify-content: flex-start;
+  align-items: center;
 }
 
 /* Pozadí celé stránky: obrázek přes celý viewport, POD veškerým obsahem
@@ -259,6 +267,41 @@ body {
   color: #7a5a10;
 }
 
+/* Indikátor strany na tahu: kruh v barvě tmavého pole desky (var(--dark)) se
+   svítícím kamenem té strany, která je na tahu. Světlejší podklad než kámen, aby
+   byl i černý kámen dobře vidět (na černém průhledném kruhu splýval). Kruh je
+   výrazně větší než kámen (padding = široký prstenec), kámen sám je o 30 % větší
+   než hrací kámen na desce. Vpravo od desky (na <768 px se v @media přesune pod
+   desku). Barvu a viditelnost řídí app-shell přes třídy .piece.black/.white a
+   .hidden – tady je jen vzhled. */
+.turn-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--dark);
+  /* Lem barvy pole kolem kamene. Velikost kamene samotného zůstává 1.3× hrací (zadání);
+     lemem se ladí jen tloušťka prstence (kámen vyplní kruh ~65 % průměru). */
+  padding: calc(var(--square) * 0.25);
+  margin-left: 1rem; /* mezera od pravé hrany desky (desktop) */
+  flex: none; /* nikdy se nezmenšovat pod svou velikost */
+}
+
+/* Vyšší specificita (2 třídy) než obecné .hidden i .turn-indicator, ať skrytí
+   vyhraje bez ohledu na pořadí pravidel v souboru. */
+.turn-indicator.hidden {
+  display: none;
+}
+
+/* Kámen uvnitř indikátoru: o 30 % větší než hrací kámen (0.72 → 0.72 × 1.3).
+   Barvu (gradient + rámeček) dědí z .piece.black/.white; tady jen velikost a
+   statické „svícení" přes box-shadow. ŽÁDNÁ animace – kámen jen svítí, nebliká. */
+.turn-indicator .piece {
+  width: calc(var(--square) * 0.72 * 1.3);
+  height: calc(var(--square) * 0.72 * 1.3);
+  box-shadow: 0 0 calc(var(--square) * 0.18) rgba(255, 255, 255, 0.7);
+}
+
 /* --- Malý mobil ---------------------------------------------------------
    Na úzké obrazovce panel NEplave přes desku (position: fixed by ji na malém
    displeji zakrýval), ale řadí se do toku NAD desku jako svislý sloupec:
@@ -337,5 +380,13 @@ body {
 
   .offer-msg {
     text-align: center;
+  }
+
+  /* Indikátor strany na tahu je na <768 px POD deskou (sloupec `.game` ho díky
+     pořadí v DOM řadí za desku), vodorovně na střed (`.game align-items: center`).
+     Přehodíme mezeru z levé strany (desktop) na horní. */
+  .turn-indicator {
+    margin-left: 0;
+    margin-top: 0.6rem;
   }
 }

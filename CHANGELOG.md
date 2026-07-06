@@ -7,6 +7,17 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-07-06
+
+### Added
+
+- **Indikátor strany na tahu vedle desky:** kruh v barvě tmavého pole desky se
+  svítícím kamenem té barvy, která je právě na tahu (černý = člověk, bílý =
+  počítač). Kámen je o 30 % větší než hrací kámen na desce. Na širokém okně stojí
+  vpravo od desky, svisle na jejím středu; na malém displeji (<768 px) se přesune
+  pod desku a vodorovně vycentruje. Za běhu partie svítí, po jejím konci (výhra /
+  prohra / remíza i vzdání) zmizí.
+
 ## [0.33.0] - 2026-07-06
 
 ### Changed

@@ -192,6 +192,11 @@
       "id": 38,
       "title": "Otočení desky: člověk dole",
       "status": "done"
+    },
+    {
+      "id": 39,
+      "title": "Kámen strany na tahu",
+      "status": "done"
     }
   ]
 }

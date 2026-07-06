@@ -175,7 +175,19 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const boardSlot = document.createElement('div');
   boardSlot.className = 'board-slot';
 
-  element.append(panel, boardSlot);
+  // Indikátor strany na tahu: kruh v barvě tmavého pole desky se svítícím kamenem
+  // barvy toho, kdo je na tahu (černý = člověk, bílý = počítač). Vzhled kamene sdílí
+  // třídy `.piece.black/.white` s deskou (jeden zdroj vzhledu). Sourozenec desky
+  // ve `.game`: na desktopu (flex row) je vpravo od desky, na <768 (flex column)
+  // pod ní. Řídí se výhradně z `render()` podle GameStatus – žádné vlastní volání
+  // serveru. Startuje skrytý (`hidden`), zobrazí se až s prvním stavem partie.
+  const turnIndicator = document.createElement('div');
+  turnIndicator.className = 'turn-indicator hidden';
+  const turnPiece = document.createElement('div');
+  turnPiece.className = 'piece';
+  turnIndicator.append(turnPiece);
+
+  element.append(panel, boardSlot, turnIndicator);
 
   let controller: BoardController | null = null;
   // Poslední známý stav ze serveru – řídí stav tlačítek (result i turn a
@@ -258,10 +270,25 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     }
     status.textContent = statusText(s);
     refreshControls();
+    updateTurnIndicator(s);
     // Po skončení partie nemá potvrzení vzdání smysl – schovej ho.
     if (s.result !== 'ongoing') {
       showConfirm(false);
     }
+  }
+
+  /**
+   * Nastaví indikátor strany na tahu: viditelný jen za běhu partie
+   * (`result === 'ongoing'`), barva kamene podle `turn`. Po konci partie i při
+   * chybě enginu (result != ongoing → sem se dostane přes onState) se skryje.
+   */
+  function updateTurnIndicator(s: GameStatus): void {
+    const ongoing = s.result === 'ongoing';
+    turnIndicator.classList.toggle('hidden', !ongoing);
+    // Barvu drž konzistentní i ve skrytém stavu, ať při dalším zobrazení
+    // neproblikne stará barva. `black` = člověk, `white` = počítač.
+    turnPiece.classList.toggle('black', s.turn === 'black');
+    turnPiece.classList.toggle('white', s.turn === 'white');
   }
 
   function onState(s: GameStatus): void {
@@ -323,6 +350,9 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     // Zbytek po minulé partii: schovej hlášku nabídky remízy.
     offerMsg.textContent = '';
     offerMsg.classList.add('hidden');
+    // Indikátor na tahu skrýt do doby, než nový controller ohlásí stav partie
+    // (chybová cesta zakládání render() nevolá – jinak by tu zůstal z minulé hry).
+    turnIndicator.classList.add('hidden');
     resignBtn.disabled = true;
     newGameBtn.disabled = true;
     offerDrawBtn.disabled = true;
