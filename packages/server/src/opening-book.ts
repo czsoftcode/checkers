@@ -1,6 +1,6 @@
 /**
- * Kniha zahájení (fáze 56, rozšířeno ve fázi 57) – statická read-only tabulka
- * pozice → kandidátní tahy.
+ * Kniha zahájení (fáze 56–58) – statická read-only tabulka pozice → kandidátní
+ * tahy.
  *
  * Slouží plnosilovému soupeři (viz `levelUsesBook` v levels.ts): než engine
  * začne hledat, server nahlédne sem a je-li pozice v knize, zahraje knižní tah
@@ -15,20 +15,23 @@
  * pozice, takže klíče i tahy pocházejí z jednoho zdroje (rules) a nemůžou se
  * rozejít s tím, co server v provozu klíčuje.
  *
- * FÁZE 57 – VÍC KANDIDÁTŮ NA POZICI: hodnota v knize je SEZNAM tahů, ne jeden
- * tah. Reálná teorie zahájení se větví (na tutéž pozici víc dobrých pokračování)
- * a dřívější model „jeden tah, konflikt = Error" ji neuměl pojmout – druhá linie
- * sdílející pozici s jinou odpovědí shodila načtení modulu. Nově se kandidáti
- * hromadí; identické tahy se dedupují (ne chyba – seed se přehrává po půltazích,
- * shodné prefixy linií nutně narazí na tutéž pozici+tah). Zůstává jediná tvrdá
- * pojistka: NELEGÁLNÍ tah v seedu pořád vyhodí Error (fail loud). Výběr z
- * kandidátů při lookupu je zatím DETERMINISTICKÝ (první vložený), viz
- * `lookupBookMove`.
+ * VÍC KANDIDÁTŮ NA POZICI (fáze 57): hodnota je SEZNAM tahů. Reálná teorie se
+ * větví (na tutéž pozici víc dobrých pokračování). Kandidáti se hromadí,
+ * identické tahy se dedupují; výběr při lookupu je DETERMINISTICKÝ (první
+ * vložený), viz `lookupBookMove`.
  *
- * ROZSAH: minimální seed jen na důkaz mechaniky, NE reálná teorie zahájení
- * (naplnění řeší další fáze). Zrcadlová symetrie desky se NEŘEŠÍ – kniha netrefí
- * zrcadlově transponované pozice. Náhodný výběr pro variabilitu je také mimo
- * rozsah (zatím deterministicky). Vše vědomě odloženo.
+ * REÁLNÁ ZAHÁJENÍ – KOMPLEX 11-15 (fáze 58): seed nese hlavní odpovědi bílého
+ * na první tah černého 11-15 (Single Corner 22-18, 23-19, Kelso 24-20, 21-17,
+ * 23-18, 22-17) do ~8 půltahů. Zdroj: Richard Pask, „Complete Checkers" (volné
+ * PDF, checkermaven.com), trunk/drawn linie sekce 11-15. KAŽDÝ půltah je ověřen
+ * přehráním přes reálná pravidla (`buildBook` páruje `from`+dopadové pole proti
+ * `legalMoves`, právě jedna shoda – jinak Error). Braní je v zahájení běžné
+ * (výměny), proto se páruje přes dopad, ne jako prostý tah.
+ *
+ * ROZSAH / VĚDOMĚ ODLOŽENO: zrcadlová symetrie desky (kniha netrefí zrcadlené
+ * pozice); náhodný výběr pro variabilitu (zatím deterministicky); ostatní první
+ * tahy černého (9-13, 9-14, 10-14, 10-15, 11-16, 12-16). „Complete Checkers" je
+ * kniha 3-move; hlubší čistě-GAYP odbočky mimo trunk zde nejsou.
  */
 
 import { applyMove, initialPosition, legalMoves, positionKey } from '@checkers/rules';
@@ -36,33 +39,39 @@ import type { Move, Position, Square } from '@checkers/rules';
 
 /**
  * Kniha zahájení: klíč `positionKey` → seznam kandidátních tahů (≥ 1, nikdy
- * prázdný – prázdný seznam se do knihy neukládá). Pořadí v seznamu je pořadí
- * vložení při stavbě (viz `buildBook`); na tom stojí deterministický výběr.
+ * prázdný). Pořadí v seznamu = pořadí vložení (viz `buildBook`); na tom stojí
+ * deterministický výběr.
  */
 export type OpeningBook = ReadonlyMap<string, readonly Move[]>;
 
 /**
- * Jedno zahájení jako sekvence prostých tahů `[from, to]` od výchozí pozice.
- * V zahájení dámy se nebere (kameny se ještě nepotkaly), takže stačí prosté
- * tahy; každý se při stavbě ověří proti `legalMoves` (nelegální = chyba seedu,
- * hlásí se hlasitě už při načtení modulu, ne tiše).
+ * Jedno zahájení jako sekvence půltahů `[from, to]` od výchozí pozice, kde `to`
+ * je CÍLOVÉ (dopadové) pole – u braní pole dopadu, ne mezipole. Braní i prosté
+ * tahy se tak zapisují stejně; `buildBook` je rozliší párováním proti
+ * `legalMoves`. (Stejná konvence jako `Ply.to` v rules/openings.ts.)
  */
 type OpeningLine = readonly (readonly [Square, Square])[];
 
 /**
- * Minimální seed. Jediná linie stačí a POKRÝVÁ OBĚ BARVY enginu:
- *  - výchozí pozice (černý na tahu) → engine hraje černou a začíná,
- *  - po prvním černém tahu (bílý na tahu) → engine hraje bílou po tahu člověka.
- * Čísla jsou legální americká zahájení (11-15 „Old Faithful" a spol.), NE nutně
- * teoreticky nejlepší – obsah řeší pozdější fáze. Legalitu hlídá `buildBook`.
+ * Seed: komplex 11-15 z Pask, „Complete Checkers", sekce 11-15 (trunk/drawn).
+ * Každá linie = 11-15 + jedna hlavní odpověď bílého + hlavní pokračování do
+ * ~8 půltahů. Pokrývá OBĚ barvy enginu: výchozí pozice (engine=černý začíná
+ * 11-15) i pozice po 11-15 (engine=bílý odpovídá). Komentář nese původní zdroj.
+ * Legalitu KAŽDÉHO půltahu vynutí `buildBook` při načtení modulu.
  */
 const SEED_LINES: readonly OpeningLine[] = [
-  [
-    [11, 15],
-    [23, 19],
-    [9, 14],
-    [22, 17],
-  ],
+  // Single Corner (11-15 22-18) – Pask CC, řádek 13757. Výměna 15x22 25x18.
+  [[11, 15], [22, 18], [15, 22], [25, 18], [12, 16], [29, 25], [9, 13], [18, 14]],
+  // 11-15 23-19; 8-11 – Pask CC, řádek 14699.
+  [[11, 15], [23, 19], [8, 11], [22, 17], [11, 16], [24, 20], [16, 23], [27, 11]],
+  // Kelso (11-15 24-20) – Pask CC, řádek 16170.
+  [[11, 15], [24, 20], [15, 18], [22, 15], [10, 19], [23, 16], [12, 19], [25, 22]],
+  // 11-15 21-17; 8-11 – Pask CC, řádek 13037.
+  [[11, 15], [21, 17], [8, 11], [17, 13], [9, 14], [22, 18], [15, 22], [25, 9]],
+  // 11-15 23-18; 9-14 – Pask CC, řádek 14191.
+  [[11, 15], [23, 18], [9, 14], [18, 11], [8, 15], [22, 18], [15, 22], [25, 9]],
+  // 11-15 22-17; 15-18 – Pask CC, řádek 13518.
+  [[11, 15], [22, 17], [15, 18], [23, 14], [9, 18], [17, 14], [10, 17], [21, 14]],
 ];
 
 /** Úplná shoda tahů (from + path + captures) pro dedup kandidátů v seedu. */
@@ -77,28 +86,30 @@ function movesEqual(a: Move, b: Move): boolean {
 }
 
 /**
- * Postaví knihu přehráním linií reálnými pravidly. Pro každý půltah přiřadí
- * `positionKey(pozice před tahem) → kandidát`. Víc linií smí sdílet pozici a
- * nabídnout k ní RŮZNÉ tahy → nashromáždí se jako víc kandidátů (žádná chyba).
- * Identický tah na téže pozici se dedupuje (shodné prefixy linií). Nelegální tah
- * v seedu je jediná tvrdá chyba → vyhodí Error při načtení modulu (fail loud;
- * tichá kniha by kazila hru bez varování).
+ * Postaví knihu přehráním linií reálnými pravidly. Každý půltah `[from, to]`
+ * spáruje proti `legalMoves(pozice)` přes `from` a DOPADOVÉ pole (`path[last]`);
+ * musí sedět PRÁVĚ JEDNA legální shoda – jinak Error (fail loud). Tím se řeší:
+ *  - braní (dopad ≠ sousední pole) i prosté tahy jednotně,
+ *  - překlep v datech (nelegální tah = 0 shod → Error),
+ *  - nejednoznačnost (dvě různé cesty se stejným dopadem = 2 shody → Error),
+ * takže se do knihy nikdy nedostane špatný nebo dvojznačný tah tiše.
+ * (Stejná párovací logika jako `playBallot` v rules – sdílený kontrakt.)
  *
- * Exportováno kvůli testům se zuby (větvení/dedup na řízeném vstupu bez sahání
- * na produkční seed).
+ * Víc linií smí sdílet pozici a nabídnout RŮZNÉ tahy → víc kandidátů. Identický
+ * tah na téže pozici se dedupuje. Exportováno kvůli testům se zuby.
  */
 export function buildBook(lines: readonly OpeningLine[]): OpeningBook {
   const book = new Map<string, Move[]>();
   for (const line of lines) {
     let position = initialPosition();
     for (const [from, to] of line) {
-      const move = legalMoves(position).find(
-        (m) =>
-          m.from === from && m.captures.length === 0 && m.path.length === 1 && m.path[0] === to,
+      const matches = legalMoves(position).filter(
+        (m) => m.from === from && m.path[m.path.length - 1] === to,
       );
-      if (move === undefined) {
+      const [move, extra] = matches;
+      if (move === undefined || extra !== undefined) {
         throw new Error(
-          `Seed knihy zahájení: ${String(from)}-${String(to)} není legální prostý tah v dané pozici.`,
+          `Seed knihy zahájení: půltah ${String(from)}->${String(to)} má ${String(matches.length)} legálních shod (očekávána právě 1).`,
         );
       }
       const key = positionKey(position);
@@ -121,9 +132,8 @@ export const OPENING_BOOK: OpeningBook = buildBook(SEED_LINES);
 /**
  * Knižní tah pro pozici, nebo `undefined`, když pozice v knize není. Při víc
  * kandidátech vybírá DETERMINISTICKY první vložený (pořadí ze `buildBook`) –
- * náhodný výběr pro variabilitu je mimo rozsah fáze 57. Volající MUSÍ vrácený
- * tah ještě ověřit proti pravidlům (`findLegalMove`) – kniha je data, ne
- * autorita.
+ * náhodný výběr pro variabilitu je mimo rozsah. Volající MUSÍ vrácený tah ještě
+ * ověřit proti pravidlům (`findLegalMove`) – kniha je data, ne autorita.
  */
 export function lookupBookMove(book: OpeningBook, position: Position): Move | undefined {
   return book.get(positionKey(position))?.[0];

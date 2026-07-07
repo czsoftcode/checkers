@@ -1,0 +1,44 @@
+{
+  "id": 58,
+  "title": "Kniha: reálný komplex 11-15",
+  "goal": "Naplnit knihu zahájení ověřenými hlavními liniemi komplexu prvního tahu černého 11-15 (a hlavní odpovědi bílého) do rozumné hloubky (cca 6-10 půltahů), pro obě barvy enginu, s deterministickým výběrem. Zdroj = Richard Pask 'Complete Checkers' (volné PDF na bobnewell.net); data z něj vytáhne Claude, legalitu hlídá buildBook (nelegální tah = Error), zásah na klíčových pozicích ověřen testy proti reálným Position. Mimo rozsah: zrcadlová symetrie/transpozice, náhodný výběr pro variabilitu, ostatní první tahy (23-18, 22-18, 24-20...).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit číslování a orientaci vůči Pask",
+      "status": "done",
+      "detail": "Před extrakcí potvrdit, že Paskovo PDN číslování 1-32 i orientace (černý táhne první, 11-15 je 1. tah černého) sedí na rules (initialPosition, legalMoves). Přehrát 2-3 hlubší vzorové linie z Pask přes reálná pravidla - musí zůstat legální celou délku. Rozejití číslování odhalit teď, ne až v seedu."
+    },
+    {
+      "title": "Extrahovat hlavní linie komplexu 11-15 z Pask",
+      "status": "done",
+      "detail": "WebFetch Paskovy Complete Checkers; vytáhnout hlavní odpovědi bílého na 11-15 (22-18, 24-20, 24-19, 23-19, 22-17, 23-18 - kolik spolehlivě přečtu) a jejich hlavní pokračování do ~6-10 půltahů. Výstup: dokumentovaný seznam číselných linií + odkaz na sekci; nejisté označit, nedomýšlet."
+    },
+    {
+      "title": "Zakódovat linie do SEED_LINES",
+      "status": "done",
+      "detail": "Extrahované linie zapsat do opening-book.ts jako OpeningLine[]; pokrýt obě barvy enginu (linie nesou pozice s černým i bílým na tahu). Legalitu vynutí buildBook při načtení modulu (nelegální = Error). Komentář u seedu = zdroj + rozsah."
+    },
+    {
+      "title": "Aktualizovat kanárkový test z fáze 57",
+      "status": "done",
+      "detail": "Každá pozice = 1 kandidát teď neplatí (po 11-15 víc odpovědí bílého). Přepsat na: žádný prázdný seznam + počty kandidátů na dokumentovaných větvících pozicích odpovídají očekávání (ne vždy 1). Musí mít zuby."
+    },
+    {
+      "title": "Testy: reálné pozice → knižní tah",
+      "status": "done",
+      "detail": "Proti reálným Position z rules asertovat, že konkrétní pozice vrátí očekávaný teoretický tah: výchozí → 11-15; po 11-15 → hlavní bílá odpověď ([0]); 2-3 pozice hlouběji v různých větvích. Zuby ověřit dočasným rozbitím."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "CHANGELOG (Added - engine v úvodu hraje reálná zahájení). Self-review ČERSTVÝM sub-agentem: znovu stáhne Pask a namátkou porovná vzorek zakódovaných linií se zdrojem (transkripční chyby), + zkontroluje číslování/orientaci a zuby kanárku."
+    }
+  ],
+  "startedAt": "2026-07-07T11:03:18.453Z",
+  "completedAt": "2026-07-07T12:03:30.153Z",
+  "autoCommit": {
+    "preSha": "289335227443b7b3faae793bc83684c1dade65f9",
+    "subject": "Phase 58: Kniha: reálný komplex 11-15"
+  }
+}

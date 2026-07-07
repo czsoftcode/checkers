@@ -7,6 +7,19 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-07-07
+
+### Added
+
+- **Počítač hraje reálná zahájení komplexu 11-15.** Kniha zahájení už není jen
+  ukázková – na plnosilových úrovních počítač v úvodu partie hraje skutečné
+  mistrovské linie prvního tahu 11-15 a hlavních odpovědí soupeře (Single Corner,
+  Kelso a další) do zhruba osmi půltahů, včetně běžných výměn (braní). Zdrojem je
+  volně dostupná kniha Richarda Paska „Complete Checkers"; každý tah je ověřený
+  proti pravidlům hry. Když partie z knihy vybočí (soupeř zahraje něco mimo
+  pokryté linie), počítač plynule přejde na vlastní počítání jako dřív. Ostatní
+  první tahy (9-13, 10-14, 11-16…) a hlubší varianty přijdou v dalších fázích.
+
 ### Changed
 
 - **Kniha zahájení umí víc tahů na jednu pozici (interní příprava).** Datový
