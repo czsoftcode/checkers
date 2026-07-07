@@ -7,6 +7,21 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-07-07
+
+### Added
+
+- **Počítač hraje reálná zahájení i komplexu 10-15.** Kniha zahájení se rozšířila
+  o pátý první tah černého – 10-15 – se **sedmi** hlavními odpověďmi soupeře
+  (21-17, 22-17, 22-18, 23-18, 23-19, 24-19, 24-20) do zhruba osmi půltahů,
+  včetně řetězců braní a výměn. Zdrojem je opět kniha Richarda Paska „Complete
+  Checkers" (Část 4, sekce 10-15s); každý tah je ověřený proti pravidlům hry. Na
+  rozdíl od dřívějších komplexů má 10-15 přesně sedm legálních odpovědí soupeře a
+  kniha pokrývá **všechny** – po tomto tahu tedy počítači žádná soupeřova
+  odpověď z knihy nevypadne. Na výchozí pozici teď počítač vybírá z pěti zahájení
+  (11-15, 9-13, 9-14, 10-14 a 10-15); přednostně stále hraje 11-15. Zbývající
+  první tahy (11-16, 12-16) přijdou v dalších fázích.
+
 ## [0.48.0] - 2026-07-07
 
 ### Added

@@ -1,0 +1,44 @@
+{
+  "id": 62,
+  "title": "Kniha: reálný komplex 10-15",
+  "goal": "Naplnit knihu zahájení ověřenými hlavními liniemi komplexu prvního tahu černého 10-15 z Pask 'Complete Checkers' do ~8 půltahů, pro obě barvy enginu, s deterministickým výběrem; legalitu každého půltahu vynutí buildBook, zásah na klíčových pozicích ověří testy proti reálným Position. Mimo rozsah: 11-16, 12-16, zrcadlová symetrie/transpozice, náhodný výběr.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit číslování a orientaci 10-15 vůči Pask",
+      "status": "done",
+      "detail": "Potvrdit, že pole a orientace desky sedí na Paskovu notaci pro komplex 10-15 (kontrola oproti ověřeným 10-14/9-14), aby se linie nezakódovaly zrcadlově."
+    },
+    {
+      "title": "Extrahovat hlavní linie komplexu 10-15 z Pask",
+      "status": "done",
+      "detail": "Vypsat trunk odpovědi bílého na 10-15 z Pask 'Complete Checkers' (sekce 10-15s) do ~8 půltahů; u každé poznamenat ballot a řádek v Pask. Vybrat jen skutečné hlavní linie, transpozice vyloučit."
+    },
+    {
+      "title": "Zakódovat linie 10-15 do SEED_LINES",
+      "status": "done",
+      "detail": "Doplnit blok KOMPLEX 10-15 do SEED_LINES v packages/server/src/opening-book.ts s komentáři (ballot + Pask řádek); buildBook vynutí legalitu každého půltahu."
+    },
+    {
+      "title": "Aktualizovat kanárek a miss test na pět prvních tahů",
+      "status": "done",
+      "detail": "Rozšířit canary/miss test tak, aby pokrýval všech pět naplněných prvních tahů černého (11-15, 9-13, 9-14, 10-14, 10-15)."
+    },
+    {
+      "title": "Testy: reálné pozice 10-15 → knižní tah",
+      "status": "done",
+      "detail": "Přidat testy, které staví reálné Position po 10-15 (obě barvy enginu) a ověřují, že kniha vrátí očekávaný deterministický tah."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat změnu do CHANGELOG.md; spustit nezávislého sub-agenta (čerstvý kontext) jako red-team na věrnost seedu a rozsah testů."
+    }
+  ],
+  "startedAt": "2026-07-07T14:04:37.560Z",
+  "completedAt": "2026-07-07T14:46:46.179Z",
+  "autoCommit": {
+    "preSha": "154a9b6f440436f5ef9f0264c6aac8b66b1349e6",
+    "subject": "Phase 62: Kniha: reálný komplex 10-15"
+  }
+}

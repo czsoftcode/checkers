@@ -50,9 +50,19 @@
  * deterministicky vybraný), 9-13, 9-14 a 10-14. Pozice po 10-14 (engine=bílý)
  * má 6 kandidátů.
  *
+ * REÁLNÁ ZAHÁJENÍ – KOMPLEX 10-15 (fáze 62): pátý naplněný první tah černého.
+ * Seed nese 7 hlavních odpovědí bílého na 10-15 (21-17, 22-17, 22-18, 23-18,
+ * 23-19, 24-19, 24-20) do ~8 půltahů, z Pask Část 4 (10-15s), trunk prvních
+ * ballotů 62/67/72/73/78/80/81. POZOR – ODLIŠNÉ OD FÁZÍ 58-61: 10-15 má právě
+ * 7 legálních odpovědí bílého a seed pokrývá VŠECHNY, takže žádná bílá odpověď
+ * z knihy nevypadne (u 9-13/9-14/10-14 vždy jedna zbývala). Výchozí pozice má
+ * tak nově 5 kandidátů prvního tahu: 11-15 (první vložený, deterministicky
+ * vybraný), 9-13, 9-14, 10-14 a 10-15. Pozice po 10-15 (engine=bílý) má
+ * 7 kandidátů (nejvíc ze všech naplněných prvních tahů).
+ *
  * ROZSAH / VĚDOMĚ ODLOŽENO: zrcadlová symetrie desky (kniha netrefí zrcadlené
  * pozice); náhodný výběr pro variabilitu (zatím deterministicky); zbývající
- * první tahy černého (10-15, 11-16, 12-16). „Complete Checkers" je
+ * první tahy černého (11-16, 12-16). „Complete Checkers" je
  * kniha 3-move; hlubší čistě-GAYP odbočky mimo trunk zde nejsou.
  */
 
@@ -145,6 +155,27 @@ const SEED_LINES: readonly OpeningLine[] = [
   // 10-14 24-20; 7-10 – Ballot 58 (Pask řádek 9502; 57 je transpoziční stub).
   // Výměna 11-16 20x11 8x22 25x18.
   [[10, 14], [24, 20], [7, 10], [22, 18], [11, 16], [20, 11], [8, 22], [25, 18]],
+  // --- KOMPLEX 10-15 (fáze 62): 7 hlavních odpovědí bílého na první tah 10-15.
+  // Pask „Complete Checkers", Část 4 (10-15s); trunk (hlavní linie) prvních
+  // ballotů 62/67/72/73/78/80/81, prvních ~8 půltahů. 11-15 linie výše zůstávají
+  // PRVNÍ → deterministický první kandidát na výchozí pozici je dál 11-15; 10-15
+  // je pátý kandidát (za 10-14). POZOR: 10-15 pokrývá VŠECH 7 legálních odpovědí
+  // bílého, takže žádná bílá odpověď z knihy nevypadne (fáze 58-61 měly vždy
+  // jednu nepokrytou); první kandidát bílého po 10-15 je 21-17 (Pask ballot 62).
+  // 10-15 21-17; 6-10 – Ballot 62 (Pask řádek 9868). Řetěz braní 9x18 23x14 10x17 22x13.
+  [[10, 15], [21, 17], [6, 10], [17, 14], [9, 18], [23, 14], [10, 17], [22, 13]],
+  // 10-15 22-17; 6-10 – Ballot 67 (Pask řádek 10757). Řetěz braní 9x18 23x14 10x17 21x14.
+  [[10, 15], [22, 17], [6, 10], [17, 14], [9, 18], [23, 14], [10, 17], [21, 14]],
+  // 10-15 22-18; 15-22 – Ballot 72 (Pask řádek 11566). Výměna 15x22 25x18, pak bílý 18x11.
+  [[10, 15], [22, 18], [15, 22], [25, 18], [9, 13], [29, 25], [11, 15], [18, 11]],
+  // 10-15 23-18; 6-10 – Ballot 73 (Pask řádek 11688). Braní 9x18, 15x24, bílý dvojité 22x6.
+  [[10, 15], [23, 18], [6, 10], [18, 14], [9, 18], [24, 19], [15, 24], [22, 6]],
+  // 10-15 23-19; 6-10 – Ballot 78 (Pask řádek 12343). Prosté tahy (closed line).
+  [[10, 15], [23, 19], [6, 10], [22, 17], [1, 6], [25, 22], [11, 16], [29, 25]],
+  // 10-15 24-19; 15-24 – Ballot 80 (Pask řádek 12600). Výměna 15x24 28x19.
+  [[10, 15], [24, 19], [15, 24], [28, 19], [6, 10], [22, 17], [9, 14], [25, 22]],
+  // 10-15 24-20; 6-10 – Ballot 81 (Pask řádek 12705). Prosté tahy.
+  [[10, 15], [24, 20], [6, 10], [28, 24], [1, 6], [23, 18], [12, 16], [32, 28]],
 ];
 
 /** Úplná shoda tahů (from + path + captures) pro dedup kandidátů v seedu. */
