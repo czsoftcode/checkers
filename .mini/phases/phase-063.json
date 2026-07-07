@@ -1,0 +1,44 @@
+{
+  "id": 63,
+  "title": "Kniha: reálný komplex 11-16",
+  "goal": "Naplnit knihu zahájení ověřenými hlavními liniemi komplexu prvního tahu černého 11-16 z Pask „Complete Checkers\" do ~8 půltahů, pro obě barvy enginu, s deterministickým výběrem; legalitu každého půltahu vynutí buildBook, zásah na klíčových pozicích ověří testy proti reálným Position. Mimo rozsah: 12-16, zrcadlová symetrie/transpozice, náhodný výběr.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit číslování a orientaci 11-16 vůči Pask",
+      "status": "done",
+      "detail": "Potvrdit číslování polí a orientaci desky pro první tah černého 11-16 proti Pask „Complete Checkers\"; zjistit počet legálních odpovědí bílého a které jsou hlavní linie (trunk). Výstup: poznámky s referencí na Pask (ballot čísla/řádky), bez zápisu do kódu."
+    },
+    {
+      "title": "Extrahovat hlavní linie komplexu 11-16 z Pask",
+      "status": "done",
+      "detail": "Vypsat trunk linie do ~8 půltahů pro každou pokrytou odpověď bílého, včetně řetězců braní a výměn; zdroj Pask sekce 11-16. Výstup: strukturovaný seznam linií připravený k zakódování."
+    },
+    {
+      "title": "Zakódovat linie 11-16 do SEED_LINES",
+      "status": "done",
+      "detail": "Přidat linie do SEED_LINES v packages/server/src/opening-book.ts s komentářem (ballot, Pask řádek); legalitu každého půltahu vynutí buildBook. Výstup: kniha se sestaví bez chyby, pnpm test zelený."
+    },
+    {
+      "title": "Aktualizovat kanárek a miss test na šest prvních tahů",
+      "status": "done",
+      "detail": "V opening-book.test.ts posunout kanárek (výchozí pozice = 6 knižních prvních tahů, počet kandidátů po 11-16) a miss test bookFirst set na šestici; nepokrytý zůstává jen 12-16. Výstup: oba testy odrážejí nový stav a jsou zelené."
+    },
+    {
+      "title": "Testy: reálné pozice 11-16 → knižní tah",
+      "status": "done",
+      "detail": "Nový describe blok s ověřením proti konkrétním reálným Position (engine=bílý i engine=černý, aspoň jeden řetězec braní), plus referenční kopie linií jako regresní zámek. Výstup: testy kotví na skutečných pozicích."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat fázi do CHANGELOG.md; pustit nezávislého sub-agenta (čerstvý kontext) na kontrolu přesnosti odpisu z Pask a záludností braní (riziko: legální, ale špatně opsaná linie, kterou buildBook nechytí)."
+    }
+  ],
+  "startedAt": "2026-07-07T18:02:50.196Z",
+  "completedAt": "2026-07-07T18:22:52.662Z",
+  "autoCommit": {
+    "preSha": "d107e14dd2eee55ff03dde5847fa4b2a14593a03",
+    "subject": "Phase 63: Kniha: reálný komplex 11-16"
+  }
+}
