@@ -32,6 +32,7 @@ export type {
   SpawnCommand,
   Strength,
 } from './engine-client.js';
-export { LEVELS, DEFAULT_LEVEL, STRENGTH_BY_LEVEL } from './levels.js';
+export { LEVELS, DEFAULT_LEVEL, STRENGTH_BY_LEVEL, LEVELS_WITH_BOOK, levelUsesBook } from './levels.js';
 export type { GameLevel } from './levels.js';
+export { OPENING_BOOK, lookupBookMove } from './opening-book.js';
 export { mulberry32 } from './prng.js';

@@ -107,7 +107,9 @@ describe('guard tahu u obrácené barvy', () => {
 
   it('člověk (bílý) nesmí zahrát tah enginu (černého) → 409 not_your_turn', async () => {
     // pendingStub: engine se spustí, ale netáhne → pozice zamrzne na černém (engine).
-    app = buildApp({ engine: pendingStub });
+    // Prázdná kniha: guard barvy testujeme izolovaně od knihy zahájení (jinak by
+    // engine ČERNÝ zahrál knižní tah z výchozí pozice a „zamrznutí" by nenastalo).
+    app = buildApp({ engine: pendingStub, openingBook: new Map<string, Move>() });
     const res = await app.inject({ method: 'POST', url: '/games', payload: { humanColor: 'white' } });
     const game = res.json<GameDto>();
     expect(game.position.turn).toBe('black'); // engine na tahu, přemýšlí
@@ -125,7 +127,9 @@ describe('guard tahu u obrácené barvy', () => {
   });
 
   it('nápověda: člověk (bílý) ji nedostane, když je na tahu engine (černý) → 409', async () => {
-    app = buildApp({ engine: pendingStub });
+    // Prázdná kniha: viz test výše – bez ní by engine zahrál knižní tah a nebyl by
+    // na tahu, takže by se netestoval guard nápovědy „na tahu je počítač".
+    app = buildApp({ engine: pendingStub, openingBook: new Map<string, Move>() });
     const res = await app.inject({ method: 'POST', url: '/games', payload: { humanColor: 'white' } });
     const game = res.json<GameDto>();
     expect(game.position.turn).toBe('black'); // engine na tahu

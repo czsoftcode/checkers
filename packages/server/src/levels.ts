@@ -74,3 +74,31 @@ export const STRENGTH_BY_LEVEL: Record<GameLevel, Strength | undefined> = {
   // učení). Slabší soupeř by chyby netrestal tak, aby se hráč poučil.
   education: undefined,
 };
+
+/**
+ * Úrovně, kde soupeř konzultuje knihu zahájení (fáze 56).
+ *
+ * EXPLICITNÍ allowlist, ne odvození z `STRENGTH_BY_LEVEL[level] === undefined`:
+ * „hraje plnou silou" a „používá knihu" jsou DVĚ RŮZNÉ věci, které se dnes jen
+ * náhodou kryjí (professional/championship/education). Vazba přes vlastní
+ * konstantu je zdroj pravdy – přidání úrovně vynutí vědomé rozhodnutí (hlídá test),
+ * místo aby nová plnosilová úroveň knihu tiše zdědila.
+ *
+ * Oslabené úrovně (`beginner`, `intermediate`) knihu NEmají: mají zůstat
+ * poražitelné, a kniha je páka síly. `championship` knihu má a KONZULTUJE ji při
+ * každém tahu enginu; ten je ale u Mistrovství vždy až za ballotem (ballot se
+ * nasazuje při založení partie, engine se na ballot tahy neptá). S dnešním seedem
+ * post-ballotové pozice v knize nejsou, takže se prakticky mine – kdyby ale ballot
+ * transponoval do seedované linie, knižní tah by padl (a je to legální tah,
+ * korektní). Žádné zvláštní hlídání ballotu tedy netřeba.
+ */
+export const LEVELS_WITH_BOOK: ReadonlySet<GameLevel> = new Set<GameLevel>([
+  'professional',
+  'championship',
+  'education',
+]);
+
+/** True, právě když úroveň má před hledáním konzultovat knihu zahájení. */
+export function levelUsesBook(level: GameLevel): boolean {
+  return LEVELS_WITH_BOOK.has(level);
+}

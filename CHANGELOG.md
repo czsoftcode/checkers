@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-07-07
+
+### Added
+
+- **Kniha zahájení pro silného soupeře (základ).** Na plnosilových úrovních
+  (Profesionál, Výuka a Mistrovství po odehrání losovaného zahájení) počítač
+  v úvodu partie zahraje tah z knihy zahájení místo vlastního počítání, pokud
+  danou pozici v knize má; jinak počítá jako dřív. Oslabené úrovně (Začátečník,
+  Pokročilý) knihu nepoužívají, aby zůstaly poražitelné. Zatím jde jen o kostru
+  s malou ukázkovou knihou (pár tahů) – naplnění skutečnou teorií zahájení přijde
+  v další fázi. Na hru to teď má minimální vliv; jde o základ pro budoucí sílu.
+
 ## [0.43.0] - 2026-07-07
 
 ### Added

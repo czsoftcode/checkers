@@ -15,7 +15,8 @@ import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from
 import { formatGamePdn, writeGamePdn } from './archive.js';
 import { findLegalMove, gameToDto, legalMoveDtos, moveToDto } from './dto.js';
 import { ERROR_CODES, sendError } from './errors.js';
-import { LEVELS, STRENGTH_BY_LEVEL } from './levels.js';
+import { LEVELS, STRENGTH_BY_LEVEL, levelUsesBook } from './levels.js';
+import { OPENING_BOOK, lookupBookMove } from './opening-book.js';
 import { GameStore, effectiveResult, opposite } from './store.js';
 import type { GameRecord } from './store.js';
 import type { EngineMover } from './engine-client.js';
@@ -79,6 +80,12 @@ export interface BuildAppOptions {
    * PRNG (`mulberry32`), aby byl los deterministický a měl zuby.
    */
   readonly rng?: () => number;
+  /**
+   * Kniha zahájení (fáze 56): pozice → tah. Když chybí, použije se výchozí
+   * `OPENING_BOOK`. Injektovatelná kvůli testům – řízená kniha nezávisí na
+   * obsahu produkčního seedu.
+   */
+  readonly openingBook?: ReadonlyMap<string, Move>;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -86,6 +93,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const store = new GameStore(options.rng);
   const engine = options.engine;
   const pdnDir = options.pdnDir;
+  const openingBook = options.openingBook ?? OPENING_BOOK;
 
   // Jednotná obálka i pro chyby z frameworku: rozbité JSON tělo přijde jako 4xx
   // s `statusCode`, přemapuje se na invalid_request. Neočekávaná chyba (např.
@@ -490,12 +498,42 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       ) {
         return; // stav se změnil / engine není na tahu – defenzivně nic nedělej
       }
+      // POZOR: tahle kontrola i `store.get` výše MUSÍ zůstat PŘED prvním awaitem
+      // (níž `engine.bestmove` nebo u knižního tahu `await Promise.resolve()`).
+      // `maybeTriggerEngine` nastaví 'thinking' a synchronně sem vskočí; kdyby se
+      // guard/return dostal ZA await, partie by uvázla natrvalo v 'thinking'
+      // (reset na 'idle' dělá jen post-await větev níž). Dnes je return před
+      // awaitem, takže žádný reset nepotřebuje.
 
-      // Síla se řídí úrovní partie (fixní po dobu partie, čte se ZE ZÁZNAMU –
-      // ne z klienta ani globálu, ať souběžné partie s různými úrovněmi hrají
-      // každá svou silou). Profesionál → undefined → engine dostane dnešní
-      // požadavek beze změny.
-      const move = await engine.bestmove(record.state.position, STRENGTH_BY_LEVEL[record.level]);
+      // Kniha zahájení (fáze 56): jen plnosilové úrovně (`levelUsesBook`). Zásah
+      // → knižní tah BEZ volání enginu; server knize nevěří stejně jako enginu,
+      // proto se tah ještě ověří přes `findLegalMove` – nelegální/chybějící knižní
+      // tah knihu zahodí a hledá se normálně (fallback, ne stav `error`). Lookup
+      // je synchronní (žádný await), pozice se pod ním nezmění; přesto knižní tah
+      // projde toutéž re-validací proti AKTUÁLNÍ pozici níž jako tah enginu.
+      const position = record.state.position;
+      let move = levelUsesBook(record.level) ? lookupBookMove(openingBook, position) : undefined;
+      if (move !== undefined && findLegalMove(position, move.from, move.path) === undefined) {
+        move = undefined; // knižní tah nelegální v této pozici → fallback na hledání
+      }
+
+      if (move === undefined) {
+        // Mimo knihu (nebo knihu neužije úroveň) → hledá engine. Síla se řídí
+        // úrovní partie (fixní po dobu partie, čte se ZE ZÁZNAMU – ne z klienta
+        // ani globálu, ať souběžné partie s různými úrovněmi hrají každá svou
+        // silou). Profesionál → undefined → engine dostane dnešní požadavek beze
+        // změny. `bestmove` je `await` = přirozený předěl: HTTP odpověď na
+        // spouštěcí request se odešle dřív, tah dorazí až pollingem.
+        move = await engine.bestmove(position, STRENGTH_BY_LEVEL[record.level]);
+      } else {
+        // Knižní tah je hotový synchronně. MUSÍME ale ustoupit event-loopu, ať se
+        // HTTP odpověď na spouštěcí request (POST /games nebo /moves) odešle DŘÍV,
+        // než tah aplikujeme – jinak by se aplikoval ještě uvnitř `void
+        // runEngineMove(...)` a spouštěcí odpověď by nesla tah už hotový místo
+        // `thinking` (rozbitý kontrakt: klient čeká tah enginu pollingem, fáze 30).
+        // Po tomto awaitu platí táž re-validace proti AKTUÁLNÍ pozici jako u enginu.
+        await Promise.resolve();
+      }
 
       // Po awaitu se stav znovu načte a ověří: tah enginu se aplikuje VÝHRADNĚ
       // proti AKTUÁLNÍ pozici, ne proti snímku z doby před přemýšlením. Za

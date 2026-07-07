@@ -1,0 +1,42 @@
+{
+  "id": 56,
+  "title": "Opening book: formát a lookup (Profesionál)",
+  "goal": "Engine na úrovni Profesionál (professional) před vlastním hledáním nahlédne do statické knihy zahájení (pozice→tah, klíčováno stávajícím Zobristem) a zahraje knižní tah, je-li pozice v knize; jinak hledá jako dnes. Fáze dodá formát knihy, loader a integraci do search cesty s minimální seed knihou a testy se zuby. Kniha se aktivuje JEN pro professional (Začátečník/Pokročilý beze změny, Mistrovství má ballot). Plnění reálnou teorií zahájení je pozdější fáze.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Kniha: modul, seed a lookup (server)",
+      "status": "done",
+      "detail": "Nový packages/server/src/opening-book.ts: inline seed párů { position, move }, Map klíčovaná positionKey z @checkers/rules (žádné ručně psané klíče). Export OPENING_BOOK a lookupBookMove(book, position): Move | undefined. Seed pozice odvozené přes rules z výchozí pozice (ne ručně psané 32-buňkové desky), vč. pozic, kde je na tahu engine v obou barvách. Unit test: seedovaná pozice → její tah; neseedovaná → undefined; klíč staví reálný positionKey (test zkonstruuje Position a čeká zásah), ne kopie serializace."
+    },
+    {
+      "title": "Allowlist úrovní s knihou (levels.ts)",
+      "status": "done",
+      "detail": "Explicitní LEVELS_WITH_BOOK = professional, championship, education + helper levelUsesBook(level); jediný zdroj pravdy vedle STRENGTH_BY_LEVEL. Test přes všech 5 úrovní: ty tři uvnitř, beginner/intermediate mimo (přidání úrovně vynutí rozhodnutí)."
+    },
+    {
+      "title": "Integrace do cesty tahu soupeře (app.ts)",
+      "status": "done",
+      "detail": "V AI-move cestě (~L498) PŘED engine.bestmove: když levelUsesBook(record.level) a lookupBookMove vrátí tah legální dle findLegalMove, použije se knižní tah bez volání enginu; jinak dnešní fallback engine.bestmove(…, STRENGTH_BY_LEVEL[level]). Zachovat stávající re-validaci stavu po awaitu. buildApp dostane volitelný openingBook (default OPENING_BOOK) jako testovací seam."
+    },
+    {
+      "title": "Integrační testy se zuby (server)",
+      "status": "done",
+      "detail": "Se stub enginem sledujícím volání: (1) zásah na allowlist úrovni → engine.bestmove se NEVOLÁ, aplikuje se knižní tah; (2) mimo knihu → engine.bestmove SE volá; (3) beginner/intermediate na pozici, co JE v injektované knize → engine se přesto volá; (4) nelegální knižní tah → fallback na engine, bez pádu."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat změnu do CHANGELOGu; nezávislý sub-agent (čerstvý kontext) projde unhappy path (prázdná/nelegální kniha, kontrakt serializace book ↔ positionKey, cross-module tvar) a nálezy zpracovat před reportem."
+    }
+  ],
+  "startedAt": "2026-07-07T04:56:31.818Z",
+  "resolvedVerify": [
+    "Reálná hra: soupeř zahraje knižní tah v zahájení (Profesionál)"
+  ],
+  "completedAt": "2026-07-07T09:58:44.969Z",
+  "autoCommit": {
+    "preSha": "7359d3cec7063707cf708eb1d318504faeeb0bfe",
+    "subject": "Phase 56: Opening book: formát a lookup (Profesionál)"
+  }
+}
