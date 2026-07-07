@@ -14,12 +14,21 @@ import { legalMoves } from '@checkers/rules';
 import type { Move, Position } from '@checkers/rules';
 import type { FastifyInstance } from 'fastify';
 import { buildApp, STRENGTH_BY_LEVEL } from '../src/index.js';
-import type { EngineMover, GameDto, Strength } from '../src/index.js';
+import type { EngineMover, GameDto, Strength, OpeningBook } from '../src/index.js';
 
 let app: FastifyInstance;
 afterEach(async () => {
   await app.close();
 });
+
+// Tenhle test cvičí ENGINE (background tah, error cesty, autorita barvy), NE
+// knihu zahájení. Od fáze 59 je ale `legalMoves[0]` (9-13) v knize, takže by na
+// úrovni Profesionál knižní tah engine zkratoval (stub by se nezavolal → tiché
+// falešné úspěchy i timeouty). Proto všechny partie stavíme s PRÁZDNOU knihou –
+// chování je pak identické jako před naplněním knihy a nezávislé na jejím růstu.
+const NO_BOOK: OpeningBook = new Map();
+const build = (opts: Parameters<typeof buildApp>[0] = {}): FastifyInstance =>
+  buildApp({ openingBook: NO_BOOK, ...opts });
 
 /** Stub: vždy vrátí první legální tah dané pozice (autorita ho pak ověří). */
 const legalStub: EngineMover = {
@@ -74,7 +83,7 @@ async function pollUntil(
 
 describe('kontrakt engineStatus v GameDto', () => {
   it('nová partie i GET nesou engineStatus "idle"', async () => {
-    app = buildApp();
+    app = build();
     const game = await createGame();
     expect(game.engineStatus).toBe('idle');
     const got = await app.inject({ method: 'GET', url: `/games/${game.id}` });
@@ -84,7 +93,7 @@ describe('kontrakt engineStatus v GameDto', () => {
 
 describe('bez enginu (opt-in) – server zůstává manuální', () => {
   it('po tahu člověka se nic nespustí, engineStatus zůstane idle, bílý na tahu', async () => {
-    app = buildApp(); // žádný engine
+    app = build(); // žádný engine
     const game = await createGame();
     const after = await playFirstHumanMove(game);
     expect(after.position.turn).toBe('white');
@@ -94,7 +103,7 @@ describe('bez enginu (opt-in) – server zůstává manuální', () => {
 
 describe('s enginem – background tah', () => {
   it('POST vrátí HNED stav po tahu člověka s engineStatus "thinking"', async () => {
-    app = buildApp({ engine: legalStub });
+    app = build({ engine: legalStub });
     const game = await createGame();
     const after = await playFirstHumanMove(game);
     // Odpověď nese stav po tahu ČLOVĚKA (bílý na tahu), engine ještě nedotáhl.
@@ -103,7 +112,7 @@ describe('s enginem – background tah', () => {
   });
 
   it('engine dotáhne tah na pozadí: GET nakonec ukáže černého a idle', async () => {
-    app = buildApp({ engine: legalStub });
+    app = build({ engine: legalStub });
     const game = await createGame();
     await playFirstHumanMove(game);
     const done = await pollUntil(
@@ -121,7 +130,7 @@ describe('s enginem – background tah', () => {
       bestmove: (): Promise<Move> => new Promise<Move>(() => undefined),
       evaluate: () => Promise.resolve({ score: 0 }),
     };
-    app = buildApp({ engine: hangStub });
+    app = build({ engine: hangStub });
     const game = await createGame();
     const after = await playFirstHumanMove(game);
     expect(after.position.turn).toBe('white');
@@ -143,7 +152,7 @@ describe('s enginem – background tah', () => {
       bestmove: (): Promise<Move> => Promise.resolve({ from: 99, path: [99], captures: [] }),
       evaluate: () => Promise.resolve({ score: 0 }),
     };
-    app = buildApp({ engine: illegalStub });
+    app = build({ engine: illegalStub });
     const game = await createGame();
     await playFirstHumanMove(game);
     const errored = await pollUntil(game.id, (dto) => dto.engineStatus === 'error');
@@ -156,7 +165,7 @@ describe('s enginem – background tah', () => {
       bestmove: (): Promise<Move> => Promise.reject(new Error('boom')),
       evaluate: () => Promise.resolve({ score: 0 }),
     };
-    app = buildApp({ engine: rejectStub });
+    app = build({ engine: rejectStub });
     const game = await createGame();
     await playFirstHumanMove(game);
     const errored = await pollUntil(game.id, (dto) => dto.engineStatus === 'error');
@@ -189,7 +198,7 @@ describe('úroveň partie protéká až do bestmove', () => {
 
   it('bez těla (výchozí Profesionál) → engine dostane strength undefined', async () => {
     const { mover, calls } = recordingStub();
-    app = buildApp({ engine: mover });
+    app = build({ engine: mover });
     const game = await createGame(); // POST bez těla
     await playFirstHumanMove(game);
     await pollUntil(game.id, (dto) => dto.engineStatus === 'idle' && dto.position.turn === 'black');
@@ -198,7 +207,7 @@ describe('úroveň partie protéká až do bestmove', () => {
 
   it('level "professional" → engine dostane strength undefined', async () => {
     const { mover, calls } = recordingStub();
-    app = buildApp({ engine: mover });
+    app = build({ engine: mover });
     const game = await createGameWithLevel('professional');
     await playFirstHumanMove(game);
     await pollUntil(game.id, (dto) => dto.engineStatus === 'idle' && dto.position.turn === 'black');
@@ -209,7 +218,7 @@ describe('úroveň partie protéká až do bestmove', () => {
     // Zuby: kdyby server úroveň zahodil a posílal pořád Profesionála, calls[0] by
     // bylo undefined a test spadne. Porovnává se s REÁLNOU mapou, ne kopií čísel.
     const { mover, calls } = recordingStub();
-    app = buildApp({ engine: mover });
+    app = build({ engine: mover });
     const game = await createGameWithLevel('beginner');
     await playFirstHumanMove(game);
     await pollUntil(game.id, (dto) => dto.engineStatus === 'idle' && dto.position.turn === 'black');
@@ -221,7 +230,7 @@ describe('úroveň partie protéká až do bestmove', () => {
     // Zuby: kdyby server pro Pokročilého tiše posílal páky Začátečníka (nebo je
     // zahodil na Profesionála = undefined), test spadne. Porovnává se REÁLNÁ mapa.
     const { mover, calls } = recordingStub();
-    app = buildApp({ engine: mover });
+    app = build({ engine: mover });
     const game = await createGameWithLevel('intermediate');
     await playFirstHumanMove(game);
     await pollUntil(game.id, (dto) => dto.engineStatus === 'idle' && dto.position.turn === 'black');
@@ -235,7 +244,7 @@ describe('úroveň partie protéká až do bestmove', () => {
   });
 
   it('GameDto vrací úroveň partie (výchozí professional i zvolený beginner)', async () => {
-    app = buildApp({ engine: recordingStub().mover });
+    app = build({ engine: recordingStub().mover });
     const def = await createGame(); // bez těla
     expect(def.level).toBe('professional');
     const beg = await createGameWithLevel('beginner');
@@ -246,7 +255,7 @@ describe('úroveň partie protéká až do bestmove', () => {
   });
 
   it('neznámá úroveň → 400 invalid_request, partie se nezaloží', async () => {
-    app = buildApp({ engine: recordingStub().mover });
+    app = build({ engine: recordingStub().mover });
     const res = await app.inject({ method: 'POST', url: '/games', payload: { level: 'grandmaster' } });
     expect(res.statusCode).toBe(400);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_request');
@@ -257,7 +266,7 @@ describe('Mistrovství: ballot nasazen a engine (bílý) táhne PRVNÍ', () => {
   it('POST /games championship → 201, po ballotu bílý na tahu, engine se rozjede (thinking) a dotáhne', async () => {
     // Legální stub jako engine → autorita mu tah stejně ověří. Bez enginu by
     // partie po ballotu jen stála na tahu bílého a nikdo by nezačal.
-    app = buildApp({ engine: legalStub });
+    app = build({ engine: legalStub });
     const res = await app.inject({ method: 'POST', url: '/games', payload: { level: 'championship' } });
     expect(res.statusCode).toBe(201);
     const created = res.json<GameDto>();
@@ -284,7 +293,7 @@ describe('Mistrovství: ballot nasazen a engine (bílý) táhne PRVNÍ', () => {
   it('ostatní úroveň (professional): POST engine NEspustí, černý (člověk) na tahu, ballotIndex null', async () => {
     // Zpětná kompatibilita: neballotové partie se založením nemění – engine se
     // rozjede až po tahu člověka, ne hned.
-    app = buildApp({ engine: legalStub });
+    app = build({ engine: legalStub });
     const res = await app.inject({ method: 'POST', url: '/games', payload: { level: 'professional' } });
     expect(res.statusCode).toBe(201);
     const created = res.json<GameDto>();

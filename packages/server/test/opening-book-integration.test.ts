@@ -161,4 +161,37 @@ describe('kniha zahájení v cestě tahu soupeře', () => {
     expect(engine.calls).toBe(1); // ← nelegální knižní tah spadl do fallbacku, ne do 'error'
     expect(done.result).toBe('ongoing');
   });
+
+  it('5) člověk BÍLÝ, profesionál → engine (černý) hraje ÚVODNÍ tah z knihy, bestmove se NEVOLÁ', async () => {
+    // Regrese k reportu z fáze 59: když si člověk zvolí bílé, engine je černý a
+    // táhne PRVNÍ hned po založení partie (přes maybeTriggerEngine, bez tahu
+    // člověka). Tenhle path dřív testy nepokrývaly. Kniha se klíčuje na VÝCHOZÍ
+    // pozici a musí engine zkratovat stejně jako v odpovědi na tah člověka.
+    const engine = spyEngine();
+    const start = initialPosition();
+    const moves = legalMoves(start);
+    // Knižní tah černého = poslední legální (odliší se od stub legalMoves[0]).
+    const blackBookMove = moves[moves.length - 1]!;
+    const book = new Map<string, Move[]>([[positionKey(start), [blackBookMove]]]);
+    app = buildApp({ engine, openingBook: book });
+
+    const game = (
+      await app.inject({
+        method: 'POST',
+        url: '/games',
+        payload: { level: 'professional', humanColor: 'white' },
+      })
+    ).json<GameDto>();
+    // Engine (černý) táhne hned; čekáme, až dotáhne a je na tahu člověk (bílý).
+    const done = await pollUntil(
+      game.id,
+      (d) => d.engineStatus === 'idle' && d.position.turn === 'white',
+    );
+
+    expect(engine.calls).toBe(0); // ← zuby: kniha zkratuje engine i u ÚVODNÍHO tahu
+    const dest = blackBookMove.path[blackBookMove.path.length - 1]!;
+    expect(cellAt(done.position, dest)).toEqual({ color: 'black', kind: 'man' });
+    expect(cellAt(done.position, blackBookMove.from)).toBeNull();
+    expect(done.result).toBe('ongoing');
+  });
 });

@@ -19,7 +19,14 @@ import { legalMoves } from '@checkers/rules';
 import type { Move, Position } from '@checkers/rules';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/index.js';
-import type { EngineMover, GameDto } from '../src/index.js';
+import type { EngineMover, GameDto, OpeningBook } from '../src/index.js';
+
+// Cvičí ENGINE/vzdání, ne knihu zahájení: partie stavíme s PRÁZDNOU knihou, aby
+// knižní zkrat (od fáze 59 je i 9-13 v knize) nepředběhl engine. Viz
+// engine-move.test.ts.
+const NO_BOOK: OpeningBook = new Map();
+const build = (opts: Parameters<typeof buildApp>[0] = {}): FastifyInstance =>
+  buildApp({ openingBook: NO_BOOK, ...opts });
 
 let dir: string;
 
@@ -75,7 +82,7 @@ async function pollUntil(
 
 describe('POST /games/:id/resign – bez enginu (manuální režim)', () => {
   it('vzdání rozehrané partie → 200 white-wins, pozice zůstává rozehraná', async () => {
-    const app = buildApp();
+    const app = build();
     try {
       const game = await createGame(app);
       const res = await app.inject({ method: 'POST', url: `/games/${game.id}/resign` });
@@ -93,7 +100,7 @@ describe('POST /games/:id/resign – bez enginu (manuální režim)', () => {
   });
 
   it('vzdání neexistující partie → 404 game_not_found', async () => {
-    const app = buildApp();
+    const app = build();
     try {
       const res = await app.inject({ method: 'POST', url: '/games/neexistuje/resign' });
       expect(res.statusCode).toBe(404);
@@ -106,7 +113,7 @@ describe('POST /games/:id/resign – bez enginu (manuální režim)', () => {
 
 describe('POST /games/:id/resign – archivace do PDN', () => {
   it('vzdaná partie se zapíše jako <id>.pdn s tokenem 1-0', async () => {
-    const app = buildApp({ pdnDir: dir });
+    const app = build({ pdnDir: dir });
     try {
       const game = await createGame(app);
       // Odehraj pár tahů, ať PDN nese i movetext, ne jen samotný výsledek.
@@ -126,7 +133,7 @@ describe('POST /games/:id/resign – archivace do PDN', () => {
   });
 
   it('dvojí vzdání → 409 game_over a právě JEDEN soubor', async () => {
-    const app = buildApp({ pdnDir: dir });
+    const app = build({ pdnDir: dir });
     try {
       const game = await createGame(app);
       const first = await app.inject({ method: 'POST', url: `/games/${game.id}/resign` });
@@ -146,7 +153,7 @@ describe('POST /games/:id/resign – archivace do PDN', () => {
   });
 
   it('vzdání skončené partie (přirozený konec) → 409 game_over', async () => {
-    const app = buildApp();
+    const app = build();
     try {
       const game = await createGame(app);
       // Dohraj partii do konce prvním legálním tahem (remízová pravidla terminují).
@@ -214,7 +221,7 @@ function gatedEngine(): { engine: EngineMover; release: () => void; called: Prom
 describe('POST /games/:id/resign – závod s přemýšlejícím enginem', () => {
   it('engine po vzdání NEzahraje (guard přes efektivní výsledek)', async () => {
     const gate = gatedEngine();
-    const app = buildApp({ engine: gate.engine, pdnDir: dir });
+    const app = build({ engine: gate.engine, pdnDir: dir });
     try {
       const game = await createGame(app);
       // Tah člověka → bílý na tahu, engine začne přemýšlet (thinking) a zablokuje se.

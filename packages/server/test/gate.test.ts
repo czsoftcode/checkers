@@ -19,7 +19,15 @@ import { afterEach, expect, it } from 'vitest';
 
 import type { FastifyInstance } from 'fastify';
 import { buildApp, EngineClient } from '../src/index.js';
-import type { GameDto, SpawnCommand } from '../src/index.js';
+import type { GameDto, SpawnCommand, OpeningBook } from '../src/index.js';
+
+// Cvičí orchestraci ENGINU (kill + zotavení), ne knihu zahájení: test hraje
+// 9-13 a ověřuje, že engine reálně táhne 23-18. Od fáze 59 je 9-13 v knize, což
+// by na úrovni Profesionál engine zkratovalo (a rozbilo board asserty). Proto
+// PRÁZDNÁ kniha – chování je identické jako před naplněním knihy.
+const NO_BOOK: OpeningBook = new Map();
+const build = (opts: Parameters<typeof buildApp>[0] = {}): FastifyInstance =>
+  buildApp({ openingBook: NO_BOOK, ...opts });
 
 const FIXTURE = fileURLToPath(new URL('./fixtures/fake-engine.mjs', import.meta.url));
 
@@ -64,7 +72,7 @@ async function pollUntil(
 
 it('kill enginu uprostřed přemýšlení – partie přežije a pokračuje', async () => {
   engine = new EngineClient({ spawn: fakeCmd(), timeMs: TIME_MS, pidFile: null });
-  app = buildApp({ engine });
+  app = build({ engine });
   await engine.warmup();
 
   // Člověk zahraje 9→13.

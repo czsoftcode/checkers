@@ -19,7 +19,14 @@ import { legalMoves } from '@checkers/rules';
 import type { Move, Position } from '@checkers/rules';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/index.js';
-import type { EngineMover, GameDto, MoveDto, Strength } from '../src/index.js';
+import type { EngineMover, GameDto, MoveDto, Strength, OpeningBook } from '../src/index.js';
+
+// Cvičí ENGINE (nápověda tahu, guardy), ne knihu zahájení: partie stavíme s
+// PRÁZDNOU knihou, aby knižní zkrat (od fáze 59 je i 9-13 v knize) nepředběhl
+// engine. Viz engine-move.test.ts.
+const NO_BOOK: OpeningBook = new Map();
+const build = (opts: Parameters<typeof buildApp>[0] = {}): FastifyInstance =>
+  buildApp({ openingBook: NO_BOOK, ...opts });
 
 interface StubOptions {
   /** bestmove vrátí NELEGÁLNÍ tah (engine se „zbláznil") → server ho musí odmítnout. */
@@ -109,7 +116,7 @@ describe('GET /games/:id/hint – happy path', () => {
     // silou (undefined), ne silou úrovně partie. Zuby: kdyby produkce omylem
     // předala STRENGTH_BY_LEVEL[record.level], tvrzení níž spadne.
     const strengths: (Strength | undefined)[] = [];
-    const app = buildApp({ engine: stubEngine({ onBestmove: (s) => strengths.push(s) }) });
+    const app = build({ engine: stubEngine({ onBestmove: (s) => strengths.push(s) }) });
     try {
       // Úroveň 'beginner' záměrně: STRENGTH_BY_LEVEL['beginner'] je DEFINOVANÁ, takže
       // regrese na `STRENGTH_BY_LEVEL[record.level]` by dala { maxDepth, carelessness }
@@ -141,7 +148,7 @@ describe('GET /games/:id/hint – happy path', () => {
 
 describe('GET /games/:id/hint – guardy a selhání', () => {
   it('neexistující partie → 404 game_not_found', async () => {
-    const app = buildApp({ engine: stubEngine() });
+    const app = build({ engine: stubEngine() });
     try {
       const res = await app.inject({ method: 'GET', url: '/games/neexistuje/hint' });
       expect(res.statusCode).toBe(404);
@@ -152,7 +159,7 @@ describe('GET /games/:id/hint – guardy a selhání', () => {
   });
 
   it('bez enginu (manuální režim) → 409 hint_unavailable', async () => {
-    const app = buildApp(); // žádný engine
+    const app = build(); // žádný engine
     try {
       const game = await createGame(app);
       const res = await app.inject({ method: 'GET', url: `/games/${game.id}/hint` });
@@ -164,7 +171,7 @@ describe('GET /games/:id/hint – guardy a selhání', () => {
   });
 
   it('skončená partie (po vzdání) → 409 game_over, engine se ani neptá', async () => {
-    const app = buildApp({ engine: stubEngine() });
+    const app = build({ engine: stubEngine() });
     try {
       const game = await createGame(app);
       await app.inject({ method: 'POST', url: `/games/${game.id}/resign` });
@@ -178,7 +185,7 @@ describe('GET /games/:id/hint – guardy a selhání', () => {
 
   it('na tahu je engine (bílý) → 409 not_your_turn', async () => {
     // Engine zasekneme v thinking → po tahu člověka zůstane na tahu bílý.
-    const app = buildApp({ engine: stubEngine({ bestmoveHangs: true }) });
+    const app = build({ engine: stubEngine({ bestmoveHangs: true }) });
     try {
       const game = await createGame(app);
       await playFirstHumanMove(app, game);
@@ -194,7 +201,7 @@ describe('GET /games/:id/hint – guardy a selhání', () => {
 
   it('engine selže při hledání → 503 engine_unavailable, partie beze změny', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const app = buildApp({ engine: stubEngine({ bestmoveRejects: true }) });
+    const app = build({ engine: stubEngine({ bestmoveRejects: true }) });
     try {
       const game = await createGame(app);
       const res = await app.inject({ method: 'GET', url: `/games/${game.id}/hint` });
@@ -212,7 +219,7 @@ describe('GET /games/:id/hint – guardy a selhání', () => {
     // ZUBY: kdyby server výstup enginu neprověřoval přes findLegalMove, podal by
     // člověku nelegální nápovědu a test by dostal 200 místo 503.
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const app = buildApp({ engine: stubEngine({ illegalMove: true }) });
+    const app = build({ engine: stubEngine({ illegalMove: true }) });
     try {
       const game = await createGame(app);
       const res = await app.inject({ method: 'GET', url: `/games/${game.id}/hint` });

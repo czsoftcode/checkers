@@ -7,6 +7,26 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-07-07
+
+### Added
+
+- **Počítač hraje reálná zahájení i komplexu 9-13.** Kniha zahájení se rozšířila
+  o druhý první tah černého – 9-13 – se šesti hlavními odpověďmi soupeře (21-17,
+  22-17, 22-18, 23-18, 24-19, 23-19) do zhruba osmi půltahů, včetně běžných
+  výměn. Zdrojem je opět kniha Richarda Paska „Complete Checkers" (Část 1);
+  každý tah je ověřený proti pravidlům hry. Na výchozí pozici tak počítač
+  vybírá z dvou zahájení (11-15 a 9-13); přednostně stále hraje 11-15. Zbývající
+  první tahy (9-14, 10-14, 10-15, 11-16, 12-16) přijdou v dalších fázích.
+
+### Changed
+
+- **Testy enginu už nezávisí na obsahu knihy zahájení.** Testy background tahu
+  enginu, guardů a archivace dřív mlčky spoléhaly, že jejich úvodní tah není
+  v knize; jak kniha roste (9-13), knižní tah by engine v testu zkratoval
+  (falešné úspěchy i vypršení). Nově tyto testy stavějí server s prázdnou knihou,
+  takže cvičí čistě engine a jsou nezávislé na dalším naplňování knihy.
+
 ## [0.45.0] - 2026-07-07
 
 ### Added

@@ -15,7 +15,14 @@ import { legalMoves } from '@checkers/rules';
 import type { Move, Position } from '@checkers/rules';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/index.js';
-import type { EngineMover, GameDto } from '../src/index.js';
+import type { EngineMover, GameDto, OpeningBook } from '../src/index.js';
+
+// Cvičí ENGINE/archivaci, ne knihu zahájení: partie stavíme s PRÁZDNOU knihou,
+// aby knižní zkrat (od fáze 59 je i 9-13 v knize) nepředběhl engine a nezměnil
+// trajektorii partie. Viz engine-move.test.ts.
+const NO_BOOK: OpeningBook = new Map();
+const build = (opts: Parameters<typeof buildApp>[0] = {}): FastifyInstance =>
+  buildApp({ openingBook: NO_BOOK, ...opts });
 
 /**
  * Engine stub: POSLEDNÍ legální tah. Proti člověku, který hraje první legální
@@ -106,7 +113,7 @@ async function playToEnd(app: FastifyInstance, dto: GameDto): Promise<GameDto> {
 
 describe('archivace dokončené partie na disk', () => {
   it('zapíše validní <id>.pdn a nenechá po sobě žádný .tmp', async () => {
-    const app = buildApp({ pdnDir: dir });
+    const app = build({ pdnDir: dir });
     try {
       const game = await createGame(app);
       const final = await playToEnd(app, game);
@@ -129,7 +136,7 @@ describe('archivace dokončené partie na disk', () => {
   });
 
   it('archivuje PRÁVĚ JEDNOU – další polling/GET soubor nepřepíše', async () => {
-    const app = buildApp({ pdnDir: dir });
+    const app = build({ pdnDir: dir });
     try {
       const game = await createGame(app);
       const final = await playToEnd(app, game);
@@ -155,7 +162,7 @@ describe('archivace dokončené partie na disk', () => {
   });
 
   it('bez pdnDir se nic nezapisuje (archivace vypnutá)', async () => {
-    const app = buildApp(); // žádný pdnDir
+    const app = build(); // žádný pdnDir
     try {
       const game = await createGame(app);
       const final = await playToEnd(app, game);
@@ -229,7 +236,7 @@ async function playEngineGameToEnd(app: FastifyInstance, game: GameDto): Promise
 
 describe('archivace v partii s enginem (větev runEngineMove)', () => {
   it('partie dohraná enginem na pozadí se zarchivuje se správným tokenem', async () => {
-    const app = buildApp({ engine: lastMoveStub, pdnDir: dir });
+    const app = build({ engine: lastMoveStub, pdnDir: dir });
     try {
       const game = await createGame(app);
       const final = await playEngineGameToEnd(app, game);
@@ -257,7 +264,7 @@ describe('archivace – selhání zápisu partii neshodí', () => {
     const badDir = join(blocker, 'sub');
 
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const app = buildApp({ pdnDir: badDir });
+    const app = build({ pdnDir: badDir });
     try {
       const game = await createGame(app);
       const final = await playToEnd(app, game); // NEsmí spadnout

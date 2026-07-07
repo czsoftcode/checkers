@@ -1,0 +1,44 @@
+{
+  "id": 59,
+  "title": "Kniha: reálný komplex 9-13",
+  "goal": "Naplnit knihu zahájení ověřenými hlavními liniemi komplexu prvního tahu černého 9-13 z Pask 'Complete Checkers' (Část 1) do ~8 půltahů, pro obě barvy enginu, s deterministickým výběrem; legalitu každého půltahu vynutí buildBook, zásah na klíčových pozicích ověří testy proti reálným Position. Mimo rozsah: ostatní zbývající zahájení (9-14, 10-14, 10-15, 11-16, 12-16), zrcadlová symetrie/transpozice, náhodný výběr pro variabilitu.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit číslování a orientaci 9-13 vůči Pask",
+      "status": "done",
+      "detail": "Přečíst Část 1 (str. 1+) v ccheck1.pdf, potvrdit, že numerace polí a orientace sedí na naši desku (kontrola na 2-3 klíčových pozicích), jako u 11-15."
+    },
+    {
+      "title": "Extrahovat 6 hlavních linií komplexu 9-13 z Pask",
+      "status": "done",
+      "detail": "Vybrat 6 hlavních odpovědí bílého na 9-13, každou do ~8 půltahů (trunk/drawn linie). Výstup = sepsané linie s odkazem na zdroj (řádek/strana Pask)."
+    },
+    {
+      "title": "Zakódovat linie 9-13 do SEED_LINES",
+      "status": "done",
+      "detail": "Přidat 6 linií 9-13 do produkčního seedu; 11-15 linie nechat PRVNÍ, ať deterministický první kandidát na výchozí pozici zůstane 11-15. Legalitu každého půltahu vynutí buildBook (nelegální = Error)."
+    },
+    {
+      "title": "Opravit stávající 11-15 testy na dva první tahy",
+      "status": "done",
+      "detail": "Aktualizovat kanárka (výchozí pozice = 2 kandidáti: 11-15 + 9-13) a test 'jiný první tah → miss' (vyloučit i 9-13, např. 12-16). Testy projdou proti reálné knize."
+    },
+    {
+      "title": "Testy: reálné pozice 9-13 → knižní tah",
+      "status": "done",
+      "detail": "Nový blok zrcadlící 11-15 testy: obě barvy enginu (engine=černý hraje 9-13; engine=bílý odpovídá knižně) + 'mimo pokryté odpovědi → undefined'."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat do CHANGELOGu; pustit nezávislého sub-agenta (čerstvý kontext) na self-review dat i testů."
+    }
+  ],
+  "startedAt": "2026-07-07T12:14:42.725Z",
+  "completedAt": "2026-07-07T13:00:57.924Z",
+  "autoCommit": {
+    "preSha": "0ea7432e52eced6f0ac07098bb5946531645b551",
+    "subject": "Phase 59: Kniha: reálný komplex 9-13"
+  }
+}

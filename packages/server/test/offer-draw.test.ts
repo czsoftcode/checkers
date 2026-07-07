@@ -26,7 +26,14 @@ import { legalMoves } from '@checkers/rules';
 import type { Move, Position } from '@checkers/rules';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/index.js';
-import type { EngineMover, GameDto } from '../src/index.js';
+import type { EngineMover, GameDto, OpeningBook } from '../src/index.js';
+
+// Cvičí ENGINE (rozhodnutí o remíze, guardy), ne knihu zahájení: partie stavíme
+// s PRÁZDNOU knihou, aby knižní zkrat (od fáze 59 je i 9-13 v knize) nepředběhl
+// engine. Viz engine-move.test.ts.
+const NO_BOOK: OpeningBook = new Map();
+const build = (opts: Parameters<typeof buildApp>[0] = {}): FastifyInstance =>
+  buildApp({ openingBook: NO_BOOK, ...opts });
 
 let dir: string;
 
@@ -119,7 +126,7 @@ describe('POST /games/:id/offer-draw – rozhodnutí enginu', () => {
     // Černý na tahu, skóre z jeho pohledu -500 → bílý vede o 500. Server po
     // negaci vidí whiteScore=+500 > 0 → odmítne. ZUBY na znaménko: bez negace by
     // whiteScore=-500 a nabídka by se chybně PŘIJALA.
-    const app = buildApp({ engine: stubEngine({ score: -500 }), pdnDir: dir });
+    const app = build({ engine: stubEngine({ score: -500 }), pdnDir: dir });
     try {
       const game = await createGame(app);
       const res = await app.inject({ method: 'POST', url: `/games/${game.id}/offer-draw` });
@@ -140,7 +147,7 @@ describe('POST /games/:id/offer-draw – rozhodnutí enginu', () => {
   it('bílý nevede (skóre černého kladné) → nabídka PŘIJATA → draw + PDN 1/2-1/2', async () => {
     // Skóre černého +50 → po negaci whiteScore=-50 ≤ 0 → přijme. ZUBY na znaménko:
     // bez negace by whiteScore=+50 > 0 a nabídka by se chybně ODMÍTLA.
-    const app = buildApp({ engine: stubEngine({ score: 50 }), pdnDir: dir });
+    const app = build({ engine: stubEngine({ score: 50 }), pdnDir: dir });
     try {
       const game = await createGame(app);
       const res = await app.inject({ method: 'POST', url: `/games/${game.id}/offer-draw` });
@@ -165,7 +172,7 @@ describe('POST /games/:id/offer-draw – rozhodnutí enginu', () => {
     // → whiteScore +500 > 0 → ODMÍTNUTO. ZUBY: kdyby se i tady negovalo, byla by
     // whiteScore -500 a nabídka by se chybně PŘIJALA.
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const app = buildApp({ engine: stubEngine({ bestmoveRejects: true, score: 500 }), pdnDir: dir });
+    const app = build({ engine: stubEngine({ bestmoveRejects: true, score: 500 }), pdnDir: dir });
     try {
       const game = await createGame(app);
       await playFirstHumanMove(app, game); // engine selže → error, bílý na tahu
@@ -181,7 +188,7 @@ describe('POST /games/:id/offer-draw – rozhodnutí enginu', () => {
   });
 
   it('práh je ostrý na nule: skóre černého 0 → whiteScore 0 ≤ 0 → přijme', async () => {
-    const app = buildApp({ engine: stubEngine({ score: 0 }), pdnDir: dir });
+    const app = build({ engine: stubEngine({ score: 0 }), pdnDir: dir });
     try {
       const game = await createGame(app);
       const res = await app.inject({ method: 'POST', url: `/games/${game.id}/offer-draw` });
@@ -193,7 +200,7 @@ describe('POST /games/:id/offer-draw – rozhodnutí enginu', () => {
   });
 
   it('dvojí přijetí → druhé 409 game_over a PRÁVĚ jeden PDN soubor', async () => {
-    const app = buildApp({ engine: stubEngine({ score: 50 }), pdnDir: dir });
+    const app = build({ engine: stubEngine({ score: 50 }), pdnDir: dir });
     try {
       const game = await createGame(app);
       const first = await app.inject({ method: 'POST', url: `/games/${game.id}/offer-draw` });
@@ -213,7 +220,7 @@ describe('POST /games/:id/offer-draw – rozhodnutí enginu', () => {
 
 describe('POST /games/:id/offer-draw – guardy a selhání', () => {
   it('neexistující partie → 404 game_not_found', async () => {
-    const app = buildApp({ engine: stubEngine({ score: 0 }) });
+    const app = build({ engine: stubEngine({ score: 0 }) });
     try {
       const res = await app.inject({ method: 'POST', url: '/games/neexistuje/offer-draw' });
       expect(res.statusCode).toBe(404);
@@ -224,7 +231,7 @@ describe('POST /games/:id/offer-draw – guardy a selhání', () => {
   });
 
   it('bez enginu (manuální režim) → 409 draw_offer_unavailable', async () => {
-    const app = buildApp(); // žádný engine
+    const app = build(); // žádný engine
     try {
       const game = await createGame(app);
       const res = await app.inject({ method: 'POST', url: `/games/${game.id}/offer-draw` });
@@ -236,7 +243,7 @@ describe('POST /games/:id/offer-draw – guardy a selhání', () => {
   });
 
   it('skončená partie (po vzdání) → 409 game_over, engine se ani neptá', async () => {
-    const app = buildApp({ engine: stubEngine({ score: 50 }), pdnDir: dir });
+    const app = build({ engine: stubEngine({ score: 50 }), pdnDir: dir });
     try {
       const game = await createGame(app);
       await app.inject({ method: 'POST', url: `/games/${game.id}/resign` });
@@ -249,7 +256,7 @@ describe('POST /games/:id/offer-draw – guardy a selhání', () => {
   });
 
   it('engine přemýšlí (na tahu bílý) → 409 engine_busy, stav beze změny', async () => {
-    const app = buildApp({ engine: stubEngine({ bestmoveHangs: true }) });
+    const app = build({ engine: stubEngine({ bestmoveHangs: true }) });
     try {
       const game = await createGame(app);
       await playFirstHumanMove(app, game); // bílý na tahu, engine se zasekne v thinking
@@ -268,7 +275,7 @@ describe('POST /games/:id/offer-draw – guardy a selhání', () => {
   });
 
   it('engine selže při vyhodnocení → 503 engine_unavailable, partie beze změny', async () => {
-    const app = buildApp({ engine: stubEngine({ evaluateFails: true }), pdnDir: dir });
+    const app = build({ engine: stubEngine({ evaluateFails: true }), pdnDir: dir });
     try {
       const game = await createGame(app);
       const res = await app.inject({ method: 'POST', url: `/games/${game.id}/offer-draw` });
