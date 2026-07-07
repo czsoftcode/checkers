@@ -34,7 +34,7 @@ function gameDto(position: Position, result: GameDto['result'] = 'ongoing'): Gam
 /** Fake controller: neřídí desku, jen zaznamenává dispose/resign a umí emitovat stav. */
 interface FakeCtl {
   readonly element: HTMLElement;
-  readonly resign: Mock<() => void>;
+  readonly resign: Mock<(onResolved?: (didResign: boolean) => void) => void>;
   readonly offerDraw: Mock<() => Promise<DrawOfferOutcome>>;
   readonly dispose: Mock<() => void>;
   emit(status: GameStatus): void;
@@ -59,7 +59,7 @@ function fakeFactory(): {
     element.className = 'fake-board';
     const ctl: FakeCtl = {
       element,
-      resign: vi.fn<() => void>(),
+      resign: vi.fn<(onResolved?: (didResign: boolean) => void) => void>(),
       offerDraw: vi.fn<() => Promise<DrawOfferOutcome>>().mockResolvedValue('declined'),
       dispose: vi.fn<() => void>(),
       emit: (status: GameStatus) => opts.onState?.(status),
@@ -877,5 +877,200 @@ describe('app-shell – indikátor strany na tahu', () => {
     change(q(shell.element, '.level-select'));
     await tick();
     expect(ind.classList.contains('hidden')).toBe(true);
+  });
+});
+
+describe('app-shell – dvě kola v Mistrovství', () => {
+  const LEVEL_KEY = 'checkers.level';
+  const NEXT_COLOR_KEY = 'checkers.nextColor';
+
+  type CreateGameFn = (
+    level: GameLevel,
+    humanColor: 'black' | 'white',
+    ballotIndex?: number,
+  ) => Promise<GameDto>;
+
+  /**
+   * Fake createGame pro zápas: u championship vrátí DTO s `ballotIndex` (poslaný
+   * = 2. kolo, jinak `drawnIndex` = los 1. kola) a pozicí BÍLÝ na tahu (jako po
+   * ballotu). Bílý-na-tahu je klíč pro zámek úrovně: v 1. kole (člověk černý) latchne
+   * `firstMoveMade`, ve 2. kole (člověk bílý) NElatchne → zámek MUSÍ držet matchActive.
+   * U ne-championship vrátí `ballotIndex: null`. Vrací i echo `humanColor` (server = autorita).
+   */
+  function matchClient(drawnIndex = 42): { client: ServerClient; createGame: Mock<CreateGameFn> } {
+    const champPos: Position = { board: Array.from({ length: 32 }, () => null), turn: 'white' };
+    const createGame = vi.fn<CreateGameFn>((level, humanColor, ballotIndex) =>
+      Promise.resolve(
+        level === 'championship'
+          ? {
+              id: 'g1',
+              position: champPos,
+              result: 'ongoing',
+              legalMoves: [],
+              engineStatus: 'idle',
+              level,
+              humanColor,
+              ballotMoves: null,
+              ballotIndex: ballotIndex ?? drawnIndex,
+            }
+          : { ...gameDto(initialPosition()), level, humanColor, ballotIndex: null },
+      ),
+    );
+    return { client: { ...fakeClient(gameDto(initialPosition())), createGame }, createGame };
+  }
+
+  /** Připne skořápku s uloženou úrovní Mistrovství → automatická první hra = 1. kolo. */
+  async function mountChampionship(client: ServerClient): Promise<{
+    shell: ReturnType<typeof createAppShell>;
+    created: FakeCtl[];
+  }> {
+    localStorage.setItem(LEVEL_KEY, 'championship');
+    const { factory, created } = fakeFactory();
+    const shell = createAppShell(client, { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+    return { shell, created };
+  }
+
+  it('1. kolo dohráno → po zavření modalu 2. kolo se STEJNÝM ballotem a člověkem BÍLÝM', async () => {
+    const { client, createGame } = matchClient(42);
+    const { shell, created } = await mountChampionship(client);
+    expect(createGame).toHaveBeenNthCalledWith(1, 'championship', 'black');
+
+    // 1. kolo dohráno (regulérní výsledek). Owed 2. kolo, ale ještě NEspuštěné –
+    // modal 1. kola je otevřený (2. kolo naskočí až po jeho zavření).
+    created[0]?.emit(OVER);
+    await tick();
+    expect(createGame).toHaveBeenCalledTimes(1);
+
+    // Zavření modalu uživatelem → auto 2. kolo: stejný index 42, člověk bílý.
+    click(q(shell.element, '.btn-modal-close'));
+    await tick();
+    expect(createGame).toHaveBeenNthCalledWith(2, 'championship', 'white', 42);
+  });
+
+  it('2. kolo dohráno → žádné 3. kolo; další partie až na „Nová hra"', async () => {
+    const { client, createGame } = matchClient(42);
+    const { shell, created } = await mountChampionship(client);
+
+    created[0]?.emit(OVER); // 1. kolo
+    await tick();
+    click(q(shell.element, '.btn-modal-close')); // → 2. kolo
+    await tick();
+    expect(createGame).toHaveBeenCalledTimes(2);
+
+    created[1]?.emit(OVER); // 2. kolo dohráno
+    await tick();
+    click(q(shell.element, '.btn-modal-close'));
+    await tick();
+    // Žádné 3. kolo se nespustilo.
+    expect(createGame).toHaveBeenCalledTimes(2);
+
+    // Nová hra → fresh 1. kolo (černá, BEZ indexu = jen 2 argumenty).
+    click(q(shell.element, '.btn-newgame'));
+    await tick();
+    expect(createGame).toHaveBeenNthCalledWith(3, 'championship', 'black');
+  });
+
+  it('vzdání 1. kola ZRUŠÍ zápas → žádné 2. kolo (rozlišení přes příznak, ne výsledek)', async () => {
+    // ZUB: emitovaný výsledek (white-wins) je IDENTICKÝ jako regulérní prohra, po
+    // které by 2. kolo naskočilo (test výše). Že tady NEnaskočí, dokazuje, že
+    // rozlišení jede přes příznak vzdání, ne přes result.
+    const { client, createGame } = matchClient(42);
+    const { shell, created } = await mountChampionship(client);
+
+    click(q(shell.element, '.btn-resign')); // Vzdávám → inline potvrzení
+    click(q(shell.element, '.btn-confirm-yes')); // Ano → resignedThisGame=true + resign()
+    created[0]?.emit(OVER); // server ohlásí konec (stejný tvar jako prohra)
+    await tick();
+    click(q(shell.element, '.btn-modal-close'));
+    await tick();
+
+    expect(createGame).toHaveBeenCalledTimes(1); // zápas zrušen, žádné 2. kolo
+  });
+
+  it('SELHANÉ vzdání 1. kola zápas NEzruší: příznak se sundá → regulérní konec spustí 2. kolo', async () => {
+    // ZUB self-review nálezu: resignedThisGame se nastaví optimisticky (kvůli timingu
+    // terminálního onState uvnitř resign()), ale callback ho MUSÍ sundat, když vzdání
+    // NEproběhlo (síť selhala → resync na ongoing). Bez toho by pozdější REGULÉRNÍ
+    // konec 1. kola spadl do „zrušit zápas" a 2. kolo by nikdy nenaskočilo.
+    const { client, createGame } = matchClient(42);
+    const { shell, created } = await mountChampionship(client);
+
+    click(q(shell.element, '.btn-resign'));
+    click(q(shell.element, '.btn-confirm-yes')); // resignedThisGame=true + resign(cb)
+    // Simuluj SELHANÉ vzdání: controller zavolá callback s false (resync na ongoing).
+    const cb = created[0]?.resign.mock.calls[0]?.[0];
+    cb?.(false);
+
+    // Partie pak skončí REGULÉRNĚ (ne vzdáním) → zápas má pokračovat.
+    created[0]?.emit(OVER);
+    await tick();
+    click(q(shell.element, '.btn-modal-close'));
+    await tick();
+
+    expect(createGame).toHaveBeenNthCalledWith(2, 'championship', 'white', 42);
+  });
+
+  it('2. kolo (člověk bílý, táhne první) drží zámek úrovně i bez prvního tahu', async () => {
+    const { client } = matchClient(42);
+    const { shell, created } = await mountChampionship(client);
+    created[0]?.emit(OVER);
+    await tick();
+    click(q(shell.element, '.btn-modal-close')); // 2. kolo běží
+    await tick();
+    // 2. kolo: člověk bílý, po ballotu na tahu člověk (bílý+idle) → firstMoveMade
+    // zůstane false. Select MUSÍ být přesto zamčený (matchActive), jinak by šel
+    // rozehraný zápas přepnout na jinou úroveň a fixní ballot by dostal 400.
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+  });
+
+  it('ne-Mistrovství: žádný zápas, žádný ballotIndex; nextColor se střídá dál', async () => {
+    const { client, createGame } = matchClient();
+    const { shell, created } = await mountRunning(client); // Profesionál (bez uložené úrovně)
+    expect(createGame).toHaveBeenNthCalledWith(1, 'professional', 'black');
+
+    created[0]?.emit(OVER);
+    await tick();
+    expect(localStorage.getItem(NEXT_COLOR_KEY)).toBe('white'); // alternace beze změny
+    click(q(shell.element, '.btn-modal-close'));
+    await tick();
+    expect(createGame).toHaveBeenCalledTimes(1); // zavření modalu nic nespustí
+
+    click(q(shell.element, '.btn-newgame'));
+    await tick();
+    expect(createGame).toHaveBeenNthCalledWith(2, 'professional', 'white'); // 2 args, opačná barva
+  });
+
+  it('každý championship zápas začíná ČERNOU i po prokládané ne-championship hře', async () => {
+    // ZUB fixní barvy: ne-championship hra překlopí nextColor na bílou. Kdyby
+    // championship 1. kolo bralo barvu z alternace, začalo by bílou. Musí černou.
+    const { client, createGame } = matchClient(42);
+    const { shell, created } = await mountRunning(client); // Profesionál černá
+    created[0]?.emit(OVER);
+    await tick();
+    click(q(shell.element, '.btn-modal-close'));
+    await tick();
+    expect(localStorage.getItem(NEXT_COLOR_KEY)).toBe('white');
+
+    const select = q(shell.element, '.level-select') as HTMLSelectElement;
+    select.value = 'championship'; // po konci partie změna úrovně sama nezaloží → Nová hra
+    click(q(shell.element, '.btn-newgame'));
+    await tick();
+    expect(createGame).toHaveBeenLastCalledWith('championship', 'black');
+  });
+
+  it('dispose uprostřed owed 2. kola nezaloží zombie controller', async () => {
+    const { client } = matchClient(42);
+    const { shell, created } = await mountChampionship(client);
+    created[0]?.emit(OVER); // owed 2. kolo
+    await tick();
+    shell.dispose(); // appka pryč PŘED zavřením modalu
+    click(q(shell.element, '.btn-modal-close')); // pokus o auto-start
+    await tick();
+    // startNewGame se sice rozběhne, ale `disposed` guard po awaitu zabrání vzniku
+    // controlleru 2. kola → žádný zombie s pollingem.
+    expect(created).toHaveLength(1);
   });
 });

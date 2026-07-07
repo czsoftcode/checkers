@@ -296,6 +296,25 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // Oddělená od `humanColor` schválně: `humanColor` je barva AKTUÁLNÍ partie ze
   // serveru, tohle je volba pro tu následující (posílá se do `createGame`).
   let nextColor: HumanColor = loadNextColor();
+  // --- Stav zápasu „2 kola" (úroveň Mistrovství). JEN V PAMĚTI: reload ho zahodí
+  // a appka založí čerstvé 1. kolo (rozhodnutí discuss – žádný LocalStorage). ---
+  // `matchBallotIndex ≠ null` = je „owed" 2. kolo: PŘÍŠTÍ startNewGame má přehrát
+  // tenhle vylosovaný index (stejné zahájení jako 1. kolo). Nastaví se po regulérně
+  // dohraném 1. kole Mistrovství, spotřebuje ho startNewGame 2. kola.
+  let matchBallotIndex: number | null = null;
+  // `true`, když AKTUÁLNÍ partie je 2. kolo zápasu. Řídí: (a) že se po ní nespustí
+  // 3. kolo, (b) zámek úrovně (2. kolo = člověk bílý → táhne první → firstMoveMade
+  // by select neuzamkl). Reset na konci 2. kola i při zrušení zápasu.
+  let playingRoundTwo = false;
+  // Barva/ballot AKTUÁLNÍ partie potřebné v render() (GameStatus je nenese): jestli
+  // je to Mistrovství (řídí střídání barvy i owed 2. kolo) a jaký ballot padl.
+  let currentIsChampionship = false;
+  let currentBallotIndex: number | null = null;
+  // `true`, když aktuální partie skončila kliknutím na „Vzdávám" (ne regulérní
+  // prohrou). Vzdání a prohra mají ZE SERVERU stejný výsledek, rozlišit je jde jen
+  // tímhle příznakem. Vzdané 1. kolo Mistrovství zápas ZRUŠÍ (žádné 2. kolo). Reset
+  // v startNewGame.
+  let resignedThisGame = false;
   // `true`, dokud běží zakládání nové partie (createGame) – ať se tlačítka a
   // dvojklik na „Nová hra" mezitím zablokují.
   let loading = false;
@@ -382,6 +401,24 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     }
   }
 
+  /**
+   * Zavření modalu UŽIVATELEM (tlačítko „Zavřít" / klik na backdrop / Esc). Kromě
+   * zavření spustí AUTO 2. kolo zápasu, když je „owed" (`matchBallotIndex !== null`):
+   * rozhodnutí discuss – 2. kolo naskočí až po zavření výsledkového modalu 1. kola,
+   * ať hráč stihne vidět výsledek. Vnitřní `closeModal` z `startNewGame` (reset) tuhle
+   * cestu ZÁMĚRNĚ nevolá, aby se auto-start nespustil rekurzivně. `wasOpen` gate: když
+   * byl modal už zavřený (Esc bez modalu), nic se nespustí. `loading` gate proti
+   * souběhu s jiným zakládáním.
+   */
+  function closeModalByUser(): void {
+    const wasOpen = !modal.classList.contains('hidden');
+    closeModal();
+    if (wasOpen && matchBallotIndex !== null && !loading) {
+      unlockAudio(); // uživatelské gesto → probuď audio pro ballot 2. kola
+      void startNewGame();
+    }
+  }
+
   /** Nastaví stav všech tlačítek podle posledního stavu partie + běžících operací. */
   function refreshControls(): void {
     const over = lastStatus.result !== 'ongoing';
@@ -392,7 +429,12 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     // neodehrané partie) a po konci partie; zamčený je jen když se hraje
     // (padl první tah) nebo běží zakládání. Tím se úroveň nezamkne bez vědomí
     // hráče, ale rozehranou partii přepnutí nerozbije.
-    levelSelect.disabled = loading || (!over && firstMoveMade);
+    // Navíc: během celého zápasu „2 kola" Mistrovství (owed 2. kolo NEBO se právě
+    // hraje 2. kolo) je úroveň zamčená na Mistrovství – jinak by šla mezi koly
+    // přepnout a fixní ballotIndex mimo championship by server odmítl 400 (fáze 53).
+    // Pokrývá i 2. kolo, kde je člověk bílý → táhne první → firstMoveMade sám neuzamkne.
+    const matchActive = playingRoundTwo || matchBallotIndex !== null;
+    levelSelect.disabled = loading || matchActive || (!over && firstMoveMade);
     // Nabídnout remízu jde jen na tahu člověka (jeho barva) a když engine
     // nepřemýšlí; ne během zakládání ani když už jedna nabídka čeká na verdikt.
     // Server to i tak ověří – tohle je jen UI, ne autorita.
@@ -420,7 +462,6 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     }
     // Řádek stavu už nenese výsledek ani chybu (jdou do modalu); za běhu je prázdný.
     setStatus('');
-    refreshControls();
     updateTurnIndicator(s);
     // Modal na terminální stav (výsledek partie / chyba enginu) – jen při ZMĚNĚ
     // stavu, ne při každém pollu. Po zavření zůstane `notifiedTerminalKey`, takže
@@ -435,18 +476,32 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       notifiedTerminalKey = null;
     } else if (key !== notifiedTerminalKey) {
       notifiedTerminalKey = key;
-      // Střídání barvy: po každé DOHRANÉ partii (skutečný výsledek – výhra/prohra/
-      // remíza) překlop barvu pro příští hru a ulož. Základ je barva SKUTEČNĚ
-      // odehrané partie (`humanColor` ze serveru), ne poslaná `nextColor` – v běžné
-      // cestě jsou shodné, ale takhle střídání drží i kdyby server barvu přebil.
       // Gate `result !== 'ongoing'` schválně vylučuje `key === 'error'`: pád enginu
-      // NENÍ dohraná partie, tak barvu neměníme (jinak by opakovaný crash tiše
-      // přeskakoval barvu). Latch (`key !== notifiedTerminalKey`) zaručí přesně
-      // jedno překlopení na partii – polling ohlásí terminální stav vícekrát, ale
-      // sem se dostaneme jen jednou.
+      // NENÍ dohraná partie (barvu neměníme, zápas nespouštíme). Latch (`key !==
+      // notifiedTerminalKey`) zaručí přesně jedno provedení na partii – polling
+      // ohlásí terminální stav vícekrát, ale sem se dostaneme jen jednou.
       if (s.result !== 'ongoing') {
-        nextColor = opposite(humanColor);
-        saveNextColor(nextColor);
+        // Střídání barvy JEN u NE-Mistrovství (fáze 52): překlop `nextColor` pro
+        // příští hru. Základ je barva SKUTEČNĚ odehrané partie (`humanColor` ze
+        // serveru). Mistrovství má barvu FIXNÍ podle kola (1. kolo černá, 2. bílá),
+        // do `nextColor` nesahá – jinak by rozhodilo paritu alternace ostatních úrovní.
+        if (!currentIsChampionship) {
+          nextColor = opposite(humanColor);
+          saveNextColor(nextColor);
+        } else if (playingRoundTwo) {
+          // 2. kolo dohráno → zápas KONČÍ. Reset stavu zápasu; další partii vyvolá
+          // člověk „Novou hrou" (žádné 3. kolo). Reset uvolní i zámek úrovně.
+          playingRoundTwo = false;
+          matchBallotIndex = null;
+        } else if (resignedThisGame) {
+          // 1. kolo VZDÁNO → zápas se ruší (rozhodnutí 3), žádné 2. kolo.
+          matchBallotIndex = null;
+        } else if (currentBallotIndex !== null) {
+          // 1. kolo dohráno REGULÉRNĚ (výhra/prohra/remíza, ne vzdání) → „owed"
+          // 2. kolo se stejným zahájením. Auto-start až po zavření modalu
+          // (`closeModalByUser`), ať hráč stihne vidět výsledek 1. kola.
+          matchBallotIndex = currentBallotIndex;
+        }
       }
       const msg = terminalMessage(s);
       if (msg !== null) {
@@ -457,6 +512,10 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     if (s.result !== 'ongoing') {
       showConfirm(false);
     }
+    // Tlačítka AŽ NAKONEC: terminální větev výše mohla nastavit `matchBallotIndex`
+    // (owed 2. kolo), což zamyká výběr úrovně (matchActive). Kdyby refreshControls
+    // běžel dřív (před nastavením), zůstal by mezi koly za otevřeným modalem odemčený.
+    refreshControls();
   }
 
   /**
@@ -529,6 +588,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     }
     loading = true;
     firstMoveMade = false; // nová partie → úroveň zas volná až do prvního tahu
+    resignedThisGame = false; // nová partie → příznak vzdání z minulé neplatí
     showConfirm(false);
     // Nová partie: zavři případný modal z minulé hry a resetuj latch, ať výsledek
     // (nebo chyba) nové partie zase vyskočí.
@@ -558,6 +618,33 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     // přetypování na GameLevel je tím kryté, server navíc neznámou úroveň odmítne.
     const level = levelSelect.value as GameLevel;
     saveLevel(level); // zapamatuj volbu na příští reload (přežije zavření stránky)
+    // Barva a případný fixní ballot pro TUHLE partii:
+    // - Mistrovství: barva je FIXNÍ podle kola (NE z alternace nextColor). 2. kolo =
+    //   owed přes `matchBallotIndex` → přehraj stejné zahájení, člověk bílý. 1. kolo
+    //   (nový zápas) → losovaný ballot (žádný index), člověk černý = engine otevírá.
+    // - Ostatní úrovně: barva z `nextColor` (alternace fáze 52), žádný ballot.
+    let colorToSend: HumanColor;
+    let ballotToSend: number | undefined;
+    if (level === 'championship') {
+      if (matchBallotIndex !== null) {
+        playingRoundTwo = true;
+        ballotToSend = matchBallotIndex;
+        matchBallotIndex = null; // spotřebováno tímhle 2. kolem
+        colorToSend = 'white';
+      } else {
+        playingRoundTwo = false;
+        ballotToSend = undefined;
+        colorToSend = 'black';
+      }
+    } else {
+      // Ne-Mistrovství: rozehraný zápas (kdyby nějaký visel) se přepnutím úrovně
+      // ruší – zámek by sem sice neměl pustit, ale stav pro jistotu vyčisti, ať
+      // neuvázne owed index z minula.
+      playingRoundTwo = false;
+      matchBallotIndex = null;
+      ballotToSend = undefined;
+      colorToSend = nextColor;
+    }
     if (controller !== null) {
       controller.dispose();
       controller = null;
@@ -565,7 +652,13 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     boardSlot.replaceChildren();
     setStatus('Načítám partii…');
     try {
-      const game = await client.createGame(level, nextColor);
+      // `ballotToSend` do createGame JEN když existuje (2. kolo) – ne posílat
+      // spurious `undefined` třetím argumentem. Drží drát i volání čisté: 1. kolo
+      // a ostatní úrovně volají stejně jako dřív (dva argumenty).
+      const game =
+        ballotToSend === undefined
+          ? await client.createGame(level, colorToSend)
+          : await client.createGame(level, colorToSend, ballotToSend);
       if (disposed) {
         return; // appka se mezitím disposla – nezakládej controller s pollingem
       }
@@ -579,6 +672,13 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       // výhry každou druhou hru. `'black'` = korektní degradace (feature se jen
       // nestřídá), shodně s fází 51.
       humanColor = game.humanColor ?? 'black';
+      // Zapamatuj pro render() (GameStatus je nenese): úroveň partie (řídí střídání
+      // barvy i owed 2. kolo) a jaký ballot padl (owed 2. kolo přehraje tenhle index).
+      // `?? null`: chybějící/undefined ballotIndex (drift/starý server) = „neznám" →
+      // owed 2. kolo se pak nerozjede (viz gate `currentBallotIndex !== null`), místo
+      // aby zápas spadl. U ne-Mistrovství je stejně null.
+      currentIsChampionship = level === 'championship';
+      currentBallotIndex = game.ballotIndex ?? null;
       // `loading` MUSÍ být false ještě před vytvořením controlleru: ten hned
       // ohlásí výchozí stav přes onState → render() a to čte `loading` do stavu
       // tlačítek. Kdyby tu bylo pořád true, tlačítka by zůstala zamčená.
@@ -591,6 +691,11 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       boardSlot.append(controller.element);
     } catch (error) {
       loading = false;
+      // Zakládání selhalo → zápas „2 kola" se nerozjel. Vyčisti jeho stav, ať po
+      // selhaném 2. kole nezůstane `playingRoundTwo=true` (viselý zámek úrovně) ani
+      // owed index; další „Nová hra" pak začne čistým 1. kolem, ne půlkou zápasu.
+      playingRoundTwo = false;
+      matchBallotIndex = null;
       console.error('Nepodařilo se založit partii:', error);
       setStatus(''); // hláška jde do modalu, ne do (mizejícího) řádku stavu
       // Umělé `white-wins` níž jen odemyká „Novou hru" – NESMÍ vyvolat výherní modal,
@@ -620,7 +725,18 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   });
   yesBtn.addEventListener('click', () => {
     showConfirm(false);
-    controller?.resign();
+    // Označ, že tento konec přijde VZDÁNÍM (ne prohrou) – terminální handler podle
+    // toho zápas Mistrovství zruší místo spuštění 2. kola. Nastav OPTIMISTICKY PŘED
+    // resign(): úspěšné vzdání vyvolá terminální onState ještě UVNITŘ resign(), to
+    // musí příznak vidět. Callback ho zas SUNDÁ, když vzdání NEproběhlo (síť selhala
+    // → resync na ongoing, nebo partii ukončil mezitím engine) – jinak by se PŘÍŠTÍ
+    // regulérní konec 1. kola omylem vyhodnotil jako vzdání a zápas by se zrušil.
+    resignedThisGame = true;
+    controller?.resign((didResign) => {
+      if (!didResign) {
+        resignedThisGame = false;
+      }
+    });
   });
   offerDrawBtn.addEventListener('click', () => {
     void offerDraw();
@@ -631,19 +747,19 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   });
 
   modalCloseBtn.addEventListener('click', () => {
-    closeModal();
+    closeModalByUser();
   });
   // Klik na tmavý backdrop (mimo dialog) zavře; klik dovnitř dialogu ne.
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
-      closeModal();
+      closeModalByUser();
     }
   });
   // Esc zavře modal, když je otevřený. Listener je na document (modal může mít fokus
   // na tlačítku Zavřít) – odhlásí se v `dispose`, ať po odstranění appky nezůstane.
   const onKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-      closeModal();
+      closeModalByUser();
     }
   };
   document.addEventListener('keydown', onKeydown);

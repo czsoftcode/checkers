@@ -1,0 +1,42 @@
+{
+  "id": 54,
+  "title": "Klient: dvě kola v Mistrovství",
+  "goal": "Po dohraném 1. kole na úrovni Mistrovství klient uloží ballotIndex partie do LocalStorage a automaticky spustí 2. kolo se stejným zahájením a otočenou barvou (střídání barvy už z fáze 52); po 2. kole se stav zápasu vynuluje a další partii musí člověk vyvolat tlačítkem Nová hra. Zahrnuje i plumbing: přidat ballotIndex do klientského GameDto + isGameDto validaci + rozšířit createGame, aby index posílal do POST /games (server ho od fáze 53 přijímá). UX rozhodnutí (kdy spustit 2. kolo vůči výsledkovému modalu, reload uprostřed zápasu, vzdání/Nová hra uprostřed, zámek úrovně championship mezi koly) se doladí v discuss.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Plumbing: ballotIndex v GameDto + createGame",
+      "status": "done",
+      "detail": "server-client.ts: přidat ballotIndex?: number do GameDto; rozšířit isGameDto (přijme číslo i chybějící pole, přítomnou neplatnou hodnotu odmítne - vzor jako humanColor); rozšířit createGame(level, humanColor, ballotIndex?) i HTTP impl (request body pošle ballotIndex JEN když je zadán). Ověří server-client.test."
+    },
+    {
+      "title": "Stav zápasu + barvy podle kola v startNewGame",
+      "status": "done",
+      "detail": "app-shell.ts: proměnné matchBallotIndex: number|null a playingRoundTwo: boolean v closure. V startNewGame pro championship odvodit barvu i index z kola: 2. kolo (matchBallotIndex != null) → pošli index + humanColor='white', playingRoundTwo=true, index vynuluj (spotřebován); championship jinak → 1. kolo (humanColor='black', žádný index, playingRoundTwo=false). Ne-championship beze změny (čte nextColor). Zámek úrovně: během playingRoundTwo drž levelSelect na championship + disabled bez ohledu na firstMoveMade (refreshControls)."
+    },
+    {
+      "title": "Terminální handler: owed 2. kolo, rozlišení vzdání, championship mimo flip",
+      "status": "done",
+      "detail": "app-shell.ts render(): příznak resignedThisGame (nastaví se v obsluze potvrzeného vzdání yesBtn). V terminální větvi (reálný výsledek, ne error): championship AND NOT playingRoundTwo AND NOT resignedThisGame → matchBallotIndex = game.ballotIndex (owed 2. kolo); jinak nic (zápas končí/zrušen). Překlopení nextColor (fáze 52) obalit level !== 'championship'. resignedThisGame resetovat v startNewGame."
+    },
+    {
+      "title": "Auto-start 2. kola po zavření modalu",
+      "status": "done",
+      "detail": "app-shell.ts: do uživatelské cesty zavření modalu (modalCloseBtn / backdrop klik / Esc) přidat: když owed 2. kolo (matchBallotIndex != null), po zavření spustit startNewGame. Napojit tak, aby nevystřelil z rekurzivního closeModal uvnitř startNewGame (reset). Po 2. kole (nic owed) se nespustí nic → Nová hra čeká na klik."
+    },
+    {
+      "title": "Testy se zuby + ověření unhappy path",
+      "status": "done",
+      "detail": "Fake klient zaznamená argumenty createGame. Pokrýt: (a) 1. kolo championship (člověk black) dohráno → po zavření modalu 2. kolo se STEJNÝM indexem a člověkem white; (b) 2. kolo dohráno → žádné 3.; (c) vzdání 1. kola → žádné 2. kolo (rozlišení přes příznak, ne přes result); (d) non-championship → žádný zápas, žádný index, nextColor alternace beze změny; (e) championship zápas začíná black i po prokládané ne-championship hře; (f) reload/dispose uprostřed nezanechá zombie auto-start. Nezávislý self-review sub-agentem (čerstvý kontext)."
+    }
+  ],
+  "startedAt": "2026-07-07T01:45:58.164Z",
+  "resolvedVerify": [
+    "Odehrát reálný zápas 2 kol v prohlížeči (Mistrovství)"
+  ],
+  "completedAt": "2026-07-07T02:23:37.603Z",
+  "autoCommit": {
+    "preSha": "20e4ffb3270547651a675bceec7076159f1059da",
+    "subject": "Phase 54: Klient: dvě kola v Mistrovství"
+  }
+}

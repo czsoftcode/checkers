@@ -118,8 +118,14 @@ export interface BoardController {
   /**
    * Vzdá partii. Počká na doběhnutí právě běžícího requestu (single-flight),
    * pak pošle vzdání serveru. Opakované volání během odesílání se ignoruje.
+   *
+   * `onResolved` (volitelný) dostane `true`, právě když vzdání SKUTEČNĚ ukončilo
+   * partii (server ho přijal), a `false`, když neproběhlo (síť selhala → resync na
+   * ongoing, partie mezitím skončila jinak, nebo se ignorovalo). Skořápka to
+   * potřebuje k rozlišení „vzdání" vs. „regulérní prohra" u zápasu 2 kol – bez
+   * potvrzení by selhané vzdání omylem zrušilo zápas při pozdějším regulérním konci.
    */
-  resign(): void;
+  resign(onResolved?: (didResign: boolean) => void): void;
   /**
    * Nabídne enginu remízu. Počká na doběhnutí běžícího requestu (single-flight),
    * pošle nabídku, převezme vrácený stav a vrátí verdikt enginu pro skořápku.
@@ -448,16 +454,21 @@ export function createBoardController(
    * (tah/poll), teprve pak pošle vzdání – klik nesmí tiše propadnout kvůli
    * single-flightu. `resigning` blokuje dvojí odeslání; skončenou partii nevzdává.
    */
-  function resign(): void {
+  function resign(onResolved?: (didResign: boolean) => void): void {
     // Vzdání je uživatelský gest – odemkni audio, ať zvuk prohry zazní i když
     // hráč do desky předtím nikdy neklikl (autoplay policy).
     player.unlock();
-    void resignFlow();
+    void resignFlow().then((didResign) => onResolved?.(didResign));
   }
 
-  async function resignFlow(): Promise<void> {
+  /**
+   * Vrací `true`, jen když vzdání SKUTEČNĚ prošlo (server přijal, `applyServerState`
+   * nasadil terminální stav). `false` na: ignorování (dvojklik / už skončeno),
+   * závod (poll mezitím ukončil partii), dispose, nebo selhání odeslání (resync).
+   */
+  async function resignFlow(): Promise<boolean> {
     if (resigning || lastResult !== 'ongoing') {
-      return;
+      return false;
     }
     resigning = true;
     try {
@@ -467,11 +478,13 @@ export function createBoardController(
       // Během čekání mohl poll dorovnat stav na terminální (engine vyhrál /
       // přirozený konec) nebo se controller stihl disposnout – pak už nevzdávej.
       if (disposed || lastResult !== 'ongoing') {
-        return;
+        return false;
       }
+      let resigned = false;
       await runRequest(async () => {
         try {
           applyServerState(await client.resign(gameId));
+          resigned = true;
         } catch (error) {
           console.error('Vzdání se nepodařilo odeslat, synchronizuji stav:', error);
           await resync();
@@ -479,6 +492,7 @@ export function createBoardController(
           void render();
         }
       });
+      return resigned;
     } finally {
       resigning = false;
     }

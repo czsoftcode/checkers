@@ -103,6 +103,64 @@ describe('createHttpClient', () => {
     expect(result.ballotMoves).toHaveLength(3);
   });
 
+  it('createGame s ballotIndex pošle index v těle (2. kolo Mistrovství)', async () => {
+    const fetchMock = okFetch({ ...sampleDto, level: 'championship', ballotIndex: 42 }, 201);
+    const client = createHttpClient(fetchMock);
+
+    await client.createGame('championship', 'white', 42);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/games',
+      expect.objectContaining({
+        body: JSON.stringify({ level: 'championship', humanColor: 'white', ballotIndex: 42 }),
+      }),
+    );
+  });
+
+  it('createGame BEZ ballotIndex ho do těla NEpřidá (jen level + humanColor)', async () => {
+    // ZUB: tělo nesmí nést `ballotIndex` (ani undefined), když se neposílá – server
+    // má pole volitelné a chybějící = normální los. Kdyby ho klient posílal vždy,
+    // 1. kolo/ostatní úrovně by tahaly navíc pole a `index=0` by nešel odlišit od losu.
+    const fetchMock = okFetch(sampleDto, 201);
+    await createHttpClient(fetchMock).createGame('beginner', 'black');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/games',
+      expect.objectContaining({
+        body: JSON.stringify({ level: 'beginner', humanColor: 'black' }),
+      }),
+    );
+  });
+
+  it('isGameDto: ballotIndex – číslo projde, null projde, chybějící projde', async () => {
+    // Číslo (championship) dorazí k volajícímu (2. kolo z něj čte index).
+    const withIndex = await createHttpClient(
+      okFetch({ ...sampleDto, level: 'championship', ballotIndex: 7 }, 201),
+    ).createGame('championship', 'black');
+    expect(withIndex.ballotIndex).toBe(7);
+
+    // null (partie bez zahájení) projde.
+    const nullIndex = await createHttpClient(
+      okFetch({ ...sampleDto, ballotIndex: null }, 201),
+    ).createGame('professional', 'black');
+    expect(nullIndex.ballotIndex).toBeNull();
+
+    // Chybějící pole (starý server bez fáze 53) projde – volající si dosadí „neznám".
+    const missing = await createHttpClient(okFetch(sampleDto, 201)).createGame('professional', 'black');
+    expect(missing.ballotIndex).toBeUndefined();
+  });
+
+  it('isGameDto: neplatný ballotIndex (řetězec / záporný / zlomek) → ServerError (drift)', async () => {
+    // ZUB guardu: přítomná nesmyslná hodnota by se v 2. kole poslala zpět na server
+    // (400) nebo protekla dál. Guard ji musí odmítnout hned při parsování odpovědi.
+    for (const bad of ['5', -1, 1.5]) {
+      const res = await createHttpClient(okFetch({ ...sampleDto, ballotIndex: bad }, 201))
+        .createGame('professional', 'black')
+        .catch((e: unknown) => e);
+      expect(res).toBeInstanceOf(ServerError);
+    }
+  });
+
   it('isGameDto: rozbité ballotMoves (číslo místo pole / prvek bez tvaru MoveDto) → ServerError', async () => {
     // ZUB guardu tvaru: klient z `ballotMoves` skládá animaci ballotu (applyMove),
     // takže rozbité pole musí spadnout hned při parsování odpovědi, ne až v renderu.

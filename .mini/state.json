@@ -267,6 +267,11 @@
       "id": 53,
       "title": "Server: fixní ballot parametrem partie",
       "status": "done"
+    },
+    {
+      "id": 54,
+      "title": "Klient: dvě kola v Mistrovství",
+      "status": "done"
     }
   ]
 }

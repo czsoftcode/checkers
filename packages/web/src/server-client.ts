@@ -67,6 +67,15 @@ export interface GameDto {
    * nesmysl.
    */
   readonly humanColor?: Color;
+  /**
+   * Index vylosovaného 3-move ballotu do serverového decku (`THREE_MOVE_BALLOTS`),
+   * nebo `null` u partie bez vynuceného zahájení. Nenulový je jen u Mistrovství.
+   * Klient ho v zápase (2 kola) přečte z 1. kola a pošle zpět do `createGame` 2. kola,
+   * ať se přehraje STEJNÉ zahájení. VOLITELNÉ na drátě (aditivní pole): chybějící /
+   * `undefined` bere volající jako „index neznám" (2. kolo se pak nerozjede). Přítomná
+   * hodnota musí být nezáporné celé číslo; jiná = drift → `isGameDto` odmítne.
+   */
+  readonly ballotIndex?: number | null;
 }
 
 /**
@@ -87,8 +96,13 @@ export interface ServerClient {
    * uloží u partie a u člověk=bílý sám spustí první tah enginu (černého). Server
    * má i default (`black`), ale klient barvu posílá vždy explicitně, ať se z volby
    * nestane tiché „co server zrovna dosadí".
+   *
+   * `ballotIndex` (volitelný) nasadí KONKRÉTNÍ vylosované zahájení místo serverového
+   * losu – používá ho 2. kolo Mistrovství, aby přehrálo stejný ballot jako 1. kolo.
+   * Posílá se JEN když je zadán a jen u Mistrovství; server ho ověří (rozsah decku,
+   * jen championship) a mimo to vrátí 400 (fáze 53). Bez něj = normální los.
    */
-  createGame(level: GameLevel, humanColor: Color): Promise<GameDto>;
+  createGame(level: GameLevel, humanColor: Color, ballotIndex?: number): Promise<GameDto>;
   getGame(id: string): Promise<GameDto>;
   postMove(id: string, from: Square, path: readonly Square[]): Promise<GameDto>;
   /** Vzdání partie (člověk = černý → vyhrává bílý). Vrací stav se skončenou partií. */
@@ -174,7 +188,16 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
   }
 
   return {
-    createGame: (level, humanColor) => request('POST', '/games', { level, humanColor }),
+    createGame: (level, humanColor, ballotIndex) =>
+      // `ballotIndex` do těla JEN když je zadán (2. kolo Mistrovství). Jinak ho
+      // vynech úplně – ne poslat `undefined`: server má pole volitelné a chybějící
+      // = normální los. Přítomné `undefined` by JSON.stringify stejně zahodil, ale
+      // podmíněné rozšíření drží tělo čisté a záměr explicitní.
+      request(
+        'POST',
+        '/games',
+        ballotIndex === undefined ? { level, humanColor } : { level, humanColor, ballotIndex },
+      ),
     getGame: (id) => request('GET', `/games/${encodeURIComponent(id)}`),
     postMove: (id, from, path) =>
       request('POST', `/games/${encodeURIComponent(id)}/moves`, { from, path: [...path] }),
@@ -325,6 +348,20 @@ function isGameDto(value: unknown): value is GameDto {
     record.humanColor !== undefined &&
     record.humanColor !== 'black' &&
     record.humanColor !== 'white'
+  ) {
+    return false;
+  }
+  // `ballotIndex`: VOLITELNÉ (aditivní pole). Chybějící / `undefined` = starý server
+  // bez pole → volající si dosadí „neznám". `null` = partie bez zahájení (ne-Mistrovství).
+  // Když PŘIJDE číslo, musí být nezáporné celé (index do serverového decku); jiná
+  // hodnota (řetězec, zlomek, záporné) je drift → odmítni, ať se do 2. kola nepošle
+  // nesmysl (server by ho stejně 400, ale drift chytneme dřív a hlasitě).
+  if (
+    record.ballotIndex !== undefined &&
+    record.ballotIndex !== null &&
+    (typeof record.ballotIndex !== 'number' ||
+      !Number.isInteger(record.ballotIndex) ||
+      record.ballotIndex < 0)
   ) {
     return false;
   }

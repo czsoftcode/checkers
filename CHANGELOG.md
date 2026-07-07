@@ -7,16 +7,19 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-07-07
+
 ### Added
 
-- **Server: nasazení konkrétního zahájení (základ pro 2 kola Mistrovství).** Server
-  teď při zakládání partie umí kromě náhodného losu přijmout i předem daný index
-  třítahového zahájení a nasadit přesně ten – ověřenou autoritativní cestou jako los.
-  Slouží jako podklad pro budoucí pravidlo „2 kola" na úrovni Mistrovství, kde druhé
-  kolo přehraje stejné zahájení jako první (s prohozenými barvami). Samotné střídání
-  kol zatím není zapojené v prohlížeči; navenek se hra chová beze změny. Neplatný
-  nebo nesmyslný požadavek (index mimo seznam zahájení, nebo zadaný mimo Mistrovství)
-  server odmítne s chybou, místo aby ho tiše ignoroval.
+- **Mistrovství se hraje na dvě kola (zápas).** Na úrovni Mistrovství teď jedna
+  partie nestačí – hraje se zápas dvou kol se stejným vylosovaným zahájením, jen
+  s prohozenými barvami. V 1. kole máš černé (počítač zahájení otevírá), po jeho
+  dohrání se výsledek ukáže a po zavření okna se **samo spustí 2. kolo**, kde máš
+  bílé a otvíráš ty. Tím si obě strany zahájení vyzkoušíš z obou pohledů. Po 2. kole
+  zápas končí – další partii spustíš tlačítkem „Nová hra". Během zápasu je úroveň
+  zamčená na Mistrovství. Když 1. kolo vzdáš, zápas se ukončí (2. kolo se nespustí).
+  (Pod kapotou: server umí přijmout konkrétní vylosované zahájení a ověřit ho stejnou
+  autoritativní cestou jako vlastní los; neplatný požadavek odmítne, netiší chybu.)
 
 ## [0.41.0] - 2026-07-07
 
