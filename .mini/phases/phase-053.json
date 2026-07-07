@@ -1,0 +1,34 @@
+{
+  "id": 53,
+  "title": "Server: fixní ballot parametrem partie",
+  "goal": "POST /games na úrovni Mistrovství přijme volitelný ballotIndex; když je zadaný, server ho po ověření rozsahu (0 ≤ i < délka THREE_MOVE_BALLOTS) nasadí jako vynucené zahájení stejnou autoritativní cestou (playBallot → advanceState) místo náhodného losu. Chybějící index = normální náhodný los (degradace pro starší klienty), index mimo rozsah nebo špatný typ = 400 (žádný tichý fallback). Rytmus 2 kol a LocalStorage zůstávají mimo tuto fázi (navazující klientská fáze).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Store: nasadit ballot podle daného indexu",
+      "status": "done",
+      "detail": "seedBallot rozdělit — sdílené přehrání THREE_MOVE_BALLOTS[i] přes advanceState do jednoho místa; los navíc jen vylosuje index. create dostane volitelný parametr fixního indexu (když zadaný → nasadí místo losu, jinak losuje). Interní RangeError na neplatný index zůstává (programová chyba → 500). Žádná duplikace smyčky playBallot→advanceState."
+    },
+    {
+      "title": "zod: volitelný ballotIndex v těle POST /games",
+      "status": "done",
+      "detail": "Do createGameBodySchema (app.ts) přidat ballotIndex: z.number().int().nonnegative().optional(). Ověří jen TYP (celé číslo ≥ 0); špatný typ/záporné/neceločíselné → 400 už z parse. Rozsah proti délce decku sem NEdávat (řeší route)."
+    },
+    {
+      "title": "Route: validace rozsahu + cross-field, předání do store",
+      "status": "done",
+      "detail": "V POST /games po parse: zadaný ballotIndex ověřit < THREE_MOVE_BALLOTS.length (import z @checkers/rules) A level === championship — na neshodě 400 s cílenou zprávou (mimo rozsah / index bez Mistrovství). Platný index předat do store.create. Chybějící index = beze změny (los u Mistrovství, nic jinde). DTO se nemění."
+    },
+    {
+      "title": "Testy se zuby + ověření unhappy path",
+      "status": "done",
+      "detail": "Store test: create(championship, black, k) s rng napevno na JINÝ index → ballotIndex === k a první tři tahy = THREE_MOVE_BALLOTS[k] (bez fixního indexu spadne na losu). Route testy 400: index = délka decku, -1, neceločíselný, ballotIndex + Začátečník. Regrese: Mistrovství bez indexu pořád losuje; ostatní úrovně beze změny. Nezávislý self-review sub-agentem na hranice a 400 vs. 500."
+    }
+  ],
+  "startedAt": "2026-07-07T01:00:26.022Z",
+  "completedAt": "2026-07-07T01:16:55.065Z",
+  "autoCommit": {
+    "preSha": "dd6f776289b92d440fc42ae197961de1eeb24e8e",
+    "subject": "Phase 53: Server: fixní ballot parametrem partie"
+  }
+}

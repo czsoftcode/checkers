@@ -9,8 +9,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { THREE_MOVE_BALLOTS } from '@checkers/rules';
-import type { Color, Position } from '@checkers/rules';
+import { THREE_MOVE_BALLOTS, playBallot } from '@checkers/rules';
+import type { Ballot, Color, Position } from '@checkers/rules';
 import { GameStore, mulberry32 } from '../src/index.js';
 
 /** Počet kamenů dané barvy na desce (board má 32 polí, Cell = Piece | null). */
@@ -85,5 +85,44 @@ describe('GameStore – los ballotu Mistrovství', () => {
     expect(() => store.create('championship')).toThrow(RangeError);
     // Neballotové úrovně se rozbitým rng nezajímají (los se nekoná).
     expect(() => store.create('professional')).not.toThrow();
+  });
+});
+
+describe('GameStore – fixní ballot podle indexu (kolo 2 Mistrovství)', () => {
+  it('create s ballotIndex nasadí PRÁVĚ ten ballot, ne los', () => {
+    // Zub: rng napevno na index 0 (`() => 0`). Kdyby create fixní index ignoroval
+    // a losoval, dostali bychom ballot 0 – test spadne. k je jiné než 0.
+    const k = 42;
+    const expected: Ballot | undefined = THREE_MOVE_BALLOTS[k];
+    if (expected === undefined) {
+      throw new Error(`test předpokládá index ${String(k)} v decku délky ${String(THREE_MOVE_BALLOTS.length)}`);
+    }
+    const rec = new GameStore(() => 0).create('championship', 'black', k);
+    expect(rec.ballotIndex).toBe(k);
+    // Tahy v historii = reálné odehrání ballotu k přes rules (ne ballotu 0).
+    expect(rec.moves).toEqual(playBallot(expected).moves);
+    expect(rec.moves).toHaveLength(3);
+    expect(rec.state.position.turn).toBe('white');
+  });
+
+  it('fixní ballot je barvově agnostický: stejný index, obě barvy → stejné tahy', () => {
+    // Kolo 1 (člověk černý) i kolo 2 (člověk bílý) přehrají STEJNÉ zahájení.
+    // humanColor mění jen kdo je engine, ne tři půltahy ballotu.
+    const k = 7;
+    const asBlack = new GameStore(() => 0).create('championship', 'black', k);
+    const asWhite = new GameStore(() => 0).create('championship', 'white', k);
+    expect(asWhite.moves).toEqual(asBlack.moves);
+    expect(asWhite.ballotIndex).toBe(k);
+    expect(asWhite.humanColor).toBe('white');
+    expect(asBlack.humanColor).toBe('black');
+  });
+
+  it('ballotIndex u ne-Mistrovství úrovně = programová chyba volajícího (RangeError)', () => {
+    // Store guard proti tiché ignoraci: route tuhle kombinaci blokuje 400 dřív,
+    // ale kdyby se sem dostala, ozve se hlasitě, ne tiše zahodí index.
+    const store = new GameStore(() => 0);
+    for (const level of ['professional', 'intermediate', 'beginner', 'education'] as const) {
+      expect(() => store.create(level, 'black', 3)).toThrow(RangeError);
+    }
   });
 });

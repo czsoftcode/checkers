@@ -9,6 +9,7 @@
 
 import Fastify from 'fastify';
 import { z } from 'zod';
+import { THREE_MOVE_BALLOTS } from '@checkers/rules';
 import type { Color, Move } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { formatGamePdn, writeGamePdn } from './archive.js';
@@ -34,6 +35,11 @@ const moveBodySchema = z.object({
 const createGameBodySchema = z.object({
   level: z.enum(LEVELS).default('professional'),
   humanColor: z.enum(['black', 'white']).default('black'),
+  // Fixní 3-move ballot pro kolo 2 Mistrovství: klient pošle index zahájení z
+  // kola 1, server ho nasadí místo losu. Schema ověří jen TYP (celé číslo ≥ 0) →
+  // špatný typ/záporné/neceločíselné padne už tady (400). Rozsah proti délce
+  // decku a pravidlo „index jen s championship" řeší route (potřebuje deck z rules).
+  ballotIndex: z.number().int().nonnegative().optional(),
 });
 
 /**
@@ -142,10 +148,35 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         reply,
         400,
         ERROR_CODES.invalidRequest,
-        `Neplatné tělo: očekávám { level: ${LEVELS.join(' | ')}, humanColor: black | white }`,
+        `Neplatné tělo: očekávám { level: ${LEVELS.join(' | ')}, humanColor: black | white, ballotIndex?: celé číslo ≥ 0 }`,
       );
     }
-    const record = store.create(parsed.data.level, parsed.data.humanColor);
+    const { level, humanColor, ballotIndex } = parsed.data;
+    // Fixní ballot (kolo 2 Mistrovství): klientský vstup, server mu nevěří. zod
+    // ověřil jen typ (celé číslo ≥ 0); tady zbývá to, co zod nevidí:
+    //   (a) rozsah proti reálnému decku – mimo rozsah = 400, ať se nedostane do
+    //       store, kde by applyBallotByIndex hodil RangeError → 500;
+    //   (b) index dává smysl JEN u Mistrovství – s jinou úrovní je to nesmysl =
+    //       400, ne tiché ignorování (maskovaná klientská chyba).
+    if (ballotIndex !== undefined) {
+      if (ballotIndex >= THREE_MOVE_BALLOTS.length) {
+        return sendError(
+          reply,
+          400,
+          ERROR_CODES.invalidRequest,
+          `ballotIndex ${String(ballotIndex)} mimo rozsah decku (0–${String(THREE_MOVE_BALLOTS.length - 1)})`,
+        );
+      }
+      if (level !== 'championship') {
+        return sendError(
+          reply,
+          400,
+          ERROR_CODES.invalidRequest,
+          `ballotIndex lze zadat jen pro úroveň 'championship', ne '${level}'`,
+        );
+      }
+    }
+    const record = store.create(level, humanColor, ballotIndex);
     // Mistrovství: partie začíná vylosovaným ballotem → jednorázový záznam KTERÉ
     // zahájení padlo (ověřitelnost losu, debug férovosti). Ballot je zároveň
     // prvními třemi tahy v historii; index je navíc.

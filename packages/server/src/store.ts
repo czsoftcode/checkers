@@ -167,12 +167,28 @@ export class GameStore {
    */
   private seedBallot(): { state: GameState; moves: Move[]; index: number } {
     const index = Math.floor(this.rng() * THREE_MOVE_BALLOTS.length);
+    return this.applyBallotByIndex(index);
+  }
+
+  /**
+   * Nasadí KONKRÉTNÍ zahájení `THREE_MOVE_BALLOTS[index]` autoritativní cestou:
+   * playBallot spáruje půltahy proti reálným `legalMoves` (na neshodě throwuje =
+   * hlasitá chyba), jeho tři `Move` se přehrají přes `advanceState` – stejná cesta
+   * jako tah hráče/enginu. Sdílí ho los ({@link seedBallot}) i fixní nasazení
+   * z {@link create}, takže „přehraj ballot podle indexu" žije na JEDNOM místě.
+   *
+   * Index MIMO rozsah decku vyhodí RangeError. To je programová chyba VOLAJÍCÍHO
+   * (rozbitý injektovaný `rng` u losu, nebo neověřený index), NE klientský vstup:
+   * klientský `ballotIndex` ověřuje route rozsahem PŘED voláním store (vrací 400),
+   * sem se dostane až zaručeně platný. Proto se tu RangeError (→ 500) nemaskuje na 400.
+   */
+  private applyBallotByIndex(index: number): { state: GameState; moves: Move[]; index: number } {
     const ballot = THREE_MOVE_BALLOTS[index];
     if (ballot === undefined) {
       throw new RangeError(
-        `Los ballotu mimo rozsah: index ${String(index)} pro deck délky ${String(
+        `Ballot mimo rozsah: index ${String(index)} pro deck délky ${String(
           THREE_MOVE_BALLOTS.length,
-        )} (rozbitý rng?)`,
+        )}`,
       );
     }
     const { moves } = playBallot(ballot);
@@ -198,10 +214,29 @@ export class GameStore {
    * = dnešek. Barvu volí klient, na losování ballotu ani na rozestavění nemá
    * vliv – ballot vždy udělá tři půltahy (černý-bílý-černý). Kdo z nich je engine,
    * řeší až app při spouštění tahu (podle `opposite(humanColor)`).
+   *
+   * `ballotIndex` (volitelný) NASADÍ fixní zahájení místo losu – používá ho kolo 2
+   * Mistrovství, aby přehrálo stejný ballot jako kolo 1. Dává smysl JEN u
+   * `championship`; poslat ho s jinou úrovní je chyba volajícího (route ji blokuje
+   * 400 už PŘED voláním store) → tady se ozve hlasitě RangeErrorem, ne tiše
+   * ignorovaným indexem. Rozsah indexu proti decku ověřuje applyBallotByIndex.
    */
-  create(level: GameLevel = DEFAULT_LEVEL, humanColor: Color = 'black'): GameRecord {
+  create(
+    level: GameLevel = DEFAULT_LEVEL,
+    humanColor: Color = 'black',
+    ballotIndex?: number,
+  ): GameRecord {
+    if (ballotIndex !== undefined && level !== 'championship') {
+      throw new RangeError(
+        `ballotIndex zadán pro úroveň '${level}', ale fixní ballot je jen pro 'championship'`,
+      );
+    }
     const id = randomUUID();
-    const seeded = level === 'championship' ? this.seedBallot() : null;
+    let seeded: { state: GameState; moves: Move[]; index: number } | null = null;
+    if (level === 'championship') {
+      seeded =
+        ballotIndex !== undefined ? this.applyBallotByIndex(ballotIndex) : this.seedBallot();
+    }
     const game: StoredGame = {
       state: seeded?.state ?? initialGameState(),
       engineStatus: 'idle',

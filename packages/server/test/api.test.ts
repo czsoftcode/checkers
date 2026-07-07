@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { FastifyInstance } from 'fastify';
-import { applyMove, initialPosition } from '@checkers/rules';
+import { THREE_MOVE_BALLOTS, applyMove, initialPosition } from '@checkers/rules';
 import { buildApp, findLegalMove, mulberry32 } from '../src/index.js';
 import type { GameDto, MoveDto } from '../src/index.js';
 
@@ -94,6 +94,83 @@ describe('POST /games – Mistrovství: ballotMoves v DTO', () => {
     } finally {
       await seeded.close();
     }
+  });
+});
+
+describe('POST /games – Mistrovství: fixní ballotIndex (kolo 2)', () => {
+  it('zadaný ballotIndex nasadí PRÁVĚ ten ballot přes API (ne los)', async () => {
+    // Zub: rng napevno na index 0. Kdyby route ballotIndex ignoroval a nechal
+    // losovat, DTO by neslo index 0 – tady čekáme 42.
+    const seeded = buildApp({ rng: () => 0 });
+    try {
+      const res = await seeded.inject({
+        method: 'POST',
+        url: '/games',
+        payload: { level: 'championship', ballotIndex: 42 },
+      });
+      expect(res.statusCode).toBe(201);
+      const game = res.json<GameDto>();
+      expect(game.ballotIndex).toBe(42);
+      expect(game.ballotMoves).not.toBeNull();
+      expect(game.position.turn).toBe('white');
+    } finally {
+      await seeded.close();
+    }
+  });
+
+  it('championship BEZ ballotIndex pořád losuje (degradace pro starší klienty)', async () => {
+    const seeded = buildApp({ rng: mulberry32(7) });
+    try {
+      const res = await seeded.inject({
+        method: 'POST',
+        url: '/games',
+        payload: { level: 'championship' },
+      });
+      expect(res.statusCode).toBe(201);
+      expect(res.json<GameDto>().ballotIndex).not.toBeNull();
+    } finally {
+      await seeded.close();
+    }
+  });
+
+  it('ballotIndex = délka decku (mimo rozsah) → 400 invalid_request', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/games',
+      payload: { level: 'championship', ballotIndex: THREE_MOVE_BALLOTS.length },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_request');
+  });
+
+  it('ballotIndex záporný → 400 invalid_request (zod nonnegative)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/games',
+      payload: { level: 'championship', ballotIndex: -1 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_request');
+  });
+
+  it('ballotIndex neceločíselný → 400 invalid_request (zod int)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/games',
+      payload: { level: 'championship', ballotIndex: 1.5 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_request');
+  });
+
+  it('ballotIndex u ne-Mistrovství úrovně → 400 invalid_request (cross-field)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/games',
+      payload: { level: 'beginner', ballotIndex: 0 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_request');
   });
 });
 

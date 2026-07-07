@@ -35,4 +35,4 @@
 - [x] 51 klient (orientace desky podle barvy + kontroly turn + mapování výhry)
 - [x] 52 střídání barvy po každé hře (2× LocalStorage) + pravidlo 2 kol v Mistrovství.
 - [ ] nové kameny
-- [ ] ballot souradnice do LocalStorage?
+- [x] ballot souradnice do LocalStorage?
