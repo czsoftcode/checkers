@@ -257,6 +257,11 @@
       "id": 51,
       "title": "Klient: orientace desky podle barvy",
       "status": "done"
+    },
+    {
+      "id": 52,
+      "title": "Klient posílá a střídá barvu",
+      "status": "done"
     }
   ]
 }

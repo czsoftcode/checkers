@@ -41,19 +41,36 @@ function okFetch(body: unknown, status = 200): typeof fetch {
 }
 
 describe('createHttpClient', () => {
-  it('createGame posílá POST /games se zvolenou úrovní v těle a vrací GameDto', async () => {
+  it('createGame posílá POST /games se zvolenou úrovní i barvou v těle a vrací GameDto', async () => {
     const fetchMock = okFetch(sampleDto, 201);
     const client = createHttpClient(fetchMock);
 
-    const result = await client.createGame('beginner');
+    const result = await client.createGame('beginner', 'black');
 
     expect(result).toEqual(sampleDto);
+    // ZUB kontraktu klient↔server: tělo MUSÍ nést i `humanColor`. Kdyby ho klient
+    // přestal posílat (regrese), server dosadí default a volba barvy by se tiše
+    // ztratila – tenhle assert to chytí tady, ne až vizuálně obrácenou deskou.
     expect(fetchMock).toHaveBeenCalledWith(
       '/games',
       expect.objectContaining({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ level: 'beginner' }),
+        body: JSON.stringify({ level: 'beginner', humanColor: 'black' }),
+      }),
+    );
+  });
+
+  it('createGame pošle i humanColor="white" (bílá větev už není spící)', async () => {
+    const fetchMock = okFetch({ ...sampleDto, humanColor: 'white' }, 201);
+    const client = createHttpClient(fetchMock);
+
+    await client.createGame('professional', 'white');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/games',
+      expect.objectContaining({
+        body: JSON.stringify({ level: 'professional', humanColor: 'white' }),
       }),
     );
   });
@@ -78,7 +95,7 @@ describe('createHttpClient', () => {
     };
     const client = createHttpClient(okFetch(championshipDto, 201));
 
-    const result = await client.createGame('championship');
+    const result = await client.createGame('championship', 'black');
 
     expect(result).toEqual(championshipDto);
     expect(result.level).toBe('championship');
@@ -100,19 +117,19 @@ describe('createHttpClient', () => {
 
     // ballotMoves je číslo, ne pole ani null.
     const numberBallot = await createHttpClient(okFetch({ ...base, ballotMoves: 3 }, 201))
-      .createGame('championship')
+      .createGame('championship', 'black')
       .catch((e: unknown) => e);
     expect(numberBallot).toBeInstanceOf(ServerError);
 
     // ballotMoves je pole, ale prvek nemá tvar MoveDto (chybí path/captures).
     const badElement = await createHttpClient(okFetch({ ...base, ballotMoves: [{ from: 9 }] }, 201))
-      .createGame('championship')
+      .createGame('championship', 'black')
       .catch((e: unknown) => e);
     expect(badElement).toBeInstanceOf(ServerError);
 
     // Chybějící pole úplně (undefined) je taky drift → odmítnout.
     const missing = await createHttpClient(okFetch(base, 201))
-      .createGame('championship')
+      .createGame('championship', 'black')
       .catch((e: unknown) => e);
     expect(missing).toBeInstanceOf(ServerError);
   });
@@ -122,7 +139,7 @@ describe('createHttpClient', () => {
     // vyžadoval, každá dnešní odpověď (a starý server) by spadla na „neočekávaný
     // tvar GameDto". Musí projít – volající si dosadí výchozí černý.
     const client = createHttpClient(okFetch(sampleDto, 201));
-    const result = await client.createGame('professional');
+    const result = await client.createGame('professional', 'black');
     expect(result).toEqual(sampleDto);
     expect(result.humanColor).toBeUndefined();
   });
@@ -130,7 +147,7 @@ describe('createHttpClient', () => {
   it('isGameDto: humanColor="white" projde a dorazí až k volajícímu', async () => {
     const whiteDto: GameDto = { ...sampleDto, humanColor: 'white' };
     const client = createHttpClient(okFetch(whiteDto, 201));
-    const result = await client.createGame('professional');
+    const result = await client.createGame('professional', 'black');
     expect(result.humanColor).toBe('white');
   });
 
@@ -138,7 +155,7 @@ describe('createHttpClient', () => {
     // ZUB: přítomná, ale nesmyslná barva by orientovala desku podle undefined
     // větve. Guard ji musí odmítnout, ne tiše protéct.
     const badColor = await createHttpClient(okFetch({ ...sampleDto, humanColor: 'red' }, 201))
-      .createGame('professional')
+      .createGame('professional', 'black')
       .catch((e: unknown) => e);
     expect(badColor).toBeInstanceOf(ServerError);
   });
@@ -234,7 +251,7 @@ describe('createHttpClient', () => {
     const fetchMock = vi.fn(() => Promise.reject(new Error('boom'))) as unknown as typeof fetch;
     const client = createHttpClient(fetchMock);
 
-    const error = await client.createGame('professional').catch((e: unknown) => e);
+    const error = await client.createGame('professional', 'black').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ServerError);
     expect(error).toMatchObject({ status: 0 });
   });
@@ -260,7 +277,7 @@ describe('createHttpClient', () => {
     const fetchMock = okFetch({ id: 'g1', result: 'ongoing', engineStatus: 'idle' });
     const client = createHttpClient(fetchMock);
 
-    const error = await client.createGame('professional').catch((e: unknown) => e);
+    const error = await client.createGame('professional', 'black').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ServerError);
   });
 

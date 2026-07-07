@@ -7,6 +7,16 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-07-07
+
+### Added
+
+- **Střídání barev mezi partiemi.** Po každé dohrané partii dostaneš na příští hru
+  opačnou barvu – jednou hraješ černé, podruhé bílé, a tak dokola. Volba přežije i
+  znovunačtení stránky (drží se v prohlížeči). Deska se orientuje podle tvé barvy
+  (ty jsi vždy dole), hlášky výhry/prohry i indikátor „kdo je na tahu" se tomu
+  přizpůsobí, a když hraješ bílé, počítač (černý) zahájí partii sám.
+
 ## [0.40.0] - 2026-07-06
 
 ### Added

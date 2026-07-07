@@ -89,10 +89,26 @@ function fakeClient(dto: GameDto): ServerClient {
 /** Fake createGame, které v odpovědi VRÁTÍ zvolenou úroveň (server = autorita). */
 function levelEchoClient(): {
   client: ServerClient;
-  createGame: Mock<(level: GameLevel) => Promise<GameDto>>;
+  createGame: Mock<(level: GameLevel, humanColor: 'black' | 'white') => Promise<GameDto>>;
 } {
-  const createGame = vi.fn<(level: GameLevel) => Promise<GameDto>>((level) =>
+  const createGame = vi.fn<(level: GameLevel, humanColor: 'black' | 'white') => Promise<GameDto>>((level) =>
     Promise.resolve({ ...gameDto(initialPosition()), level }),
+  );
+  return { client: { ...fakeClient(gameDto(initialPosition())), createGame }, createGame };
+}
+
+/**
+ * Fake createGame, které v odpovědi VRÁTÍ i zvolenou barvu člověka (server =
+ * autorita nad `humanColor`). Slouží k ověření střídání barvy: každá partie
+ * skutečně „hraje" barvu, kterou si klient vyžádal, takže překlopení po dohrání
+ * vychází z reálné odehrané barvy.
+ */
+function colorEchoClient(): {
+  client: ServerClient;
+  createGame: Mock<(level: GameLevel, humanColor: 'black' | 'white') => Promise<GameDto>>;
+} {
+  const createGame = vi.fn<(level: GameLevel, humanColor: 'black' | 'white') => Promise<GameDto>>(
+    (level, humanColor) => Promise.resolve({ ...gameDto(initialPosition()), level, humanColor }),
   );
   return { client: { ...fakeClient(gameDto(initialPosition())), createGame }, createGame };
 }
@@ -184,6 +200,86 @@ describe('app-shell – perspektiva bílého (humanColor=white)', () => {
   });
 });
 
+describe('app-shell – střídání barvy po každé dohrané partii', () => {
+  const NEXT_COLOR_KEY = 'checkers.nextColor';
+
+  it('první partie je černá (výchozí), po dohrání pošle příští createGame bílou a uloží ji', async () => {
+    const { client, createGame } = colorEchoClient();
+    const { shell, created } = await mountRunning(client);
+
+    // Napoprvé nic uloženo → výchozí černý (dnešní chování).
+    expect(createGame).toHaveBeenNthCalledWith(1, 'professional', 'black');
+
+    // Partie se DOHRAJE (skutečný výsledek) → barva se překlopí a uloží.
+    created[0]?.emit(OVER);
+    await tick();
+    expect(localStorage.getItem(NEXT_COLOR_KEY)).toBe('white');
+
+    // Nová hra → další createGame dostane opačnou barvu.
+    click(q(shell.element, '.btn-newgame'));
+    await tick();
+    expect(createGame).toHaveBeenLastCalledWith('professional', 'white');
+
+    // A po dohrání DRUHÉ (bílé) partie se překlopí zpět na černou (ping-pong).
+    created[1]?.emit(OVER);
+    await tick();
+    expect(localStorage.getItem(NEXT_COLOR_KEY)).toBe('black');
+  });
+
+  it('pád enginu (error) barvu NEpřeklopí – není to dohraná partie; až reálný výsledek', async () => {
+    const { client } = colorEchoClient();
+    const { created } = await mountRunning(client);
+
+    // Chyba enginu (result ongoing, engineStatus error) – terminální latch se sice
+    // zapne, ale barva se překlápět NESMÍ (partie nedohrána).
+    created[0]?.emit({ result: 'ongoing', turn: 'black', engineStatus: 'error' });
+    await tick();
+    expect(localStorage.getItem(NEXT_COLOR_KEY)).toBeNull(); // nikdy nezapsáno
+
+    // Reálný výsledek přijde až teď → TEĎ se překlopí.
+    created[0]?.emit(OVER);
+    await tick();
+    expect(localStorage.getItem(NEXT_COLOR_KEY)).toBe('white');
+  });
+
+  it('první partie vezme barvu uloženou v LocalStorage (přežije reload)', async () => {
+    // Jako by minulá session skončila s „příště bílý". Nová session (mount) ji vezme.
+    localStorage.setItem(NEXT_COLOR_KEY, 'white');
+    const { client, createGame } = colorEchoClient();
+    await mountRunning(client);
+
+    expect(createGame).toHaveBeenNthCalledWith(1, 'professional', 'white');
+  });
+
+  it('starý server bez humanColor: po překlopení na bílou zůstane mapování ČERNÉ (fallback black)', async () => {
+    // ZUB regrese: server BEZ fáze 50 pole `humanColor` v požadavku ignoruje a
+    // člověka drží černého → v DTO humanColor NIKDY nepošle. Klient sice požádá o
+    // bílou, ale MUSÍ padnout na 'black' (ne na poslanou 'white'), jinak by desku
+    // orientoval pro bílého proti serveru, co hraje černého. Kdyby fallback byl
+    // `?? nextColor`, tenhle test spadne (mapování by bylo invertované).
+    const createGame = vi.fn<(level: GameLevel, humanColor: 'black' | 'white') => Promise<GameDto>>(
+      (level) => Promise.resolve({ ...gameDto(initialPosition()), level }), // BEZ humanColor
+    );
+    const client: ServerClient = { ...fakeClient(gameDto(initialPosition())), createGame };
+    const { shell, created } = await mountRunning(client);
+
+    // Dohraj hru 1 (výchozí černá) → nextColor se překlopí na 'white'.
+    created[0]?.emit(OVER);
+    await tick();
+    expect(localStorage.getItem(NEXT_COLOR_KEY)).toBe('white');
+
+    // Nová hra: klient pošle 'white', ale starý server ho zahodí → DTO zas bez barvy.
+    click(q(shell.element, '.btn-newgame'));
+    await tick();
+    expect(createGame).toHaveBeenLastCalledWith('professional', 'white');
+
+    // black-wins MUSÍ znamenat výhru člověka (černého) → fallback drží 'black'.
+    created[1]?.emit({ result: 'black-wins', turn: 'black', engineStatus: 'idle' });
+    await tick();
+    expect(q(q(shell.element, '.modal-overlay'), '.modal-msg').textContent).toBe('Vyhráli jste.');
+  });
+});
+
 describe('app-shell – panel nad deskou: obsah a struktura', () => {
   it('za běhu partie je řádek stavu prázdný a SKRYTÝ (kdo je na tahu = barva kamene), soupeř nikde', async () => {
     const { shell } = await mountRunning();
@@ -269,7 +365,7 @@ describe('app-shell – výběr úrovně', () => {
     document.body.append(shell.element);
     await tick();
 
-    expect(createGame).toHaveBeenCalledWith('professional');
+    expect(createGame).toHaveBeenCalledWith('professional', 'black');
     const select = q(shell.element, '.level-select') as HTMLSelectElement;
     // Soupeř se hlásí přepínačem (samostatný řádek s úrovní partie jsme zrušili).
     expect(select.value).toBe('professional');
@@ -292,7 +388,7 @@ describe('app-shell – výběr úrovně', () => {
     change(select); // uživatel přepnul úroveň PŘED prvním tahem
     await tick();
 
-    expect(createGame).toHaveBeenLastCalledWith('beginner');
+    expect(createGame).toHaveBeenLastCalledWith('beginner', 'black');
     expect(select.value).toBe('beginner');
   });
 
@@ -348,7 +444,7 @@ describe('app-shell – výběr úrovně', () => {
       level: 'championship',
       ballotMoves: null,
     };
-    const createGame = vi.fn<(level: GameLevel) => Promise<GameDto>>((level) =>
+    const createGame = vi.fn<(level: GameLevel, humanColor: 'black' | 'white') => Promise<GameDto>>((level) =>
       Promise.resolve(level === 'championship' ? champStart : { ...gameDto(initialPosition()), level }),
     );
     const client: ServerClient = { ...fakeClient(gameDto(initialPosition())), createGame };
@@ -362,7 +458,7 @@ describe('app-shell – výběr úrovně', () => {
     change(select); // výběr Mistrovství PŘED tahem přehraje partii na championship
     await tick();
 
-    expect(createGame).toHaveBeenLastCalledWith('championship');
+    expect(createGame).toHaveBeenLastCalledWith('championship', 'black');
     // Po založení Mistrovství je na tahu počítač (bílý + thinking) → latch
     // `firstMoveMade` se zamkne HNED, přepínač se zamkne. Zuby: kdyby se latch u
     // bílý-na-tahu startu nezamkl, select by zůstal odemčený a hráč by mohl
@@ -464,7 +560,7 @@ describe('app-shell – úroveň přežije reload (LocalStorage)', () => {
 
     const select = q(shell.element, '.level-select') as HTMLSelectElement;
     expect(select.value).toBe('intermediate');
-    expect(createGame).toHaveBeenCalledWith('intermediate');
+    expect(createGame).toHaveBeenCalledWith('intermediate', 'black');
   });
 
   it('neplatná uložená hodnota → fallback na výchozí Profesionál (nepropustí se serveru)', async () => {
@@ -477,7 +573,7 @@ describe('app-shell – úroveň přežije reload (LocalStorage)', () => {
 
     const select = q(shell.element, '.level-select') as HTMLSelectElement;
     expect(select.value).toBe('professional');
-    expect(createGame).toHaveBeenCalledWith('professional');
+    expect(createGame).toHaveBeenCalledWith('professional', 'black');
   });
 
   it('nedostupný LocalStorage (getItem hodí) → start nespadne, jede Profesionál', async () => {
@@ -493,7 +589,7 @@ describe('app-shell – úroveň přežije reload (LocalStorage)', () => {
 
     // Deska se vykreslila (appka nespadla), partie běží na výchozí úrovni.
     expect(shell.element.querySelectorAll('.fake-board')).toHaveLength(1);
-    expect(createGame).toHaveBeenCalledWith('professional');
+    expect(createGame).toHaveBeenCalledWith('professional', 'black');
   });
 });
 

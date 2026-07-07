@@ -39,6 +39,21 @@ const LEVEL_LABELS: Record<GameLevel, string> = {
 const LEVEL_STORAGE_KEY = 'checkers.level';
 
 /**
+ * Klíč v LocalStorage pro barvu, kterou má ČLOVĚK dostat v PŘÍŠTÍ partii. Střídá
+ * se po každé dohrané partii (viz `render`), takže tady je uložená ta NÁSLEDUJÍCÍ
+ * volba – ne barva aktuální partie (ta žije v `humanColor` a chodí ze serveru).
+ */
+const COLOR_STORAGE_KEY = 'checkers.nextColor';
+
+/** Barva člověka (engine hraje druhou). Odvozeno z `GameDto`, ať je jeden zdroj pravdy. */
+type HumanColor = NonNullable<GameDto['humanColor']>;
+
+/** Opačná barva – engine dostane vždycky tu, kterou nehraje člověk. */
+function opposite(color: HumanColor): HumanColor {
+  return color === 'black' ? 'white' : 'black';
+}
+
+/**
  * Načte zapamatovanou úroveň z LocalStorage. Vrací `null`, když nic uloženo není,
  * uložená hodnota NENÍ platná úroveň (stará/poškozená/cizí zápis), nebo když
  * LocalStorage vůbec nejde (privátní režim, vypnuté úložiště → `getItem` hodí).
@@ -64,6 +79,34 @@ function saveLevel(level: GameLevel): void {
     localStorage.setItem(LEVEL_STORAGE_KEY, level);
   } catch {
     // Nejde uložit → preference se prostě nezapamatuje, appka běží dál.
+  }
+}
+
+/**
+ * Načte barvu pro PŘÍŠTÍ partii z LocalStorage. Výchozí `'black'` (dnešní chování,
+ * člověk černý), když nic uloženo není, uložená hodnota není platná barva
+ * (stará/poškozená/cizí zápis), nebo LocalStorage vůbec nejde (privátní režim).
+ * Čtení NESMÍ shodit start appky – proto try/catch a validace, ne slepá důvěra
+ * uloženému řetězci (jinak by nesmysl protekl jako barva do `createGame`).
+ */
+function loadNextColor(): HumanColor {
+  try {
+    const raw = localStorage.getItem(COLOR_STORAGE_KEY);
+    if (raw === 'black' || raw === 'white') {
+      return raw;
+    }
+  } catch {
+    // LocalStorage nedostupný → tichý fallback na výchozí barvu.
+  }
+  return 'black';
+}
+
+/** Uloží barvu pro příští partii. Selhání zápisu (kvóta/privátní režim) je neškodné → spolknout. */
+function saveNextColor(color: HumanColor): void {
+  try {
+    localStorage.setItem(COLOR_STORAGE_KEY, color);
+  } catch {
+    // Nejde uložit → střídání se prostě nezapamatuje přes reload, appka běží dál.
   }
 }
 
@@ -246,7 +289,13 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // mapování výsledku na výhru/prohru, „jsem na tahu" pro nabídku remízy a detekci
   // prvního tahu (výchozí stav = člověk na tahu). Výchozí `'black'` (dnešní chování)
   // do prvního `createGame`; každá nová partie ji přepíše podle vráceného DTO.
-  let humanColor: NonNullable<GameDto['humanColor']> = 'black';
+  let humanColor: HumanColor = 'black';
+  // Barva, kterou má člověk dostat v PŘÍŠTÍ zakládané partii. Init z LocalStorage
+  // (výchozí černý = dnešní chování). Po každé DOHRANÉ partii se překlopí (viz
+  // `render`) a uloží, takže se barvy střídají hru po hře a přežije to reload.
+  // Oddělená od `humanColor` schválně: `humanColor` je barva AKTUÁLNÍ partie ze
+  // serveru, tohle je volba pro tu následující (posílá se do `createGame`).
+  let nextColor: HumanColor = loadNextColor();
   // `true`, dokud běží zakládání nové partie (createGame) – ať se tlačítka a
   // dvojklik na „Nová hra" mezitím zablokují.
   let loading = false;
@@ -386,6 +435,19 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       notifiedTerminalKey = null;
     } else if (key !== notifiedTerminalKey) {
       notifiedTerminalKey = key;
+      // Střídání barvy: po každé DOHRANÉ partii (skutečný výsledek – výhra/prohra/
+      // remíza) překlop barvu pro příští hru a ulož. Základ je barva SKUTEČNĚ
+      // odehrané partie (`humanColor` ze serveru), ne poslaná `nextColor` – v běžné
+      // cestě jsou shodné, ale takhle střídání drží i kdyby server barvu přebil.
+      // Gate `result !== 'ongoing'` schválně vylučuje `key === 'error'`: pád enginu
+      // NENÍ dohraná partie, tak barvu neměníme (jinak by opakovaný crash tiše
+      // přeskakoval barvu). Latch (`key !== notifiedTerminalKey`) zaručí přesně
+      // jedno překlopení na partii – polling ohlásí terminální stav vícekrát, ale
+      // sem se dostaneme jen jednou.
+      if (s.result !== 'ongoing') {
+        nextColor = opposite(humanColor);
+        saveNextColor(nextColor);
+      }
       const msg = terminalMessage(s);
       if (msg !== null) {
         showModal(msg);
@@ -503,13 +565,19 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     boardSlot.replaceChildren();
     setStatus('Načítám partii…');
     try {
-      const game = await client.createGame(level);
+      const game = await client.createGame(level, nextColor);
       if (disposed) {
         return; // appka se mezitím disposla – nezakládej controller s pollingem
       }
       // Barva člověka pro tuhle partii MUSÍ být nastavená DŘÍV, než controller
       // ohlásí první stav (onState → render() čte humanColor pro latch i mapování
-      // výsledku). Chybí-li v DTO, výchozí černý (dnešní chování).
+      // výsledku). Zdroj pravdy je server: bereme `game.humanColor`. Chybí-li v DTO,
+      // je to server BEZ fáze 50 – ten pole `humanColor` v požadavku ignoruje a
+      // člověka drží VŽDY černého. Fallback proto MUSÍ být `'black'` (ne poslaná
+      // `nextColor`): jinak by klient orientoval desku pro bílého, zatímco server
+      // hraje člověka černého → zrcadlově obrácená deska a invertované mapování
+      // výhry každou druhou hru. `'black'` = korektní degradace (feature se jen
+      // nestřídá), shodně s fází 51.
       humanColor = game.humanColor ?? 'black';
       // `loading` MUSÍ být false ještě před vytvořením controlleru: ten hned
       // ohlásí výchozí stav přes onState → render() a to čte `loading` do stavu

@@ -1,0 +1,48 @@
+{
+  "id": 52,
+  "title": "Klient posílá a střídá barvu",
+  "goal": "Klient posílá humanColor do POST /games a po každé dohrané partii barvu člověka překlopí (uloží do LocalStorage, ať přežije reload); tím se aktivuje dosud spící bílá větev z fáze 51. Pravidlo 2 kol v Mistrovství zůstává mimo tuto fázi – potřebuje serverovou podporu pro fixní ballot (vlastní pozdější fáze).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "createGame přijme a pošle humanColor",
+      "status": "done",
+      "detail": "server-client.ts: ServerClient.createGame(level, humanColor) + createHttpClient posílá do POST /games tělo { level, humanColor }. Kontrakt klient-server; kryto server-client.test (tělo nese obě pole)."
+    },
+    {
+      "title": "LocalStorage helpery pro barvu",
+      "status": "done",
+      "detail": "app-shell.ts: loadNextColor()/saveNextColor() po vzoru úrovně - vlastní klíč, validace proti ['black','white'], try/catch. Chybějící/neplatná/nedostupné úložiště -> výchozí 'black' (dnešní chování), start se neshodí."
+    },
+    {
+      "title": "startNewGame pošle zvolenou barvu",
+      "status": "done",
+      "detail": "nextColor (init z loadNextColor) se předá do createGame(level, nextColor); barva aktuální partie se odvodí z vráceného DTO (game.humanColor ?? nextColor). Aktivuje spící bílou větev z fáze 51."
+    },
+    {
+      "title": "Překlopení barvy po dohrané partii",
+      "status": "done",
+      "detail": "V render() v bloku terminálního latche, jen když s.result !== 'ongoing' (NE na engine-error), přepnout nextColor na opačnou a saveNextColor. Kritérium: přesně jednou za partii; pád enginu neflipuje."
+    },
+    {
+      "title": "Testy se zuby",
+      "status": "done",
+      "detail": "server-client.test: POST tělo nese humanColor. app-shell.test: po výsledku partie jde další createGame s opačnou barvou a barva se uloží do LocalStorage; první partie bere uloženou/výchozí; partie končící engine-error barvu NEpřeklopí."
+    },
+    {
+      "title": "Ověření bílé větve E2E + nezávislý self-review",
+      "status": "done",
+      "detail": "Ruční ověření, že člověk=bílý reálně funguje (server spustí první tah enginu, deska otočená, výsledek správně mapován) dle watch-out fáze 51; nezávislý sub-agent (čerstvý kontext) prověří chybové cesty a kontrakt těla POST."
+    }
+  ],
+  "startedAt": "2026-07-07T00:19:11.936Z",
+  "resolvedVerify": [
+    "Vizuální round-trip člověk=bílý proti reálnému serveru",
+    "Neuložené změny obrázků kamenů NEPATŘÍ do commitu fáze 52"
+  ],
+  "completedAt": "2026-07-07T00:40:57.630Z",
+  "autoCommit": {
+    "preSha": "f30813fb20487f3523350af63731551faf08f6b5",
+    "subject": "Phase 52: Klient posílá a střídá barvu"
+  }
+}

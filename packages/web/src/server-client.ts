@@ -81,8 +81,14 @@ export interface DrawOffer {
 
 /** Klient serveru. Injektuje se do controlleru, ať jde otestovat bez sítě. */
 export interface ServerClient {
-  /** Založí novou partii proti enginu na zvolené úrovni obtížnosti. */
-  createGame(level: GameLevel): Promise<GameDto>;
+  /**
+   * Založí novou partii proti enginu na zvolené úrovni obtížnosti a se zvolenou
+   * barvou ČLOVĚKA (`humanColor`; engine hraje druhou). Server je autorita: barvu
+   * uloží u partie a u člověk=bílý sám spustí první tah enginu (černého). Server
+   * má i default (`black`), ale klient barvu posílá vždy explicitně, ať se z volby
+   * nestane tiché „co server zrovna dosadí".
+   */
+  createGame(level: GameLevel, humanColor: Color): Promise<GameDto>;
   getGame(id: string): Promise<GameDto>;
   postMove(id: string, from: Square, path: readonly Square[]): Promise<GameDto>;
   /** Vzdání partie (člověk = černý → vyhrává bílý). Vrací stav se skončenou partií. */
@@ -168,7 +174,7 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
   }
 
   return {
-    createGame: (level) => request('POST', '/games', { level }),
+    createGame: (level, humanColor) => request('POST', '/games', { level, humanColor }),
     getGame: (id) => request('GET', `/games/${encodeURIComponent(id)}`),
     postMove: (id, from, path) =>
       request('POST', `/games/${encodeURIComponent(id)}/moves`, { from, path: [...path] }),
