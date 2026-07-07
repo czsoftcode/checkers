@@ -242,6 +242,11 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // Poslední známý stav ze serveru – řídí stav tlačítek (result i turn a
   // engineStatus kvůli tlačítku nabídky remízy) a to, jestli je vzdání aktuální.
   let lastStatus: GameStatus = { result: 'ongoing', turn: 'black', engineStatus: 'idle' };
+  // Barva člověka v AKTUÁLNÍ partii (ze serveru přes `GameDto.humanColor`). Řídí
+  // mapování výsledku na výhru/prohru, „jsem na tahu" pro nabídku remízy a detekci
+  // prvního tahu (výchozí stav = člověk na tahu). Výchozí `'black'` (dnešní chování)
+  // do prvního `createGame`; každá nová partie ji přepíše podle vráceného DTO.
+  let humanColor: NonNullable<GameDto['humanColor']> = 'black';
   // `true`, dokud běží zakládání nové partie (createGame) – ať se tlačítka a
   // dvojklik na „Nová hra" mezitím zablokují.
   let loading = false;
@@ -286,11 +291,11 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
    * nebo chyba enginu. `null`, když se nemá nic hlásit (běžící partie).
    */
   function terminalMessage(s: GameStatus): string | null {
-    if (s.result === 'black-wins') {
-      return 'Vyhráli jste.';
-    }
-    if (s.result === 'white-wins') {
-      return 'Vyhrál počítač.';
+    // Výhra/prohra podle barvy člověka: 'black-wins' vyhrává člověk jen když hraje
+    // černé, jinak vyhrál počítač (a naopak). Remíza je na barvě nezávislá.
+    if (s.result === 'black-wins' || s.result === 'white-wins') {
+      const humanWon = s.result === `${humanColor}-wins`;
+      return humanWon ? 'Vyhráli jste.' : 'Vyhrál počítač.';
     }
     if (s.result === 'draw') {
       return 'Remíza.';
@@ -339,29 +344,29 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     // (padl první tah) nebo běží zakládání. Tím se úroveň nezamkne bez vědomí
     // hráče, ale rozehranou partii přepnutí nerozbije.
     levelSelect.disabled = loading || (!over && firstMoveMade);
-    // Nabídnout remízu jde jen na tahu člověka (černý) a když engine nepřemýšlí;
-    // ne během zakládání ani když už jedna nabídka čeká na verdikt. Server to i
-    // tak ověří – tohle je jen UI, ne autorita.
+    // Nabídnout remízu jde jen na tahu člověka (jeho barva) a když engine
+    // nepřemýšlí; ne během zakládání ani když už jedna nabídka čeká na verdikt.
+    // Server to i tak ověří – tohle je jen UI, ne autorita.
     offerDrawBtn.disabled =
       over ||
       loading ||
       offering ||
-      lastStatus.turn !== 'black' ||
+      lastStatus.turn !== humanColor ||
       lastStatus.engineStatus === 'thinking';
   }
 
   /** Překreslí řádek stavu a nastaví tlačítka podle stavu partie. */
   function render(s: GameStatus): void {
     lastStatus = s;
-    // Jakmile stav přestane být „výchozí" (černý na tahu, engine idle, hra běží),
+    // Jakmile stav přestane být „výchozí" (člověk na tahu, engine idle, hra běží),
     // padl první tah → zamkni výběr úrovně. Latch (jen nahoru): i když se stav
-    // po tahu enginu vrátí na černý+idle, přepínač zůstane zamčený až do konce
-    // partie / nové hry. U běžných úrovní se sem dřív než prvním tahem člověka
-    // (černý) nedostane nic než výchozí stav. U Mistrovství je počáteční stav
-    // rovnou bílý+thinking (engine táhne první z nasazeného zahájení), takže se
-    // latch zamkne HNED při založení – to je správně: ballot už partii „rozehrál",
-    // úroveň se pro rozehranou partii měnit nemá.
-    if (s.result !== 'ongoing' || s.turn !== 'black' || s.engineStatus !== 'idle') {
+    // po tahu enginu vrátí na „člověk+idle", přepínač zůstane zamčený až do konce
+    // partie / nové hry. U běžných úrovní s ČLOVĚKEM ČERNÝM se sem dřív než prvním
+    // tahem člověka nedostane nic než výchozí stav. Kde engine táhne PRVNÍ (Mistrovství
+    // s nasazeným ballotem, nebo člověk BÍLÝ → engine černý začíná), je počáteční
+    // stav rovnou „soupeř na tahu / thinking", takže se latch zamkne HNED při
+    // založení – to je správně: partie už je rozehraná, úroveň se měnit nemá.
+    if (s.result !== 'ongoing' || s.turn !== humanColor || s.engineStatus !== 'idle') {
       firstMoveMade = true;
     }
     // Řádek stavu už nenese výsledek ani chybu (jdou do modalu); za běhu je prázdný.
@@ -400,8 +405,9 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   function updateTurnIndicator(s: GameStatus): void {
     const ongoing = s.result === 'ongoing';
     turnIndicator.classList.toggle('hidden', !ongoing);
-    // Barvu drž konzistentní i ve skrytém stavu, ať při dalším zobrazení
-    // neproblikne stará barva. `black` = člověk, `white` = počítač.
+    // Kámen má barvu strany NA TAHU (ne „vždy člověk"): to je správně v obou
+    // orientacích – když je na tahu člověk, svítí jeho barva, když engine, jeho.
+    // Barvu drž konzistentní i ve skrytém stavu, ať při dalším zobrazení neproblikne stará.
     turnPiece.classList.toggle('black', s.turn === 'black');
     turnPiece.classList.toggle('white', s.turn === 'white');
   }
@@ -501,6 +507,10 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       if (disposed) {
         return; // appka se mezitím disposla – nezakládej controller s pollingem
       }
+      // Barva člověka pro tuhle partii MUSÍ být nastavená DŘÍV, než controller
+      // ohlásí první stav (onState → render() čte humanColor pro latch i mapování
+      // výsledku). Chybí-li v DTO, výchozí černý (dnešní chování).
+      humanColor = game.humanColor ?? 'black';
       // `loading` MUSÍ být false ještě před vytvořením controlleru: ten hned
       // ohlásí výchozí stav přes onState → render() a to čte `loading` do stavu
       // tlačítek. Kdyby tu bylo pořád true, tlačítka by zůstala zamčená.

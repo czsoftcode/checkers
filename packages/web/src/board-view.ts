@@ -12,7 +12,7 @@
  */
 
 import { BOARD_SIZE, coordsToSquare, isDarkSquare } from '@checkers/rules';
-import type { Cell, Position, Square } from '@checkers/rules';
+import type { Cell, Color, Position, Square } from '@checkers/rules';
 
 import { diffMove } from './move-diff.js';
 import { createSoundPlayer } from './sound.js';
@@ -131,23 +131,29 @@ interface RunningAnimation {
  * ozvučuje animaci tahu a jde injektovat kvůli testu; výchozí je reálný přehrávač
  * (no-op bez `Audio`). `drag` (volitelné) zapne tažení kamenů (drag & drop);
  * bez něj deska funguje jen na ťuknutí jako dřív (a testy bez drag callbacků projdou).
+ * `humanColor` (výchozí `'black'`) orientuje desku tak, aby kameny člověka ležely
+ * dole; ovlivní jen pořadí buněk v DOM, ne číslování polí ani klikání.
  */
 export function createBoardView(
   onSquareClick: (square: Square | null) => void,
   player: SoundPlayer = createSoundPlayer(),
   drag?: DragCallbacks,
+  humanColor: Color = 'black',
 ): BoardView {
   const element = document.createElement('div');
   element.className = 'board';
 
   const squareEls = new Map<Square, HTMLElement>();
-  // Deska je otočená o 180° (řady i sloupce od nejvyššího indexu k nule), aby
-  // kameny člověka (černé, pole 1–12) ležely DOLE a soupeř nahoře. Otáčí se jen
+  // Orientace: kameny ČLOVĚKA leží DOLE. Přirozené pořadí (row/col 0→7) dává bílé
+  // pole (21–32) dole, otočení o 180° (7→0) dává černé (1–12) dole. Tak když je
+  // člověk bílý, plníme přirozeně; když černý (výchozí), otočíme. Otáčí se JEN
   // POŘADÍ vkládání do DOM (grid plní buňky v pořadí appendu); `data-square` i
   // třídy .dark/.light se dál počítají z reálných souřadnic (row, col), takže
-  // číslování polí, klikání i validace tahů zůstávají netknuté.
-  for (let row = BOARD_SIZE - 1; row >= 0; row--) {
-    for (let col = BOARD_SIZE - 1; col >= 0; col--) {
+  // číslování polí, klikání i validace tahů zůstávají netknuté v OBOU orientacích.
+  const reversed = humanColor === 'black';
+  const seq = Array.from({ length: BOARD_SIZE }, (_, i) => (reversed ? BOARD_SIZE - 1 - i : i));
+  for (const row of seq) {
+    for (const col of seq) {
       const cell = document.createElement('div');
       const dark = isDarkSquare(row, col);
       cell.className = dark ? 'square dark' : 'square light';

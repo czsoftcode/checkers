@@ -167,6 +167,27 @@ describe('render desky', () => {
     expect(numbersIn(56, 64)).toEqual([1, 2, 3, 4]); // dolní řada = strana černého (člověk)
   });
 
+  it('orientace člověk=bílý: přirozené pořadí – pole 1–4 nahoře, 29–32 dole', () => {
+    // ZUB orientace podle barvy: při humanColor='white' se deska NEotáčí (přirozené
+    // pořadí), aby kameny bílého člověka (21–32) ležely dole. Je to přesné zrcadlo
+    // výchozí černé orientace výše – kdyby se orientace přestala řídit barvou,
+    // padne buď tento test, nebo ten nad ním.
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'white');
+    const cells = [...view.element.querySelectorAll<HTMLElement>('.square')];
+    expect(cells).toHaveLength(64);
+
+    const numbersIn = (from: number, to: number): number[] =>
+      cells
+        .slice(from, to)
+        .map((el) => el.dataset.square)
+        .filter((s): s is string => s !== undefined)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+    expect(numbersIn(0, 8)).toEqual([1, 2, 3, 4]); // horní řada = strana černého (soupeř)
+    expect(numbersIn(56, 64)).toEqual([29, 30, 31, 32]); // dolní řada = strana bílého (člověk)
+  });
+
   it('vykreslí výchozí rozestavění: 12 černých a 12 bílých kamenů', () => {
     const board = mount();
     expect(board.querySelectorAll('.piece.black')).toHaveLength(12);
@@ -271,6 +292,41 @@ describe('interakce výběru', () => {
     const board = mount(whiteTurn, { client: fake.client, game: gameDto(whiteTurn, 'thinking') });
 
     click(squareEl(board, 22)); // bílý kámen – ale hraje engine
+    expect(board.querySelectorAll('.selected')).toHaveLength(0);
+    expect(fake.posted).toEqual([]);
+  });
+
+  it('člověk=BÍLÝ: na tahu bílý → klik na bílý kámen vybere a tah se odešle', () => {
+    // ZUB obrácené barvy: při humanColor='white' smí člověk vybírat a táhnout BÍLÉ
+    // kameny na tahu bílého. Kdyby turn-check zůstal natvrdo na černém, klik na bílý
+    // kámen by se zahodil a hra za bílého by nešla.
+    const whiteTurn = position('white', { 22: whiteMan, 9: blackMan });
+    const fake = serverFake(whiteTurn);
+    const board = mount(whiteTurn, {
+      client: fake.client,
+      game: { ...gameDto(whiteTurn, 'idle'), humanColor: 'white' },
+    });
+
+    click(squareEl(board, 22)); // bílý kámen – hraje ČLOVĚK (bílý)
+    expect(squareEl(board, 22).classList.contains('selected')).toBe(true);
+    const target = board.querySelector<HTMLElement>('.square.target');
+    expect(target).not.toBeNull();
+    click(target!); // dokonči tah na zvýrazněný cíl
+    expect(fake.posted).toHaveLength(1);
+    expect(fake.posted[0]?.from).toBe(22);
+  });
+
+  it('člověk=BÍLÝ: na tahu ČERNÝ (engine) → klik na černý kámen se zahodí', () => {
+    // Zrcadlo předchozího: když je na tahu soupeř (černý = engine), člověk (bílý)
+    // nesmí za něj táhnout – klik na černý kámen nic nevybere ani neodešle.
+    const blackTurn = position('black', { 9: blackMan, 22: whiteMan });
+    const fake = serverFake(blackTurn);
+    const board = mount(blackTurn, {
+      client: fake.client,
+      game: { ...gameDto(blackTurn, 'thinking'), humanColor: 'white' },
+    });
+
+    click(squareEl(board, 9)); // černý kámen – ale hraje engine (černý)
     expect(board.querySelectorAll('.selected')).toHaveLength(0);
     expect(fake.posted).toEqual([]);
   });

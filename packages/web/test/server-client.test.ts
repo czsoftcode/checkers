@@ -117,6 +117,32 @@ describe('createHttpClient', () => {
     expect(missing).toBeInstanceOf(ServerError);
   });
 
+  it('isGameDto: humanColor je volitelný – chybějící pole projde (výchozí černý)', async () => {
+    // ZUB zpětné kompatibility: sampleDto humanColor NEMÁ. Kdyby guard pole
+    // vyžadoval, každá dnešní odpověď (a starý server) by spadla na „neočekávaný
+    // tvar GameDto". Musí projít – volající si dosadí výchozí černý.
+    const client = createHttpClient(okFetch(sampleDto, 201));
+    const result = await client.createGame('professional');
+    expect(result).toEqual(sampleDto);
+    expect(result.humanColor).toBeUndefined();
+  });
+
+  it('isGameDto: humanColor="white" projde a dorazí až k volajícímu', async () => {
+    const whiteDto: GameDto = { ...sampleDto, humanColor: 'white' };
+    const client = createHttpClient(okFetch(whiteDto, 201));
+    const result = await client.createGame('professional');
+    expect(result.humanColor).toBe('white');
+  });
+
+  it('isGameDto: neplatný humanColor (ne black/white) → ServerError (drift)', async () => {
+    // ZUB: přítomná, ale nesmyslná barva by orientovala desku podle undefined
+    // větve. Guard ji musí odmítnout, ne tiše protéct.
+    const badColor = await createHttpClient(okFetch({ ...sampleDto, humanColor: 'red' }, 201))
+      .createGame('professional')
+      .catch((e: unknown) => e);
+    expect(badColor).toBeInstanceOf(ServerError);
+  });
+
   it('getGame posílá GET /games/:id s enkódovaným id', async () => {
     const fetchMock = okFetch(sampleDto);
     const client = createHttpClient(fetchMock);

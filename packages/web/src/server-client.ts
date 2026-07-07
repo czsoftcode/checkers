@@ -12,7 +12,7 @@
  * `dto.test.ts` (web na balíček server nezávisí, aby se nesvázal build graf).
  */
 
-import type { GameResult, Position, Square } from '@checkers/rules';
+import type { Color, GameResult, Position, Square } from '@checkers/rules';
 
 /** Stav tahu enginu na pozadí (kontrakt se serverem). */
 export type EngineStatus = 'idle' | 'thinking' | 'error';
@@ -57,6 +57,16 @@ export interface GameDto {
    * – zdroj pravdy o tazích i výsledné pozici je server.
    */
   readonly ballotMoves: MoveDto[] | null;
+  /**
+   * Barva, kterou v této partii hraje ČLOVĚK (engine hraje druhou). Server ji od
+   * fáze 50 posílá; klient podle ní orientuje desku (člověk dole), rozhoduje čí
+   * je tah a mapuje výsledek na „vyhrál/prohrál jsem". VOLITELNÉ na drátě: starý
+   * server (nebo odpověď bez pole) = `undefined` → klient bere výchozí `'black'`
+   * (dnešní chování, člověk černý). Přítomná neplatná hodnota (ne `black`/`white`)
+   * je ale drift kontraktu → `isGameDto` ji odmítne, ať se do orientace nedostane
+   * nesmysl.
+   */
+  readonly humanColor?: Color;
 }
 
 /**
@@ -298,6 +308,17 @@ function isGameDto(value: unknown): value is GameDto {
   if (
     record.ballotMoves !== null &&
     !(Array.isArray(record.ballotMoves) && record.ballotMoves.every(isMoveDto))
+  ) {
+    return false;
+  }
+  // `humanColor`: VOLITELNÉ (aditivní pole, zpětná kompatibilita). Chybějící /
+  // `undefined` je v pořádku – volající si dosadí výchozí `'black'`. Ale když
+  // pole PŘIJDE, musí být platná barva; jiná hodnota je drift → odmítni, ať se
+  // do orientace desky nedostane nesmysl (obrácená deska / špatné mapování výhry).
+  if (
+    record.humanColor !== undefined &&
+    record.humanColor !== 'black' &&
+    record.humanColor !== 'white'
   ) {
     return false;
   }

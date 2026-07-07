@@ -252,6 +252,11 @@
       "id": 50,
       "title": "Server: barva hráče parametrem partie",
       "status": "done"
+    },
+    {
+      "id": 51,
+      "title": "Klient: orientace desky podle barvy",
+      "status": "done"
     }
   ]
 }

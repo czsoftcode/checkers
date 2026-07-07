@@ -4,16 +4,17 @@
  *
  * Klient UŽ NENÍ druhý rozhodčí: tah neaplikuje lokálně, ale pošle ho serveru
  * (`postMove`) a desku nastaví na `GameDto`, který server vrátí. Tah enginu
- * (bílý) zachytí opakované dotazování (`getGame` à 250 ms). `rules` v klientu
- * zůstávají jen na zvýrazňování legálních tahů (výběr kamene, dopady skoku) –
- * jediným zdrojem pravdy o stavu partie je server.
+ * zachytí opakované dotazování (`getGame` à 250 ms). `rules` v klientu zůstávají
+ * jen na zvýrazňování legálních tahů (výběr kamene, dopady skoku) – jediným
+ * zdrojem pravdy o stavu partie je server.
  *
- * Člověk hraje ČERNÉ (server má napevno engine = bílý). Vybírat a táhnout jde
- * jen když je na tahu člověk (`position.turn === 'black'`). POZOR: „černý táhne
- * první" NEplatí univerzálně – na úrovni Mistrovství server nasadí vylosované
- * zahájení a partie startuje s BÍLÝM na tahu, takže engine táhne první (jeho tah
- * chytí první poll stejně jako každý jiný). Interakce člověka „jen na tahu černého"
- * tím ale zůstává v platnosti.
+ * Barvu člověka nese `game.humanColor` (engine hraje druhou); chybí-li, bere se
+ * výchozí `'black'` (dnešní chování). Vybírat a táhnout jde jen když je na tahu
+ * člověk (`position.turn === humanColor`). POZOR: „člověk táhne první" NEplatí
+ * univerzálně – na úrovni Mistrovství server nasadí vylosované zahájení a partie
+ * startuje s BÍLÝM na tahu; a když je člověk bílý, táhne první engine (černý).
+ * V obou případech chytí tah enginu první poll stejně jako každý jiný. Interakce
+ * člověka „jen na jeho tahu" tím zůstává v platnosti.
  *
  * Single-flight: v jednu chvíli běží jen jeden request (POST tahu i GET poll).
  * `GameDto` nenese pořadové číslo, takže dva souběžné snímky nejde spolehlivě
@@ -54,9 +55,6 @@ export interface GameStatus {
  */
 export type DrawOfferOutcome = 'accepted' | 'declined' | 'error';
 
-/** Barva, kterou hraje člověk. Server má engine napevno jako bílého. */
-const HUMAN_COLOR: Color = 'black';
-
 /** Interval opakovaného dotazu na stav (kvůli tahu enginu na pozadí). */
 const POLL_INTERVAL_MS = 250;
 
@@ -95,16 +93,17 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Engine (bílý) právě potáhl: dřív byl na tahu on (`prev.turn !== HUMAN_COLOR`) a
- * teď je zpět člověk (`next.turn === HUMAN_COLOR`). Vzdání během přemýšlení tohle
- * nespustí – mění výsledek, ne pozici, takže `prev.turn` zůstane bílý.
+ * Engine právě potáhl: dřív byl na tahu on (`prev.turn !== humanColor`) a teď je
+ * zpět člověk (`next.turn === humanColor`). Vzdání během přemýšlení tohle nespustí
+ * – mění výsledek, ne pozici, takže `prev.turn` zůstane u enginu.
  *
- * Platí i pro PRVNÍ tah enginu u Mistrovství: počáteční pozice je tam bílý-na-tahu
- * (engine táhne první), takže první poll vidí přechod bílý→černý stejně jako
+ * Platí i pro PRVNÍ tah enginu: u Mistrovství je počáteční pozice bílý-na-tahu
+ * (engine táhne první z nasazeného zahájení), u „člověk bílý" táhne první engine
+ * (černý). V obou případech vidí první poll přechod engine→člověk stejně jako
  * kterýkoli pozdější tah enginu. Žádný předchozí tah člověka není potřeba.
  */
-function engineJustMoved(prev: Position, next: Position): boolean {
-  return prev.turn !== HUMAN_COLOR && next.turn === HUMAN_COLOR;
+function engineJustMoved(prev: Position, next: Position, humanColor: Color): boolean {
+  return prev.turn !== humanColor && next.turn === humanColor;
 }
 
 /** Rozpracovaný výběr: výchozí kámen a už naklikané dopady (bez `from`). */
@@ -168,6 +167,10 @@ export function createBoardController(
   options: BoardControllerOptions = {},
 ): BoardController {
   let position = game.position;
+  // Barva člověka pro CELOU partii (engine hraje druhou). Ze serveru (`humanColor`),
+  // s výchozím `'black'` když chybí (zpětná kompatibilita). Řídí turn-checky,
+  // detekci tahu enginu, orientaci desky i mapování výsledku na výhru/prohru.
+  const humanColor: Color = game.humanColor ?? 'black';
   let selection: Selection | null = null;
   // `true`, dokud běží nějaký request (POST tahu / GET poll / vzdání). Drží
   // single-flight i zámek proti klikání během odesílání tahu.
@@ -224,11 +227,16 @@ export function createBoardController(
   const onState = options.onState;
   const gameId = game.id;
   const player = options.soundPlayer ?? createSoundPlayer();
-  const view = createBoardView(handleClick, player, {
-    canDrag,
-    onDragStart,
-    onDrop,
-  });
+  const view = createBoardView(
+    handleClick,
+    player,
+    {
+      canDrag,
+      onDragStart,
+      onDrop,
+    },
+    humanColor,
+  );
   const timer = setInterval(() => {
     void tickLoop();
   }, options.pollIntervalMs ?? POLL_INTERVAL_MS);
@@ -247,7 +255,7 @@ export function createBoardController(
     // Když běží request nebo není na tahu člověk (engine přemýšlí), klik zahodíme.
     // Bez kontroly barvy by šlo vybrat bílý kámen (selectableAt jen porovnává
     // cell.color === turn), zahrát za engine a dostat 409.
-    if (busy || position.turn !== HUMAN_COLOR) {
+    if (busy || position.turn !== humanColor) {
       return;
     }
 
@@ -366,7 +374,7 @@ export function createBoardController(
         // pollem jako přechod bílý→černý. (Serverový test „POST vrátí HNED stav …
         // thinking" ten kontrakt přibíjí; kdyby server začal balit tah enginu
         // rovnou do odpovědi na postMove, floor by se tiše přestal aplikovat.)
-        if (engineJustMoved(position, dto.position)) {
+        if (engineJustMoved(position, dto.position, humanColor)) {
           // Tah enginu je připravený. Ať ale „neproblikne" hned po tvém tahu:
           // počkej, až doanimuje tvůj tah (`lastRender` – jinak by ho nová animace
           // usekla), a od jeho konce nech uplynout aspoň `aiMovePauseMs`. Podlaha,
@@ -413,7 +421,7 @@ export function createBoardController(
       dragging ||
       hintRequested ||
       lastResult !== 'ongoing' ||
-      position.turn !== HUMAN_COLOR ||
+      position.turn !== humanColor ||
       selection !== null
     ) {
       return;
@@ -424,7 +432,7 @@ export function createBoardController(
         const move = await getHint(gameId);
         // Po awaitu ověř, že rada pořád platí pro AKTUÁLNÍ stav: nová hra (disposed),
         // změna tahu, konec partie nebo rozjetý vlastní výběr → radu zahoď.
-        if (disposed || position.turn !== HUMAN_COLOR || lastResult !== 'ongoing' || selection !== null) {
+        if (disposed || position.turn !== humanColor || lastResult !== 'ongoing' || selection !== null) {
           return;
         }
         hintMove = move;
@@ -566,7 +574,7 @@ export function createBoardController(
       rendered = render();
     }
     lastRender = rendered;
-    if (prevTurn === HUMAN_COLOR && dto.position.turn !== HUMAN_COLOR) {
+    if (prevTurn === humanColor && dto.position.turn !== humanColor) {
       // Přechod tah ČLOVĚKA → na tahu engine, tj. člověk PRÁVĚ potáhl. Nastav se
       // JEN tady (ne při opakovaných „thinking" pollech, které vrací tutéž pozici
       // s bílým na tahu – jinak by se známka pořád posouvala a pauza by se dlouho
@@ -581,7 +589,7 @@ export function createBoardController(
     // Zvuk konce partie zazní JEDNOU, na přechodu ongoing → terminální stav (ne
     // při načtení už skončené partie a ne opakovaně dalšími polly). Výhra hraje
     // fanfáru, prohra zvuk prohry, remíza zvuk remízy. Člověk hraje černé
-    // (HUMAN_COLOR).
+    // (humanColor).
     if (prevResult === 'ongoing' && dto.result !== 'ongoing') {
       // Mapa terminální výsledek → zvuk. `Record<Exclude<…>>` (stejně jako
       // server/CLI) je exhaustivní: kdyby do GameResult přibyla další terminální
@@ -590,8 +598,8 @@ export function createBoardController(
       const humanWins: SoundEvent = 'win';
       const humanLoses: SoundEvent = 'loss';
       const soundByResult: Record<Exclude<GameResult, 'ongoing'>, SoundEvent> = {
-        'black-wins': HUMAN_COLOR === 'black' ? humanWins : humanLoses,
-        'white-wins': HUMAN_COLOR === 'black' ? humanLoses : humanWins,
+        'black-wins': humanColor === 'black' ? humanWins : humanLoses,
+        'white-wins': humanColor === 'black' ? humanLoses : humanWins,
         draw: 'draw',
       };
       scheduleEndSound(rendered, dto.result, soundByResult[dto.result]);
@@ -801,7 +809,7 @@ export function createBoardController(
    * drží `onDrop` + server.
    */
   function canDrag(square: Square): boolean {
-    if (busy || dragging || position.turn !== HUMAN_COLOR || lastResult !== 'ongoing') {
+    if (busy || dragging || position.turn !== humanColor || lastResult !== 'ongoing') {
       return false;
     }
     if (selection !== null && selection.path.length > 0) {
@@ -839,7 +847,7 @@ export function createBoardController(
     dragging = false;
     // Konzistenční pojistka: bez odpovídajícího výběru, mimo tah, nebo když se zvedlo
     // z jiného pole než kde kámen opticky stojí → kámen jen vrať.
-    if (busy || position.turn !== HUMAN_COLOR || selection === null || origin !== lastHopOf(selection)) {
+    if (busy || position.turn !== humanColor || selection === null || origin !== lastHopOf(selection)) {
       return { kind: 'return' };
     }
     if (to === null) {

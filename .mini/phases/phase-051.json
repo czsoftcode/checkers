@@ -1,0 +1,47 @@
+{
+  "id": 51,
+  "title": "Klient: orientace desky podle barvy",
+  "goal": "Klient přečte humanColor z GameDto a podle ní orientuje desku (člověk dole), rozhoduje čí je tah (kdy smí táhnout člověk) a mapuje výsledek/zvuk na vyhrál/prohrál jsem; výchozí chování beze změny když barva chybí (člověk černý). Rozšíření webového GameDto o humanColor včetně guardu isGameDto (aditivní, validní odpověď nesmí odmítnout). Mimo fázi: střídání barev mezi partiemi, LocalStorage a pravidlo 2 kol v Mistrovství (fáze 52).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "DTO + guard: humanColor ve webovém GameDto",
+      "status": "done",
+      "detail": "Přidat readonly humanColor?: Color do GameDto (server-client.ts); guard isGameDto tolerantní: chybějící/undefined = ok (default černý, zpětná kompatibilita), přítomná neplatná hodnota (ne black/white) = odmítnout jako drift. Pokryto testem v server-client.test.ts (validní bílá projde, nesmysl spadne, chybějící projde)."
+    },
+    {
+      "title": "Controller: barva člověka per-partie",
+      "status": "done",
+      "detail": "Nahradit modulový HUMAN_COLOR hodnotou z game.humanColor ?? 'black'; protáhnout všech 9 míst (turn-checky výběru/dragu, detekce dokončeného tahu enginu, mapování black-wins/white-wins → zvuk výhra/prohra 593-594). Předat barvu do createBoardView kvůli orientaci."
+    },
+    {
+      "title": "Board-view: orientace desky podle barvy",
+      "status": "done",
+      "detail": "createBoardView přijme orientaci (barvu člověka); směr plnění mřížky: černý = dnešní obrácené pořadí (černý dole), bílý = přirozené pořadí (bílý dole). data-square, klikání i validace zůstávají z reálných souřadnic (žádná zrcadlová chyba). Test ověří pořadí DOM buněk pro obě barvy."
+    },
+    {
+      "title": "App-shell: hlášky, tlačítka a indikátor podle barvy",
+      "status": "done",
+      "detail": "Uložit humanColor ze založené partie; terminalMessage (výhra/prohra dle barvy), offerDrawBtn disabled dle turn !== humanColor, updateTurnIndicator (kámen člověka), latch firstMoveMade (výchozí stav = člověk na tahu + engine idle) odvodit z barvy. Default černý beze změny. Pozn.: u člověk=bílý táhne engine (černý) první → latch zamkne úroveň hned, konzistentně s Mistrovstvím."
+    },
+    {
+      "title": "Testy se zuby: perspektiva bílého (engine černý)",
+      "status": "done",
+      "detail": "Nová větev humanColor='white': (a) orientace desky přirozená; (b) turn-check pustí bílý tah člověka, zablokuje černý (enginův); (c) black-wins → Vyhrál počítač, white-wins → Vyhráli jste; (d) indikátor a nabídka remízy podle bílé. VŠECHNY stávající testy bez barvy zůstanou zelené (default černý)."
+    },
+    {
+      "title": "Nezávislý sub-agent self-review",
+      "status": "done",
+      "detail": "Fáze sahá na kontrakt server↔klient (DTO) a na turn/chybové cesty → dle projektového CLAUDE.md pustit před reportem nezávislého sub-agenta (čerstvý kontext) na review orientace, guardu a mapování barev."
+    }
+  ],
+  "startedAt": "2026-07-06T23:48:32.330Z",
+  "resolvedVerify": [
+    "Vizuální kontrola orientace desky pro člověk=bílý"
+  ],
+  "completedAt": "2026-07-07T00:10:12.938Z",
+  "autoCommit": {
+    "preSha": "2246e4c6f83f1f9690cbd2b78af1d16d21d8f8d5",
+    "subject": "Phase 51: Klient: orientace desky podle barvy"
+  }
+}

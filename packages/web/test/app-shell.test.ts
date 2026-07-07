@@ -151,6 +151,39 @@ describe('app-shell – stav tlačítek podle výsledku', () => {
   });
 });
 
+describe('app-shell – perspektiva bílého (humanColor=white)', () => {
+  const whiteDto = (): GameDto => ({ ...gameDto(initialPosition()), humanColor: 'white' });
+
+  it('engine (černý) vyhrál → modal „Vyhrál počítač."', async () => {
+    // ZUB obrácené barvy: při člověk=bílý znamená black-wins prohru člověka.
+    // Kdyby mapování zůstalo natvrdo (black-wins = výhra člověka), modal by lhal.
+    const { shell, created } = await mountRunning(fakeClient(whiteDto()));
+    created[0]?.emit({ result: 'black-wins', turn: 'black', engineStatus: 'idle' });
+    await tick();
+    const modal = q(shell.element, '.modal-overlay');
+    expect(q(modal, '.modal-msg').textContent).toBe('Vyhrál počítač.');
+  });
+
+  it('člověk (bílý) vyhrál → modal „Vyhráli jste."', async () => {
+    const { shell, created } = await mountRunning(fakeClient(whiteDto()));
+    created[0]?.emit({ result: 'white-wins', turn: 'white', engineStatus: 'idle' });
+    await tick();
+    const modal = q(shell.element, '.modal-overlay');
+    expect(q(modal, '.modal-msg').textContent).toBe('Vyhráli jste.');
+  });
+
+  it('nabídka remízy aktivní jen na tahu bílého (člověka), ne na tahu enginu', async () => {
+    const { shell, created } = await mountRunning(fakeClient(whiteDto()));
+    const offer = q(shell.element, '.btn-offer-draw') as HTMLButtonElement;
+
+    created[0]?.emit({ result: 'ongoing', turn: 'white', engineStatus: 'idle' });
+    expect(offer.disabled).toBe(false); // na tahu člověk (bílý)
+
+    created[0]?.emit({ result: 'ongoing', turn: 'black', engineStatus: 'idle' });
+    expect(offer.disabled).toBe(true); // na tahu engine (černý)
+  });
+});
+
 describe('app-shell – panel nad deskou: obsah a struktura', () => {
   it('za běhu partie je řádek stavu prázdný a SKRYTÝ (kdo je na tahu = barva kamene), soupeř nikde', async () => {
     const { shell } = await mountRunning();
