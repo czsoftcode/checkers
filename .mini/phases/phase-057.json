@@ -1,0 +1,44 @@
+{
+  "id": 57,
+  "title": "Kniha: víc kandidátů na pozici",
+  "goal": "Přepsat knihu zahájení z modelu 'jeden tah na pozici (konflikt = chyba)' na 'víc kandidátních tahů na pozici s deterministickým výběrem', aby šel v následující fázi uložit reálný větvící se strom zahájení; seed zůstává minimální (důkaz mechaniky), s testy se zuby na větvení, výběr i fallback. Mimo rozsah: naplnění reálnou teorií (další fáze), zrcadlová symetrie/transpozice, náhodný výběr pro variabilitu.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Typ knihy: kandidáti místo jednoho tahu",
+      "status": "done",
+      "detail": "OpeningBook = ReadonlyMap<string, readonly Move[]>; buildBook připojuje kandidáty místo přepisu, identické tahy dedupuje přes movesEqual, pravidlo konflikt=Error se ruší. Nelegální tah v seedu → pořád Error. buildBook se exportuje kvůli testům. Produkční SEED_LINES beze změny (minimální)."
+    },
+    {
+      "title": "Deterministický výběr v lookupBookMove",
+      "status": "done",
+      "detail": "Vrací první kandidát v pořadí vložení (stabilní); návratový typ zůstává Move | undefined. API pro volajícího beze změny."
+    },
+    {
+      "title": "Volající app.ts na nový typ",
+      "status": "done",
+      "detail": "BuildAppOptions.openingBook typ na ReadonlyMap<string, readonly Move[]>; lookup na L515 beze změny; typecheck + build projdou."
+    },
+    {
+      "title": "Migrace existujících testů na nový tvar",
+      "status": "done",
+      "detail": "opening-book-integration.test.ts a human-color.test.ts konstruují knihu jako [[key, [move]]]; opening-book.test.ts funkční; celá server suita zelená."
+    },
+    {
+      "title": "Testy se zuby na mechaniku",
+      "status": "done",
+      "detail": "buildBook: (a) dvě různé odpovědi na tutéž pozici → 2 kandidáti bez Error; (b) identický tah 2x → 1 kandidát (dedup); (c) nelegální tah → Error. lookupBookMove: (d) výběr = první vložený; (e) miss → undefined. Zuby ověřím dočasným rozbitím kódu."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat fázi; čerstvý sub-agent na cross-module kontrakt (typ knihy opening-book.ts ↔ app.ts ↔ testy) a na to, že zrušení konflikt=Error nezavedlo tichou záměnu tahů."
+    }
+  ],
+  "startedAt": "2026-07-07T10:31:27.241Z",
+  "completedAt": "2026-07-07T10:47:33.261Z",
+  "autoCommit": {
+    "preSha": "d186144ad91a99407071f803e0487db6987a5009",
+    "subject": "Phase 57: Kniha: víc kandidátů na pozici"
+  }
+}

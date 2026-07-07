@@ -1,5 +1,6 @@
 /**
- * Kniha zahájení (fáze 56) – statická read-only tabulka pozice → tah.
+ * Kniha zahájení (fáze 56, rozšířeno ve fázi 57) – statická read-only tabulka
+ * pozice → kandidátní tahy.
  *
  * Slouží plnosilovému soupeři (viz `levelUsesBook` v levels.ts): než engine
  * začne hledat, server nahlédne sem a je-li pozice v knize, zahraje knižní tah
@@ -14,13 +15,31 @@
  * pozice, takže klíče i tahy pocházejí z jednoho zdroje (rules) a nemůžou se
  * rozejít s tím, co server v provozu klíčuje.
  *
- * ROZSAH: minimální seed jen na důkaz mechaniky, NE reálná teorie zahájení.
- * Zrcadlová symetrie desky se NEŘEŠÍ – kniha netrefí zrcadlově transponované
- * pozice. Obojí je vědomě odloženo do pozdější obsahové fáze.
+ * FÁZE 57 – VÍC KANDIDÁTŮ NA POZICI: hodnota v knize je SEZNAM tahů, ne jeden
+ * tah. Reálná teorie zahájení se větví (na tutéž pozici víc dobrých pokračování)
+ * a dřívější model „jeden tah, konflikt = Error" ji neuměl pojmout – druhá linie
+ * sdílející pozici s jinou odpovědí shodila načtení modulu. Nově se kandidáti
+ * hromadí; identické tahy se dedupují (ne chyba – seed se přehrává po půltazích,
+ * shodné prefixy linií nutně narazí na tutéž pozici+tah). Zůstává jediná tvrdá
+ * pojistka: NELEGÁLNÍ tah v seedu pořád vyhodí Error (fail loud). Výběr z
+ * kandidátů při lookupu je zatím DETERMINISTICKÝ (první vložený), viz
+ * `lookupBookMove`.
+ *
+ * ROZSAH: minimální seed jen na důkaz mechaniky, NE reálná teorie zahájení
+ * (naplnění řeší další fáze). Zrcadlová symetrie desky se NEŘEŠÍ – kniha netrefí
+ * zrcadlově transponované pozice. Náhodný výběr pro variabilitu je také mimo
+ * rozsah (zatím deterministicky). Vše vědomě odloženo.
  */
 
 import { applyMove, initialPosition, legalMoves, positionKey } from '@checkers/rules';
 import type { Move, Position, Square } from '@checkers/rules';
+
+/**
+ * Kniha zahájení: klíč `positionKey` → seznam kandidátních tahů (≥ 1, nikdy
+ * prázdný – prázdný seznam se do knihy neukládá). Pořadí v seznamu je pořadí
+ * vložení při stavbě (viz `buildBook`); na tom stojí deterministický výběr.
+ */
+export type OpeningBook = ReadonlyMap<string, readonly Move[]>;
 
 /**
  * Jedno zahájení jako sekvence prostých tahů `[from, to]` od výchozí pozice.
@@ -46,7 +65,7 @@ const SEED_LINES: readonly OpeningLine[] = [
   ],
 ];
 
-/** Úplná shoda tahů (from + path + captures) pro detekci konfliktu v seedu. */
+/** Úplná shoda tahů (from + path + captures) pro dedup kandidátů v seedu. */
 function movesEqual(a: Move, b: Move): boolean {
   return (
     a.from === b.from &&
@@ -59,12 +78,17 @@ function movesEqual(a: Move, b: Move): boolean {
 
 /**
  * Postaví knihu přehráním linií reálnými pravidly. Pro každý půltah přiřadí
- * `positionKey(pozice před tahem) → tah`. Nelegální tah v seedu nebo konflikt
- * (dvě různá zahájení pro tutéž pozici) je chyba seedu → vyhodí Error při
- * načtení modulu (fail loud; tichá kniha by kazila hru bez varování).
+ * `positionKey(pozice před tahem) → kandidát`. Víc linií smí sdílet pozici a
+ * nabídnout k ní RŮZNÉ tahy → nashromáždí se jako víc kandidátů (žádná chyba).
+ * Identický tah na téže pozici se dedupuje (shodné prefixy linií). Nelegální tah
+ * v seedu je jediná tvrdá chyba → vyhodí Error při načtení modulu (fail loud;
+ * tichá kniha by kazila hru bez varování).
+ *
+ * Exportováno kvůli testům se zuby (větvení/dedup na řízeném vstupu bez sahání
+ * na produkční seed).
  */
-function buildBook(lines: readonly OpeningLine[]): ReadonlyMap<string, Move> {
-  const book = new Map<string, Move>();
+export function buildBook(lines: readonly OpeningLine[]): OpeningBook {
+  const book = new Map<string, Move[]>();
   for (const line of lines) {
     let position = initialPosition();
     for (const [from, to] of line) {
@@ -78,13 +102,13 @@ function buildBook(lines: readonly OpeningLine[]): ReadonlyMap<string, Move> {
         );
       }
       const key = positionKey(position);
-      const existing = book.get(key);
-      if (existing !== undefined && !movesEqual(existing, move)) {
-        throw new Error(
-          'Seed knihy zahájení: konflikt – dvě různá zahájení pro tutéž pozici.',
-        );
+      const candidates = book.get(key);
+      if (candidates === undefined) {
+        book.set(key, [move]);
+      } else if (!candidates.some((c) => movesEqual(c, move))) {
+        candidates.push(move); // nový kandidát na známé pozici (větvení)
       }
-      book.set(key, move);
+      // else: identický tah už v seznamu → dedup, nic (shodný prefix linií)
       position = applyMove(position, move);
     }
   }
@@ -92,16 +116,15 @@ function buildBook(lines: readonly OpeningLine[]): ReadonlyMap<string, Move> {
 }
 
 /** Výchozí kniha zahájení serveru. */
-export const OPENING_BOOK: ReadonlyMap<string, Move> = buildBook(SEED_LINES);
+export const OPENING_BOOK: OpeningBook = buildBook(SEED_LINES);
 
 /**
- * Knižní tah pro pozici, nebo `undefined`, když pozice v knize není. Volající
- * MUSÍ vrácený tah ještě ověřit proti pravidlům (`findLegalMove`) – kniha je
- * data, ne autorita.
+ * Knižní tah pro pozici, nebo `undefined`, když pozice v knize není. Při víc
+ * kandidátech vybírá DETERMINISTICKY první vložený (pořadí ze `buildBook`) –
+ * náhodný výběr pro variabilitu je mimo rozsah fáze 57. Volající MUSÍ vrácený
+ * tah ještě ověřit proti pravidlům (`findLegalMove`) – kniha je data, ne
+ * autorita.
  */
-export function lookupBookMove(
-  book: ReadonlyMap<string, Move>,
-  position: Position,
-): Move | undefined {
-  return book.get(positionKey(position));
+export function lookupBookMove(book: OpeningBook, position: Position): Move | undefined {
+  return book.get(positionKey(position))?.[0];
 }

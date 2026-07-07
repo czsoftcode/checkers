@@ -7,6 +7,17 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Kniha zahájení umí víc tahů na jednu pozici (interní příprava).** Datový
+  model knihy se změnil z „jedna pozice = jeden tah" na „jedna pozice = seznam
+  možných tahů", aby do ní v příští fázi šla uložit skutečná teorie zahájení,
+  která se větví (na tutéž pozici bývá víc dobrých pokračování). Dřív dvě linie
+  sdílející pozici s různým tahem shodily načtení serveru; nově se hromadí jako
+  varianty. Na hru to teď nemá žádný vliv – ukázková kniha zůstává stejná a
+  počítač vybírá první uloženou variantu. Naplnění reálnými zahájeními přijde
+  v další fázi.
+
 ## [0.44.0] - 2026-07-07
 
 ### Added

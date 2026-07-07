@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { applyMove, initialPosition, legalMoves, positionKey } from '@checkers/rules';
 import type { Move } from '@checkers/rules';
 
-import { OPENING_BOOK, lookupBookMove } from '../src/opening-book.js';
+import { OPENING_BOOK, buildBook, lookupBookMove } from '../src/opening-book.js';
 
 /** Prostý tah `from`-`to` v dané pozici z reálných pravidel (nebo chyba). */
 function simpleMove(position: Parameters<typeof legalMoves>[0], from: number, to: number): Move {
@@ -61,5 +61,70 @@ describe('kniha zahájení – lookupBookMove', () => {
   it('kontrakt: klíč knihy je reálný positionKey (has() na dopočítaném klíči)', () => {
     // Kdyby modul klíčoval jinou serializací, tenhle klíč by v mapě nebyl.
     expect(OPENING_BOOK.has(positionKey(initialPosition()))).toBe(true);
+  });
+});
+
+describe('kniha zahájení – buildBook: víc kandidátů na pozici (fáze 57)', () => {
+  it('(a) dvě RŮZNÉ odpovědi na tutéž pozici → 2 kandidáti, NEvyhodí Error', () => {
+    // Obě linie startují z výchozí pozice (černý na tahu), ale prvním tahem se
+    // rozejdou. Dřívější model „konflikt = Error" by tady spadl; nově se
+    // nashromáždí jako dva kandidáti.
+    const start = initialPosition();
+    const book = buildBook([[[11, 15]], [[9, 14]]]);
+    const candidates = book.get(positionKey(start));
+    expect(candidates).toHaveLength(2);
+    // Pořadí = pořadí vložení (na tom stojí deterministický výběr).
+    expect(candidates![0]).toEqual(simpleMove(start, 11, 15));
+    expect(candidates![1]).toEqual(simpleMove(start, 9, 14));
+  });
+
+  it('(b) identický tah 2× (shodný prefix linií) → 1 kandidát (dedup), NEvyhodí', () => {
+    // Dvě linie se shodným prvním tahem 11-15 narazí na tutéž pozici+tah.
+    const start = initialPosition();
+    const book = buildBook([
+      [
+        [11, 15],
+        [23, 19],
+      ],
+      [
+        [11, 15],
+        [22, 17],
+      ],
+    ]);
+    // Výchozí pozice: 11-15 vložený dvakrát → dedup na 1.
+    expect(book.get(positionKey(start))).toHaveLength(1);
+    // Po 11-15 (bílý na tahu) se ale linie rozešly → 2 kandidáti (větvení).
+    const afterBlack = applyMove(start, simpleMove(start, 11, 15));
+    expect(book.get(positionKey(afterBlack))).toHaveLength(2);
+  });
+
+  it('(c) nelegální tah v seedu → pořád vyhodí Error (fail loud pojistka zůstává)', () => {
+    // 11-20 není legální prostý tah z výchozí pozice.
+    expect(() => buildBook([[[11, 20]]])).toThrow(/není legální/);
+  });
+
+  it('(d) lookupBookMove při víc kandidátech vybírá DETERMINISTICKY první vložený', () => {
+    const start = initialPosition();
+    const book = buildBook([[[9, 14]], [[11, 15]]]); // pořadí vložení: 9-14, pak 11-15
+    // Vybere první vložený (9-14), NE ten „hezčí" nebo náhodný.
+    expect(lookupBookMove(book, start)).toEqual(simpleMove(start, 9, 14));
+  });
+
+  it('(e) pozice mimo knihu → lookupBookMove vrací undefined', () => {
+    const start = initialPosition();
+    const book = buildBook([[[11, 15]]]);
+    const afterBook = applyMove(start, simpleMove(start, 11, 15)); // bílý na tahu, NENÍ v knize
+    expect(lookupBookMove(book, afterBook)).toBeUndefined();
+  });
+
+  it('(f) kanárek: PRODUKČNÍ seed nemá na žádné pozici víc než 1 kandidáta', () => {
+    // Zrušením „konflikt = Error" (fáze 57) může do seedu potichu proklouznout
+    // kolizní kandidát – dnes inertní (výběr = [0]), ale ve fázi 58 s náhodným
+    // výběrem by začal kazit hru. Aktuální seed je LINEÁRNÍ (jedna linie), takže
+    // každá pozice smí mít právě 1 kandidát; víc = neúmyslná kolize v seedu.
+    // Až fáze 58 přidá záměrné větvení, tento test se vědomě upraví.
+    for (const candidates of OPENING_BOOK.values()) {
+      expect(candidates).toHaveLength(1);
+    }
   });
 });

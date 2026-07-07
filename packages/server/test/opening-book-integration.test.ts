@@ -111,7 +111,7 @@ function cellAt(pos: Position, square: number): Position['board'][number] | unde
 describe('kniha zahájení v cestě tahu soupeře', () => {
   it('1) zásah na profesionálovi → engine.bestmove se NEVOLÁ, hraje se knižní tah', async () => {
     const engine = spyEngine();
-    const book = new Map<string, Move>([[positionKey(POS_ENGINE_TO_MOVE), WHITE_BOOK_MOVE]]);
+    const book = new Map<string, Move[]>([[positionKey(POS_ENGINE_TO_MOVE), [WHITE_BOOK_MOVE]]]);
     app = buildApp({ engine, openingBook: book });
 
     const id = await createAndPlayFirst('professional');
@@ -127,7 +127,7 @@ describe('kniha zahájení v cestě tahu soupeře', () => {
 
   it('2) mimo knihu → engine.bestmove SE volá (fallback)', async () => {
     const engine = spyEngine();
-    app = buildApp({ engine, openingBook: new Map() }); // prázdná kniha = vždy miss
+    app = buildApp({ engine, openingBook: new Map<string, Move[]>() }); // prázdná kniha = vždy miss
 
     const id = await createAndPlayFirst('professional');
     await pollUntil(id, (d) => d.engineStatus === 'idle' && d.position.turn === 'black');
@@ -138,7 +138,7 @@ describe('kniha zahájení v cestě tahu soupeře', () => {
   it('3) beginner na pozici, co JE v knize → engine se přesto volá (gate)', async () => {
     const engine = spyEngine();
     // Kniha OBSAHUJE P, ale beginner ji nesmí použít.
-    const book = new Map<string, Move>([[positionKey(POS_ENGINE_TO_MOVE), WHITE_BOOK_MOVE]]);
+    const book = new Map<string, Move[]>([[positionKey(POS_ENGINE_TO_MOVE), [WHITE_BOOK_MOVE]]]);
     app = buildApp({ engine, openingBook: book });
 
     const id = await createAndPlayFirst('beginner');
@@ -152,7 +152,7 @@ describe('kniha zahájení v cestě tahu soupeře', () => {
     // Tah z pole 1 (černý kámen, ne bílý) není v bílých legalMoves(P) → nelegální.
     const illegal: Move = { from: 1, path: [5], captures: [] };
     expect(findLegalMove(POS_ENGINE_TO_MOVE, illegal.from, illegal.path)).toBeUndefined(); // precondition
-    const book = new Map<string, Move>([[positionKey(POS_ENGINE_TO_MOVE), illegal]]);
+    const book = new Map<string, Move[]>([[positionKey(POS_ENGINE_TO_MOVE), [illegal]]]);
     app = buildApp({ engine, openingBook: book });
 
     const id = await createAndPlayFirst('professional');

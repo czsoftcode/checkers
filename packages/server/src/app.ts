@@ -17,6 +17,7 @@ import { findLegalMove, gameToDto, legalMoveDtos, moveToDto } from './dto.js';
 import { ERROR_CODES, sendError } from './errors.js';
 import { LEVELS, STRENGTH_BY_LEVEL, levelUsesBook } from './levels.js';
 import { OPENING_BOOK, lookupBookMove } from './opening-book.js';
+import type { OpeningBook } from './opening-book.js';
 import { GameStore, effectiveResult, opposite } from './store.js';
 import type { GameRecord } from './store.js';
 import type { EngineMover } from './engine-client.js';
@@ -81,11 +82,11 @@ export interface BuildAppOptions {
    */
   readonly rng?: () => number;
   /**
-   * Kniha zahájení (fáze 56): pozice → tah. Když chybí, použije se výchozí
-   * `OPENING_BOOK`. Injektovatelná kvůli testům – řízená kniha nezávisí na
-   * obsahu produkčního seedu.
+   * Kniha zahájení (fáze 56, kandidáti od fáze 57): pozice → seznam tahů. Když
+   * chybí, použije se výchozí `OPENING_BOOK`. Injektovatelná kvůli testům –
+   * řízená kniha nezávisí na obsahu produkčního seedu.
    */
-  readonly openingBook?: ReadonlyMap<string, Move>;
+  readonly openingBook?: OpeningBook;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
