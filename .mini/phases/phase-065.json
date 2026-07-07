@@ -1,0 +1,47 @@
+{
+  "id": 65,
+  "title": "Endgame DB: rešerše a rozsah",
+  "goal": "Sepsat rozhodovací dokument, který s konkrétními čísly odpoví, jak náročná je endgame databáze pro americkou dámu (počet kamenů, velikost/formát, generovaná vs. externí Chinook data, náročnost retrográdní analýzy, integrační bod), a doporučí první realizovatelný řez — bez psaní produkčního DB kódu.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Měřicí skript: přesné počty pozic 2-5 kamenů",
+      "status": "done",
+      "detail": "Throwaway skript (scratch/scripts, mimo produkci) nad rules: enumeruje rozestavění k kamenů na 32 polích, každý kámen z {černý/bílý muž/dáma}, vyloučí muže na proměňovací řadě, započítá stranu na tahu, odečte symetrii desky. Legalitu ověří přes legalMoves/pravidla. Výstup: tabulka počtů pro k = 2,3,4,5 vypsaná skriptem."
+    },
+    {
+      "title": "Extrapolace na 6-8 kamenů + paměť a velikost",
+      "status": "done",
+      "detail": "Z naměřených 2-5 sestavit kombinatorický model, ověřit reprodukci přesných čísel, dopočítat 6,7,8. Převést na velikost (WLD = 2 bity/pozice na disku) a špičkovou RAM generování (~1 B/pozice největší materiálové třídy). Výstup: tabulka pozice→bajty→RAM porovnaná s HW stropem ~10 GB."
+    },
+    {
+      "title": "Chinook: fakta, formát, indexace, licence",
+      "status": "done",
+      "detail": "Ověřit a sepsat: <=8 kamenů / 443 mld. pozic / 2,7 GB, WLD ne DTW, přiložený C kód, schéma indexace, náročnost portu do TS (proměna, strana na tahu, orientace). Dohledat/vyřešit licenci - bez ní je import slepá ulička. Výstup: sekce dokumentu s fakty a licenčním verdiktem."
+    },
+    {
+      "title": "Návrh formátu tabulek a integračního bodu",
+      "status": "done",
+      "detail": "Skica kontraktu generátor<->lookup: deterministická indexace pozice → WLD hodnota; jak runtime lookup čte tabulku server-side (mmap/read-only) a kde se napojí do enginu/serverové autority. Výstup: sekce dokumentu popisující formát indexace a integraci - návrh, ne kód."
+    },
+    {
+      "title": "Rozhodovací dokument docs/endgame-db.md s doporučeným řezem",
+      "status": "done",
+      "detail": "Sjednotit kroky 1-4 do jednoho dokumentu s JEDNÍM doporučením: konkrétní řez (<=N kamenů, vlastní generátor) a strop v kamenech, za kterým je jedinou cestou import Chinooku. Výstup: docs/endgame-db.md obsahuje naměřená čísla a jedno rozhodnutí, ne výčet možností."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat fázi do CHANGELOGu. Nezávislý sub-agent (čerstvý kontext) ověří, že čísla v dokumentu sedí s výstupem skriptu, model neodporuje přesným počtům a doporučený strop je podložený."
+    }
+  ],
+  "startedAt": "2026-07-07T19:40:36.304Z",
+  "resolvedVerify": [
+    "Přečíst docs/endgame-db.md a odsouhlasit doporučený strop ≤6 kamenů"
+  ],
+  "completedAt": "2026-07-07T20:06:04.810Z",
+  "autoCommit": {
+    "preSha": "52db97ae6f7b932788138963718c48177e5321c7",
+    "subject": "Phase 65: Endgame DB: rešerše a rozsah"
+  }
+}

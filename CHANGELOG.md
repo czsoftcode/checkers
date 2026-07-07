@@ -7,6 +7,21 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+
+- **Rešerše endgame databáze: rozhodovací dokument a měřicí skript.** Než se
+  začne stavět endgame databáze (nejtěžší kus v2), vznikl podklad pro
+  rozhodnutí `docs/endgame-db.md` postavený na reálných, změřených číslech, ne
+  na odhadu. Nový jednorázový skript `scripts/endgame-count.mjs` (není produkční
+  kód) přesně spočítá počet legálních pozic pro 2 až 8 kamenů dvěma nezávislými
+  metodami, které se musí shodnout (jinak končí chybou), a výsledek křížově
+  ověří proti veřejnému číslu projektu Chinook (odchylka 0,84 %). Dokument z
+  toho odvozuje paměťovou, diskovou a časovou náročnost a doporučuje **stavět
+  vlastní generátor koncovek do 6 kamenů** (na vývojovém stroji se ještě vejde
+  do paměti), se stropem: 7 kamenů vyžaduje jiný algoritmus, 8 kamenů je reálné
+  jen importem Chinook dat, který je zatím blokovaný nejasnou licencí. Žádná
+  změna běhového chování hry - jde čistě o přípravu rozhodnutí.
+
 ## [0.51.0] - 2026-07-07
 
 ### Added
