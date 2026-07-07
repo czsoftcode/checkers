@@ -1,0 +1,16 @@
+{
+  "id": 55,
+  "title": "Obrázkové kameny a deska (webp)",
+  "goal": "Nahradit CSS kameny a barevná pole desky obrázky webp (černý/červený kámen + dáma, dřevěná deska game_board.webp) s fallbackem na dosavadní CSS, zvětšit kameny na 0.8 pole a přidat stín pod kameny (výraznější při tažení).",
+  "status": "done",
+  "startedAt": "2026-07-07T03:57:24.344Z",
+  "resolvedVerify": [
+    "Vizuál desky a kamenů v reálném prohlížeči",
+    "Cross-layer vazba --piece-scale (CSS) × DRAG_LIFT_SCALE (JS)"
+  ],
+  "completedAt": "2026-07-07T04:14:49.630Z",
+  "autoCommit": {
+    "preSha": "47cd1a5a4d7cb7204879f04b3e9bd4fca43d52ec",
+    "subject": "Phase 55: Obrázkové kameny a deska (webp)"
+  }
+}

@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-07-07
+
+### Added
+
+- **Nový vzhled desky a kamenů (dřevo + vyřezávané kameny).** Hrací deska je teď
+  dřevěná šachovnice a kameny jsou obrázky (černý a červený, včetně dam s korunkou),
+  místo dosavadních jednobarevných polí a kreslených koleček. Kameny jsou o něco
+  větší (lépe vyplní pole) a vrhají stín – při přenášení myší je stín výraznější,
+  aby působily „zvednuté nad deskou". Když se obrázky z jakéhokoli důvodu nenačtou,
+  hra se sama vrátí k původnímu vzhledu (barevná pole a kreslené kameny), takže
+  zůstane vždy hratelná.
+
 ## [0.42.0] - 2026-07-07
 
 ### Added

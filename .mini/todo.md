@@ -34,5 +34,5 @@
 - [ ] [M6/v2] Per-úroveň čas na přemýšlení enginu pro Mistrovství: dnes je DEFAULT_ENGINE_TIME_MS=1000 fixní pro všechny úrovně (měkký rozpočet vyhledávání = reálná páka síly, ne kosmetika). Pro Mistrovství zvážit vyšší čas (hlubší iterativní prohlubování → silnější hra). Chce: (a) plumbing per-úroveň času (dnes fixní na EngineClient.timeMs; bestmove by přijal timeMs override, podobně jako STRENGTH_BY_LEVEL), (b) číslo PODLOŽIT self-play měřením (selfplay-gate), ne od stolu. Trade-offy: delší čekání na tah AI; diminishing returns + strop remízy (proti špičce hlavně líp brání/trestá, ne vyhrává víc); TT přínosná až od hloubky ~7 (fáze 17) a bez inkrementálního Zobristu (todo 26) škáluje hůř. POZNÁMKA: čas není mezi třemi vize-pákami v2 (ballot, opening book, endgame DB) - je to ladění existujícího parametru, ne nová páka.
 - [x] 51 klient (orientace desky podle barvy + kontroly turn + mapování výhry)
 - [x] 52 střídání barvy po každé hře (2× LocalStorage) + pravidlo 2 kol v Mistrovství.
-- [ ] nové kameny
+- [x] nové kameny
 - [x] ballot souradnice do LocalStorage?

@@ -14,7 +14,9 @@
 import { BOARD_SIZE, coordsToSquare, isDarkSquare } from '@checkers/rules';
 import type { Cell, Color, Position, Square } from '@checkers/rules';
 
+import { enableBoardImage } from './board-image.js';
 import { diffMove } from './move-diff.js';
+import { enablePieceImages } from './piece-images.js';
 import { createSoundPlayer } from './sound.js';
 import type { SoundPlayer } from './sound.js';
 
@@ -25,8 +27,14 @@ const CAPTURE_FADE_MS = 200;
 
 /** Doba návratu kamene na výchozí pole při neplatném/mezidopadovém puštění (ms). */
 const DRAG_RETURN_MS = 180;
-/** Zvětšení zvednutého kamene při tažení (scale). */
-const DRAG_LIFT_SCALE = 1.18;
+/**
+ * Zvětšení zvednutého kamene při tažení (scale). Násobí se s velikostí hracího
+ * kamene (`--piece-scale` v CSS, teď 0.8), takže zvednutý kámen zabere 0.8 ×
+ * 1.1875 = 0.95 pole – větší než v klidu, ale ještě se vejde do pole (nepřeteče
+ * do sousedních). POZOR: když se změní `--piece-scale`, tenhle výsledek se posune
+ * a je potřeba faktor přepočítat (hodnoty žijí v různých vrstvách: CSS vs JS).
+ */
+const DRAG_LIFT_SCALE = 1.1875;
 
 /** Stav k vykreslení: pozice, vybrané pole a cílová pole ke zvýraznění. */
 export interface RenderState {
@@ -182,6 +190,12 @@ export function createBoardView(
     player.unlock();
     onSquareClick(squareOf(event.target));
   });
+
+  // Obrázková deska (webp) a obrázkové kameny (webp): asynchronně ověří načtení a
+  // při úspěchu přepnou vzhled (třída na `.board`). Nezávislé – když se načte jen
+  // jedno, druhé zůstane na CSS fallbacku. Neúspěch/jsdom → CSS fallback obou.
+  enableBoardImage(element);
+  enablePieceImages(element);
 
   // Tažení kamene (drag & drop). Jen když volající předal `drag` callbacky.
   if (drag !== undefined) {

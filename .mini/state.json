@@ -272,6 +272,11 @@
       "id": 54,
       "title": "Klient: dvě kola v Mistrovství",
       "status": "done"
+    },
+    {
+      "id": 55,
+      "title": "Obrázkové kameny a deska (webp)",
+      "status": "done"
     }
   ]
 }

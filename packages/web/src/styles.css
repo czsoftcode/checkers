@@ -11,6 +11,14 @@
      deskou a panel se počítá jinak), takže se tahle rezerva na mobilu neuplatní. */
   --board-size: min(calc(98vh - 7.5rem), calc(94vw - 9rem));
   --square: calc(var(--board-size) / 8);
+  /* Velikost hracího kamene jako podíl pole (kámen na desce = tolik % pole).
+     Jedno místo pravdy: používá ji i kámen v indikátoru na tahu (× 1.3), ať se
+     obě velikosti nikdy nerozejdou. POZOR: zvednutý kámen při tažení = tato
+     hodnota × DRAG_LIFT_SCALE (board-view.ts, teď 1.1875 → 0.8 × 1.1875 = 0.95,
+     ještě se vejde do pole). Při změně této hodnoty přepočítej i DRAG_LIFT_SCALE,
+     jinak zvednutý kámen přeteče do sousedních polí (vazba CSS↔JS nejde sdílet
+     konstantou bez čtení computed stylu). */
+  --piece-scale: 0.8;
   --light: #e8d3a1;
   --dark: #8a5a2b;
   --frame: #4a3418;
@@ -347,14 +355,43 @@ body {
   pointer-events: none;
 }
 
+/* Obrázková deska (webp) místo barevných polí. Zapíná JS třídou `.board-img` na
+   `.board` AŽ po ověření načtení (board-image.ts); jinak (chyba/jsdom) platí
+   barevná pole výše. Obrázek se roztáhne 1:1 přes celou desku a pole se
+   zprůhlední, ať dřevo prosvítá. `url(...)` Vite přepíše na hashovanou cestu
+   (žádný inline styl → CSP v pořádku). Zvýraznění výběru/cíle/nápovědy kreslí
+   overlay (outline, ::after), takže fungují i nad průhledným polem beze změny.
+   POZOR: obrázek nese vlastní 8×8 mřížku; přesné lícování s DOM mřížkou drží jen
+   při rovnoměrné mřížce v obrázku (viz board-image.ts). */
+.board.board-img {
+  background: url('./assets/game_board.webp') center / 100% 100% no-repeat;
+}
+
+.board.board-img .square {
+  background: transparent;
+}
+
+/* Cesta vícenásobného skoku: podbarvení `var(--path)` má alfu 0.5, takže dřevo
+   pod ní zůstane vidět. Vyšší specificitou ji vracíme nad průhledný základ výše. */
+.board.board-img .square.path {
+  background: var(--path);
+}
+
 .piece {
-  width: 72%;
-  height: 72%;
+  width: calc(var(--piece-scale) * 100%);
+  height: calc(var(--piece-scale) * 100%);
   border-radius: 50%;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Stín kamene vržený vpravo dolů (světlo zleva shora). `drop-shadow` (ne
+     `box-shadow`) obkreslí skutečný tvar podle průhlednosti webp, ne čtverec pole.
+     Odsazení i rozostření škálují s velikostí pole (`--square`), aby byl stín
+     stejný na malém i velkém displeji. Zvednutý kámen (`.dragging`) ho níže
+     zvětší. */
+  filter: drop-shadow(calc(var(--square) * 0.03) calc(var(--square) * 0.045)
+    calc(var(--square) * 0.045) rgba(0, 0, 0, 0.5));
   /* Klik projde skrz kámen na stabilní .square – pojistka proti spolknutí kliku
      při překreslení. Kámen sám nikdy není cílem kliku, výběr řídí pole pod ním. */
   pointer-events: none;
@@ -375,7 +412,10 @@ body {
 .piece.dragging {
   position: relative;
   z-index: 10;
-  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45));
+  /* Přenášený (zvednutý) kámen vrhá VĚTŠÍ stín vpravo dolů – dojem „výš nad
+     deskou". Větší odsazení i rozostření než klidový stín na `.piece`. */
+  filter: drop-shadow(calc(var(--square) * 0.06) calc(var(--square) * 0.09)
+    calc(var(--square) * 0.11) rgba(0, 0, 0, 0.55));
 }
 
 .piece.black {
@@ -383,9 +423,12 @@ body {
   border: 2px solid #000;
 }
 
+/* „Bílý" hráč je barevně ČERVENÝ (sladěno s webp kamenem white.webp, který je
+   červený, ne bílý). Fallback gradient proto taky červený, ať se při chybě
+   načtení obrázků vzhled výrazně nezmění. */
 .piece.white {
-  background: radial-gradient(circle at 35% 30%, #fff, #c4c4c4);
-  border: 2px solid #8a8a8a;
+  background: radial-gradient(circle at 35% 30%, #f26b5e, #b81f14);
+  border: 2px solid #7a1a12;
 }
 
 /* Dáma: korunka uprostřed kamene. */
@@ -400,7 +443,39 @@ body {
 }
 
 .piece.white.king::before {
-  color: #7a5a10;
+  color: #ffd24a;
+}
+
+/* Obrázkové kameny (webp). Zapíná je JS třídou `.pieces-img` na `.board` AŽ po
+   ověření, že se všechny čtyři obrázky načetly (piece-images.ts); do té doby (a
+   při chybě/jsdom) platí CSS fallback výše. `url(...)` Vite při buildu přepíše na
+   hashovanou cestu (žádný inline styl → CSP v pořádku). Obrázek nese vlastní
+   okraj i korunku dámy, proto rušíme lem i CSS korunku (`::before`), ať se
+   nekreslí dvakrát. `border-radius: 50%` z `.piece` ořízne obrázek do kruhu i
+   kdyby měl neprůhledné rohy. */
+.board.pieces-img .piece {
+  background: center / contain no-repeat;
+  border: none;
+}
+
+.board.pieces-img .piece.black {
+  background-image: url('./assets/black.webp');
+}
+
+.board.pieces-img .piece.white {
+  background-image: url('./assets/white.webp');
+}
+
+.board.pieces-img .piece.black.king {
+  background-image: url('./assets/black_queen.webp');
+}
+
+.board.pieces-img .piece.white.king {
+  background-image: url('./assets/white_queen.webp');
+}
+
+.board.pieces-img .piece.king::before {
+  display: none;
 }
 
 /* Indikátor strany na tahu: kruh v barvě tmavého pole desky (var(--dark)) se
@@ -429,12 +504,12 @@ body {
   display: none;
 }
 
-/* Kámen uvnitř indikátoru: o 30 % větší než hrací kámen (0.72 → 0.72 × 1.3).
+/* Kámen uvnitř indikátoru: o 30 % větší než hrací kámen (--piece-scale × 1.3).
    Barvu (gradient + rámeček) dědí z .piece.black/.white; tady jen velikost a
    statické „svícení" přes box-shadow. ŽÁDNÁ animace – kámen jen svítí, nebliká. */
 .turn-indicator .piece {
-  width: calc(var(--square) * 0.72 * 1.3);
-  height: calc(var(--square) * 0.72 * 1.3);
+  width: calc(var(--square) * var(--piece-scale) * 1.3);
+  height: calc(var(--square) * var(--piece-scale) * 1.3);
   box-shadow: 0 0 calc(var(--square) * 0.18) rgba(255, 255, 255, 0.7);
 }
 
