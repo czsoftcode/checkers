@@ -31,12 +31,17 @@
  * REÁLNÁ ZAHÁJENÍ – KOMPLEX 9-13 (fáze 59): druhý naplněný první tah černého.
  * Seed nese 6 hlavních odpovědí bílého na 9-13 (21-17, 22-17, 22-18, 23-18,
  * 24-19, 23-19) do ~8 půltahů, z Pask Část 1 (9-13s), trunk příslušných ballotů.
- * Výchozí pozice má tak nově 2 kandidáty prvního tahu: 11-15 (první vložený,
- * deterministicky vybraný) a 9-13. Pozice po 9-13 (engine=bílý) má 6 kandidátů.
+ *
+ * REÁLNÁ ZAHÁJENÍ – KOMPLEX 9-14 (fáze 60): třetí naplněný první tah černého.
+ * Seed nese 6 hlavních odpovědí bílého na 9-14 (22-17, 22-18, 23-18, 23-19,
+ * 24-19, 24-20) do ~8 půltahů, z Pask Část 2 (9-14s), trunk ballotů 26/30/34/
+ * 35/39/42. Výchozí pozice má tak nově 3 kandidáty prvního tahu: 11-15 (první
+ * vložený, deterministicky vybraný), 9-13 a 9-14. Pozice po 9-14 (engine=bílý)
+ * má 6 kandidátů (po 9-13 rovněž 6).
  *
  * ROZSAH / VĚDOMĚ ODLOŽENO: zrcadlová symetrie desky (kniha netrefí zrcadlené
  * pozice); náhodný výběr pro variabilitu (zatím deterministicky); zbývající
- * první tahy černého (9-14, 10-14, 10-15, 11-16, 12-16). „Complete Checkers" je
+ * první tahy černého (10-14, 10-15, 11-16, 12-16). „Complete Checkers" je
  * kniha 3-move; hlubší čistě-GAYP odbočky mimo trunk zde nejsou.
  */
 
@@ -94,6 +99,22 @@ const SEED_LINES: readonly OpeningLine[] = [
   [[9, 13], [24, 19], [5, 9], [28, 24], [11, 15], [22, 18], [15, 22], [25, 18]],
   // 9-13 23-19; 5-9 – Ballot 13. Výměna 22-18 15x22 25x18.
   [[9, 13], [23, 19], [5, 9], [27, 23], [11, 15], [22, 18], [15, 22], [25, 18]],
+  // --- KOMPLEX 9-14 (fáze 60): 6 hlavních odpovědí bílého na první tah 9-14.
+  // Pask „Complete Checkers", Část 2 (9-14s); trunk (hlavní linie) uvedených
+  // ballotů, prvních ~8 půltahů. 11-15 linie výše zůstávají PRVNÍ → deterministický
+  // první kandidát na výchozí pozici je dál 11-15; 9-14 je třetí kandidát (za 9-13).
+  // 9-14 22-17; 5-9 – Ballot 26. Výměna 14-17 21x14, pak černý bere zpět 9x25 29x22.
+  [[9, 14], [22, 17], [5, 9], [17, 13], [1, 5], [25, 22], [14, 17], [21, 14]],
+  // 9-14 22-18; 5-9 – Ballot 30. Výměna 10x19 24x15 (18-15 break).
+  [[9, 14], [22, 18], [5, 9], [25, 22], [11, 16], [18, 15], [10, 19], [24, 15]],
+  // 9-14 23-18; 14-23 – Ballot 34. Vynucené braní 14x23 27x18, pak 10x17 21x14.
+  [[9, 14], [23, 18], [14, 23], [27, 18], [12, 16], [18, 14], [10, 17], [21, 14]],
+  // 9-14 23-19; 5-9 – Ballot 35. Výměna 22-18 15x22 25x18.
+  [[9, 14], [23, 19], [5, 9], [27, 23], [11, 15], [22, 18], [15, 22], [25, 18]],
+  // 9-14 24-19; 11-15 – Ballot 39. Dvojitá výměna 15x24, 18x9 5x14, 28x19.
+  [[9, 14], [24, 19], [11, 15], [22, 18], [15, 24], [18, 9], [5, 14], [28, 19]],
+  // 9-14 24-20; 10-15 – Ballot 42. Prosté tahy, bez braní (do Key Landing 19).
+  [[9, 14], [24, 20], [10, 15], [22, 17], [7, 10], [25, 22], [3, 7], [29, 25]],
 ];
 
 /** Úplná shoda tahů (from + path + captures) pro dedup kandidátů v seedu. */

@@ -53,8 +53,8 @@ describe('kniha zahájení – lookupBookMove', () => {
 
   it('pozice po JINÉM prvním tahu než knižním → miss (undefined)', () => {
     const start = initialPosition();
-    // Vyber legální první tah, který NENÍ knižní (kniha zná 11-15 a 9-13).
-    const bookFirst = new Set(['11-15', '9-13']);
+    // Vyber legální první tah, který NENÍ knižní (kniha zná 11-15, 9-13 a 9-14).
+    const bookFirst = new Set(['11-15', '9-13', '9-14']);
     const other = legalMoves(start).find((m) => !bookFirst.has(`${m.from}-${m.path[0]}`));
     expect(other).toBeDefined();
     const afterOther = applyMove(start, other!);
@@ -127,13 +127,15 @@ describe('kniha zahájení – buildBook: víc kandidátů na pozici (fáze 57)'
     for (const candidates of OPENING_BOOK.values()) {
       expect(candidates.length).toBeGreaterThan(0);
     }
-    // 2) výchozí pozice: 2 knižní první tahy (11-15 z fáze 58, 9-13 z fáze 59),
-    //    každý dedup na 1 → přesně 2 kandidáti. Pořadí vložení: 11-15 první.
+    // 2) výchozí pozice: 3 knižní první tahy (11-15 z fáze 58, 9-13 z fáze 59,
+    //    9-14 z fáze 60), každý dedup na 1 → přesně 3 kandidáti. Pořadí vložení:
+    //    11-15 první, 9-13 druhý, 9-14 třetí.
     const start = initialPosition();
     const firstCandidates = OPENING_BOOK.get(positionKey(start));
-    expect(firstCandidates).toHaveLength(2);
+    expect(firstCandidates).toHaveLength(3);
     expect(firstCandidates![0]).toEqual(simpleMove(start, 11, 15));
     expect(firstCandidates![1]).toEqual(simpleMove(start, 9, 13));
+    expect(firstCandidates![2]).toEqual(simpleMove(start, 9, 14));
     // 3) po 11-15 (bílý na tahu): 6 hlavních odpovědí bílého = přesně 6 kandidátů.
     //    Duplicitní/kolizní tah v seedu by tohle číslo rozbil (zuby). Při změně
     //    počtu seed linií se číslo VĚDOMĚ upraví.
@@ -142,6 +144,9 @@ describe('kniha zahájení – buildBook: víc kandidátů na pozici (fáze 57)'
     // 4) po 9-13 (bílý na tahu): 6 hlavních odpovědí bílého = přesně 6 kandidátů.
     const afterBlack913 = applyMove(start, simpleMove(start, 9, 13));
     expect(OPENING_BOOK.get(positionKey(afterBlack913))).toHaveLength(6);
+    // 5) po 9-14 (bílý na tahu): 6 hlavních odpovědí bílého = přesně 6 kandidátů.
+    const afterBlack914 = applyMove(start, simpleMove(start, 9, 14));
+    expect(OPENING_BOOK.get(positionKey(afterBlack914))).toHaveLength(6);
   });
 });
 
@@ -287,6 +292,81 @@ describe('kniha zahájení – reálný komplex 9-13 (fáze 59)', () => {
   ];
 
   it('všech 6 referenčních linií 9-13 je v PRODUKČNÍ knize po celé délce (regresní zámek)', () => {
+    for (const line of REFERENCE_LINES) {
+      let pos = initialPosition();
+      for (const [from, to] of line) {
+        const candidates = OPENING_BOOK.get(positionKey(pos)) ?? [];
+        const present = candidates.some(
+          (m) => m.from === from && m.path[m.path.length - 1] === to,
+        );
+        expect(present, `chybí knižní tah ${from}->${to}`).toBe(true);
+        pos = play(pos, from, to);
+      }
+    }
+  });
+});
+
+describe('kniha zahájení – reálný komplex 9-14 (fáze 60)', () => {
+  /** Přehraje půltah `from`→dopad `to` (i braní) proti reálným pravidlům. */
+  function play(pos: Parameters<typeof legalMoves>[0], from: number, to: number) {
+    const matches = legalMoves(pos).filter(
+      (m) => m.from === from && m.path[m.path.length - 1] === to,
+    );
+    if (matches.length !== 1) {
+      throw new Error(`test: ${from}->${to} má ${matches.length} shod (očekávána 1)`);
+    }
+    return applyMove(pos, matches[0]!);
+  }
+  /** Dopadové pole knižního tahu pro pozici (nebo undefined). */
+  function bookLanding(pos: Parameters<typeof legalMoves>[0]): [number, number] | undefined {
+    const m = lookupBookMove(OPENING_BOOK, pos);
+    return m === undefined ? undefined : [m.from, m.path[m.path.length - 1]!];
+  }
+
+  it('engine=bílý po 9-14: deterministicky první kandidát 22-17', () => {
+    const p = play(initialPosition(), 9, 14); // černý (člověk) zahraje 9-14
+    // Kniha má 6 odpovědí bílého; deterministický výběr vrací první vloženou (22-17).
+    expect(bookLanding(p)).toEqual([22, 17]);
+  });
+
+  it('engine=černý odpoví na 9-14 24-19 → knižní 11-15 (pokrytá NE-první odpověď)', () => {
+    let p = play(initialPosition(), 9, 14);
+    // Bílý (člověk) zahraje 24-19 – NENÍ první kandidát, ale kniha ho POKRÝVÁ.
+    p = play(p, 24, 19);
+    expect(bookLanding(p)).toEqual([11, 15]);
+  });
+
+  it('9-14 23-18 → černý knižně bere 14x23 (braní zakódováno správně)', () => {
+    let p = play(initialPosition(), 9, 14);
+    p = play(p, 23, 18); // bílý 23-18 nabízí výměnu (vynucené braní)
+    const bm = lookupBookMove(OPENING_BOOK, p);
+    expect(bm).toBeDefined();
+    expect([bm!.from, bm!.path[bm!.path.length - 1]]).toEqual([14, 23]);
+    expect(bm!.captures.length).toBe(1); // je to braní, ne prostý tah
+  });
+
+  it('mimo pokryté odpovědi bílého → černý vypadne z knihy (undefined)', () => {
+    let p = play(initialPosition(), 9, 14);
+    // 21-17 je legální odpověď bílého, ale JEDINÁ ze 7, kterou seed nepokrývá
+    // (má 22-17, 22-18, 23-18, 23-19, 24-19, 24-20) → černý není v knize.
+    p = play(p, 21, 17);
+    expect(lookupBookMove(OPENING_BOOK, p)).toBeUndefined();
+  });
+
+  // REFERENČNÍ linie 9-14 (kopie SEED_LINES, ověřená proti Pask „Complete
+  // Checkers", Část 2 při self-review fáze 60). Stejná ochrana i hranice jako
+  // u 9-13 výše: nezávislá kopie chytí BUDOUCÍ divergenci, ne souběžný překlep
+  // zapsaný stejně sem i do seedu. Formát [from, dopad].
+  const REFERENCE_LINES: readonly (readonly [number, number])[][] = [
+    [[9, 14], [22, 17], [5, 9], [17, 13], [1, 5], [25, 22], [14, 17], [21, 14]],
+    [[9, 14], [22, 18], [5, 9], [25, 22], [11, 16], [18, 15], [10, 19], [24, 15]],
+    [[9, 14], [23, 18], [14, 23], [27, 18], [12, 16], [18, 14], [10, 17], [21, 14]],
+    [[9, 14], [23, 19], [5, 9], [27, 23], [11, 15], [22, 18], [15, 22], [25, 18]],
+    [[9, 14], [24, 19], [11, 15], [22, 18], [15, 24], [18, 9], [5, 14], [28, 19]],
+    [[9, 14], [24, 20], [10, 15], [22, 17], [7, 10], [25, 22], [3, 7], [29, 25]],
+  ];
+
+  it('všech 6 referenčních linií 9-14 je v PRODUKČNÍ knize po celé délce (regresní zámek)', () => {
     for (const line of REFERENCE_LINES) {
       let pos = initialPosition();
       for (const [from, to] of line) {

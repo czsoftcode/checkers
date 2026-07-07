@@ -1,0 +1,44 @@
+{
+  "id": 60,
+  "title": "Kniha: reálný komplex 9-14",
+  "goal": "Naplnit knihu zahájení ověřenými hlavními liniemi komplexu prvního tahu černého 9-14 z Pask 'Complete Checkers' (Část 1) do ~8 půltahů, pro obě barvy enginu, s deterministickým výběrem; legalitu každého půltahu vynutí buildBook, zásah na klíčových pozicích ověří testy proti reálným Position. Mimo rozsah: ostatní zbývající první tahy (10-14, 10-15, 11-16, 12-16), zrcadlová symetrie/transpozice, náhodný výběr.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit číslování a orientaci 9-14 vůči Pask",
+      "status": "done",
+      "detail": "Potvrdit, že pole 9 a 14 v standardním PDN číslování odpovídají prvnímu tahu černého 9-14 v Pask 'Complete Checkers', Část 1 (9-14s); zapsat, které ballty/linie se vezmou. Výstup: seznam vybraných hlavních odpovědí bílého s čísly řádků/ballotů ze zdroje."
+    },
+    {
+      "title": "Extrahovat hlavní linie komplexu 9-14 z Pask",
+      "status": "done",
+      "detail": "Z trunku (hlavních linií) vybraných ballotů opsat prvních ~8 půltahů ve formátu [from, dopad]. Výstup: 5-6 linií jako pole dvojic, každá s komentářem (odpověď bílého + číslo řádku Pask)."
+    },
+    {
+      "title": "Zakódovat linie 9-14 do SEED_LINES",
+      "status": "done",
+      "detail": "Přidat linie do SEED_LINES v opening-book.ts s blokovým komentářem (jako u 9-13); načtení modulu přes buildBook vynutí legalitu každého půltahu (nelegální/dvojznačný = Error). Výstup: modul se načte bez chyby, kniha má nově 3. kandidát prvního tahu 9-14."
+    },
+    {
+      "title": "Aktualizovat kanárek a miss test na tři první tahy",
+      "status": "done",
+      "detail": "V testu (f) opravit počet knižních prvních tahů na výchozí pozici na 3 (11-15, 9-13, 9-14); v 'miss' testu rozšířit Set blokovaných prvních tahů o 9-14, ať dál vybírá skutečně ne-knižní tah. Výstup: oba upravené testy zelené."
+    },
+    {
+      "title": "Testy: reálné pozice 9-14 → knižní tah",
+      "status": "done",
+      "detail": "Nový describe blok jako u 9-13: engine=bílý po 9-14 vrací deterministicky první kandidát; pokrytá ne-první odpověď bílého; alespoň jedna linie s braním ověřená; ne-pokrytá odpověď → undefined; regresní zámek všech linií v produkční knize. Výstup: nové testy zelené, celá sada pnpm test zelená."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat fázi do CHANGELOG.md; pustit sub-agenta s čerstvým kontextem na kontrolu přepisu linií proti Pask a zubatosti testů. Výstup: CHANGELOG hotový, nálezy self-review vypořádané."
+    }
+  ],
+  "startedAt": "2026-07-07T13:15:18.017Z",
+  "completedAt": "2026-07-07T13:35:02.232Z",
+  "autoCommit": {
+    "preSha": "6ca2a18caa3b06e700c30986ae8a9113bb79d7ca",
+    "subject": "Phase 60: Kniha: reálný komplex 9-14"
+  }
+}

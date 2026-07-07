@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-07-07
+
+### Added
+
+- **Počítač hraje reálná zahájení i komplexu 9-14.** Kniha zahájení se rozšířila
+  o třetí první tah černého – 9-14 – se šesti hlavními odpověďmi soupeře (22-17,
+  22-18, 23-18, 23-19, 24-19, 24-20) do zhruba osmi půltahů, včetně běžných
+  výměn. Zdrojem je opět kniha Richarda Paska „Complete Checkers" (Část 2, sekce
+  9-14s); každý tah je ověřený proti pravidlům hry. Na výchozí pozici tak počítač
+  vybírá ze tří zahájení (11-15, 9-13 a 9-14); přednostně stále hraje 11-15.
+  Zbývající první tahy (10-14, 10-15, 11-16, 12-16) přijdou v dalších fázích.
+
 ## [0.46.0] - 2026-07-07
 
 ### Added
