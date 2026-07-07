@@ -39,9 +39,20 @@
  * vložený, deterministicky vybraný), 9-13 a 9-14. Pozice po 9-14 (engine=bílý)
  * má 6 kandidátů (po 9-13 rovněž 6).
  *
+ * REÁLNÁ ZAHÁJENÍ – KOMPLEX 10-14 (fáze 61): čtvrtý naplněný první tah černého.
+ * Seed nese 6 hlavních odpovědí bílého na 10-14 (22-17, 22-18, 23-18, 23-19,
+ * 24-19, 24-20) do ~8 půltahů, z Pask Část 3 (10-14s), trunk ballotů 45/47/50/
+ * 50B/53/58. U 23-19 první ballot 50A svým trunkem transponuje do 7-10 (T) a
+ * 24-20 první ballot 57 je krátký transpoziční stub („INTO … V15"); pro obě
+ * odpovědi se proto bere první ballot s VLASTNÍM samostatným trunkem (50B, resp.
+ * 58) – stejně jako fáze 60 přeskočila transpoziční linie. Výchozí
+ * pozice má tak nově 4 kandidáty prvního tahu: 11-15 (první vložený,
+ * deterministicky vybraný), 9-13, 9-14 a 10-14. Pozice po 10-14 (engine=bílý)
+ * má 6 kandidátů.
+ *
  * ROZSAH / VĚDOMĚ ODLOŽENO: zrcadlová symetrie desky (kniha netrefí zrcadlené
  * pozice); náhodný výběr pro variabilitu (zatím deterministicky); zbývající
- * první tahy černého (10-14, 10-15, 11-16, 12-16). „Complete Checkers" je
+ * první tahy černého (10-15, 11-16, 12-16). „Complete Checkers" je
  * kniha 3-move; hlubší čistě-GAYP odbočky mimo trunk zde nejsou.
  */
 
@@ -115,6 +126,25 @@ const SEED_LINES: readonly OpeningLine[] = [
   [[9, 14], [24, 19], [11, 15], [22, 18], [15, 24], [18, 9], [5, 14], [28, 19]],
   // 9-14 24-20; 10-15 – Ballot 42. Prosté tahy, bez braní (do Key Landing 19).
   [[9, 14], [24, 20], [10, 15], [22, 17], [7, 10], [25, 22], [3, 7], [29, 25]],
+  // --- KOMPLEX 10-14 (fáze 61): 6 hlavních odpovědí bílého na první tah 10-14.
+  // Pask „Complete Checkers", Část 3 (10-14s); trunk (hlavní linie) uvedených
+  // ballotů, prvních ~8 půltahů. 11-15 linie výše zůstávají PRVNÍ → deterministický
+  // první kandidát na výchozí pozici je dál 11-15; 10-14 je čtvrtý kandidát (za 9-14).
+  // 10-14 22-17; 7-10 – Ballot 45 (Pask řádek 6988). Výměna 14-17 21x14.
+  [[10, 14], [22, 17], [7, 10], [17, 13], [3, 7], [25, 22], [14, 17], [21, 14]],
+  // 10-14 22-18; 6-10 – Ballot 47 (Pask řádek 7794). Výměna 11-15 18x11 8x15.
+  [[10, 14], [22, 18], [6, 10], [25, 22], [11, 15], [18, 11], [8, 15], [29, 25]],
+  // 10-14 23-18; 14-23 – Ballot 50 (Pask řádek 8403). Vynucené braní 14x23 27x18.
+  [[10, 14], [23, 18], [14, 23], [27, 18], [12, 16], [32, 27], [16, 20], [26, 23]],
+  // 10-14 23-19; 7-10 – Ballot 50B (Pask řádek 8555; 50A trunk transponuje do
+  // 7-10 (T), proto se bere první ballot 23-19 s vlastním diagramem = 50B).
+  // Trojitá výměna 11x18 22x15, 10x19 24x15.
+  [[10, 14], [23, 19], [7, 10], [19, 15], [11, 18], [22, 15], [10, 19], [24, 15]],
+  // 10-14 24-19; 6-10 – Ballot 53 (Pask řádek 8977). Výměna 13x22, pak bílý 25x9.
+  [[10, 14], [24, 19], [6, 10], [22, 17], [9, 13], [28, 24], [13, 22], [25, 9]],
+  // 10-14 24-20; 7-10 – Ballot 58 (Pask řádek 9502; 57 je transpoziční stub).
+  // Výměna 11-16 20x11 8x22 25x18.
+  [[10, 14], [24, 20], [7, 10], [22, 18], [11, 16], [20, 11], [8, 22], [25, 18]],
 ];
 
 /** Úplná shoda tahů (from + path + captures) pro dedup kandidátů v seedu. */

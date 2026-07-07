@@ -1,0 +1,44 @@
+{
+  "id": 61,
+  "title": "Kniha: reálný komplex 10-14",
+  "goal": "Naplnit knihu zahájení ověřenými hlavními liniemi komplexu prvního tahu černého 10-14 z Pask 'Complete Checkers' do ~8 půltahů, pro obě barvy enginu, s deterministickým výběrem; legalitu každého půltahu vynutí buildBook, zásah na klíčových pozicích ověří testy proti reálným Position. Mimo rozsah: 10-15, 11-16, 12-16, zrcadlová symetrie/transpozice, náhodný výběr.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit číslování a orientaci 10-14 vůči Pask",
+      "status": "done",
+      "detail": "Potvrdit, že pole 10 a 14 (a čísla braných/cílových polí) v repu odpovídají číslování v Pask 'Complete Checkers'; najít v pask.txt sekci komplexu 10-14 a zapsat řádky zdroje. Výstup: mapování polí sedí, řádky sekce dohledané."
+    },
+    {
+      "title": "Extrahovat hlavní linie komplexu 10-14 z Pask",
+      "status": "done",
+      "detail": "Vypsat hlavní (trunk/drawn) odpovědi bílého na 10-14 a jejich pokračování do ~8 půltahů, s odkazem na řádek v Pask u každé linie. Výstup: seznam ~6 linií s citací zdroje, zatím jako poznámky (ne kód)."
+    },
+    {
+      "title": "Zakódovat linie 10-14 do SEED_LINES",
+      "status": "done",
+      "detail": "Přidat linie do SEED_LINES v opening-book.ts za blok 9-14, včetně komentářového bloku ve stejném stylu (zdroj, ballot, výměny); 10-14 je čtvrtý vložený první tah → deterministicky za 11-15/9-13/9-14. Legalitu každého půltahu vynutí buildBook. Výstup: build knihy projde bez chyby."
+    },
+    {
+      "title": "Aktualizovat kanárek a miss test na čtyři první tahy",
+      "status": "done",
+      "detail": "V opening-book.test.ts přidat '10-14' do bookFirst Setu (miss test) a v kanárku zvednout počet kandidátů výchozí pozice ze 3 na 4 + ověřit firstCandidates[3] = 10-14; přidat blok kandidátů po 10-14 (engine=bílý). Výstup: oba testy zelené."
+    },
+    {
+      "title": "Testy: reálné pozice 10-14 → knižní tah",
+      "status": "done",
+      "detail": "Přidat testy, že na konkrétních pozicích komplexu 10-14 (obě barvy enginu) vrací lookupBookMove očekávaný knižní tah proti reálným Position. Výstup: nové testy zelené, celá sada projde."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat fázi do CHANGELOG.md; pustit nezávislého sub-agenta (čerstvý kontext) na verifikaci věrnosti linií vůči Pask a na checklist z CLAUDE.md. Výstup: CHANGELOG doplněn, self-review bez self-catchable nálezů."
+    }
+  ],
+  "startedAt": "2026-07-07T13:40:24.788Z",
+  "completedAt": "2026-07-07T13:59:24.149Z",
+  "autoCommit": {
+    "preSha": "ec4c4a2f4d241d31914ad502b0ab957bf099ae6a",
+    "subject": "Phase 61: Kniha: reálný komplex 10-14"
+  }
+}
