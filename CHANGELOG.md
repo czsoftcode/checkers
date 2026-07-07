@@ -7,6 +7,24 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-07-07
+
+### Added
+
+- **Počítač hraje reálná zahájení i komplexu 12-16 (poslední první tah).** Kniha
+  zahájení se rozšířila o **sedmý a poslední** první tah černého – 12-16 – takže
+  počítač teď zná všech sedm legálních prvních tahů. Zdrojem je opět kniha
+  Richarda Paska „Complete Checkers" (Část 7, sekce 12-16s); každá linie jde do
+  zhruba osmi půltahů včetně řetězců braní a výměn a je ověřená proti pravidlům
+  hry. Na rozdíl od zahájení 10-15 a 11-16 (kde kniha pokrývala všech sedm
+  soupeřových odpovědí) má 12-16 v knize jen **šest** ze sedmi: soupeřova odpověď
+  23-19 sice existuje, ale nemá v soutěžním rozlosování (3-move deck) žádnou
+  linii, takže po ní počítač z knihy vypadne a dopočítá si tah sám. U odpovědi
+  24-19 přechází hlavní linie po sedmi půltazích do zahájení 11-16, tato jedna
+  linie je proto o půltah kratší. Na výchozí pozici teď počítač vybírá ze sedmi
+  zahájení (11-15, 9-13, 9-14, 10-14, 10-15, 11-16 a 12-16); přednostně stále
+  hraje 11-15. Tím je celý první tah černého v knize kompletní.
+
 ## [0.50.0] - 2026-07-07
 
 ### Added

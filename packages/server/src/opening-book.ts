@@ -77,10 +77,23 @@
  * vybraný), 9-13, 9-14, 10-14, 10-15 a 11-16. Pozice po 11-16 (engine=bílý) má
  * 7 kandidátů (jako po 10-15).
  *
+ * REÁLNÁ ZAHÁJENÍ – KOMPLEX 12-16 (fáze 64): SEDMÝ a POSLEDNÍ první tah černého;
+ * tím je pokryto všech 7 legálních prvních tahů černého. Seed nese odpovědi
+ * bílého na 12-16 do ~8 půltahů, z Pask Část 7 (12-16s), trunk prvních ballotů
+ * 126/130/132/134/136/137. Výchozí pozice má tak nově 7 kandidátů prvního tahu:
+ * 11-15 (první vložený, deterministicky vybraný), 9-13, 9-14, 10-14, 10-15,
+ * 11-16 a 12-16. ODLIŠNÉ OD 10-15/11-16 (které pokryly VŠECH 7 odpovědí bílého):
+ * 12-16 pokrývá jen 6 ze 7 – bílé 23-19 NENÍ ve 3-move decku (Pask nemá žádný
+ * 12-16 23-19 ballot), takže pozice po 12-16 má 6 kandidátů (jako 9-13/9-14/
+ * 10-14) a 12-16 23-19 je legální bílá odpověď MIMO knihu → miss. První kandidát
+ * bílého po 12-16 je 21-17 (ballot 126). ODCHYLKA od „prostě 8 půltahů": 24-19
+ * (ballot 136) trunk po 7 půltazích (…8-12) transponuje do 11-16 24-19; 8-11,
+ * proto tato JEDNA linie má jen 7 půltahů (jako 21-17/ballot 105 ve fázi 63).
+ *
  * ROZSAH / VĚDOMĚ ODLOŽENO: zrcadlová symetrie desky (kniha netrefí zrcadlené
- * pozice); náhodný výběr pro variabilitu (zatím deterministicky); zbývající
- * první tah černého (12-16). „Complete Checkers" je
- * kniha 3-move; hlubší čistě-GAYP odbočky mimo trunk zde nejsou.
+ * pozice); náhodný výběr pro variabilitu (zatím deterministicky). Všech 7
+ * prvních tahů černého je pokryto; hlubší varianty (V1, V2…) mimo trunk ani
+ * transpoziční linie zde nejsou. „Complete Checkers" je kniha 3-move.
  */
 
 import { applyMove, initialPosition, legalMoves, positionKey } from '@checkers/rules';
@@ -217,6 +230,33 @@ const SEED_LINES: readonly OpeningLine[] = [
   // 11-16 24-20; 16-19 – Ballot 125 (Pask řádek 18610; 124A je transpoziční stub
   // do 12-16, proto 125). Výměna 16-19 23x16 12x19, pak 18x9.
   [[11, 16], [24, 20], [16, 19], [23, 16], [12, 19], [22, 18], [9, 14], [18, 9]],
+  // --- KOMPLEX 12-16 (fáze 64): SEDMÝ a POSLEDNÍ první tah černého → po něm je
+  // v knize všech 7 legálních prvních tahů černého. Pask „Complete Checkers",
+  // Část 7 (12-16s); trunk prvních ballotů 126/130/132/134/136/137. 11-15 linie
+  // výše zůstávají PRVNÍ → deterministický první kandidát výchozí pozice je dál
+  // 11-15; 12-16 je sedmý kandidát (za 11-16). POZOR – ODLIŠNÉ OD 10-15/11-16:
+  // 12-16 pokrývá jen 6 ze 7 legálních odpovědí bílého. Bílé 23-19 NENÍ ve
+  // 3-move decku (Pask nemá 12-16 23-19 ballot), takže po 12-16 zůstává 23-19
+  // nepokryté a pozice po 12-16 má 6 kandidátů (jako 9-13/9-14/10-14, ne 7).
+  // 12-16 21-17; 9-13 – Ballot 126 (Pask řádek 18815). Dvojitá výměna 23x16 11x20
+  // (černý 16-19, bílý 23x19→16, černý 11x16→20), pak bílý 17-14.
+  [[12, 16], [21, 17], [9, 13], [25, 21], [16, 19], [23, 16], [11, 20], [17, 14]],
+  // 12-16 22-17; 16-19 – Ballot 130 (Pask řádek 19404). Řetěz braní 24x15 11x18
+  // 23x14 9x18, pak bílý 26-23.
+  [[12, 16], [22, 17], [16, 19], [24, 15], [11, 18], [23, 14], [9, 18], [26, 23]],
+  // 12-16 22-18; 16-19 – Ballot 132 (Pask řádek 19788). Dvojitá výměna 24x15 10x19,
+  // 23x16 11x20, pak bílý 25-22.
+  [[12, 16], [22, 18], [16, 19], [24, 15], [10, 19], [23, 16], [11, 20], [25, 22]],
+  // 12-16 23-18; 16-19 – Ballot 134 (Pask řádek 20079). Výměna 24x15 10x19, prosté
+  // 27-24 7-10, pak bílý znovu bere 24x15.
+  [[12, 16], [23, 18], [16, 19], [24, 15], [10, 19], [27, 24], [7, 10], [24, 15]],
+  // 12-16 24-19; 16-20 – Ballot 136 (Pask řádek 20289). Prosté tahy; trunk po
+  // 7 půltazích (8-12) TRANSPONUJE do 11-16 24-19; 8-11, proto tato JEDNA linie
+  // má 7 (ne 8) půltahů – jako 21-17 (ballot 105) ve fázi 63.
+  [[12, 16], [24, 19], [16, 20], [22, 18], [10, 14], [26, 22], [8, 12]],
+  // 12-16 24-20; 8-12 – Ballot 137 (Pask řádek 20356). Prosté tahy do výměny 24x15
+  // (černý 16-19, bílý 24x19→15).
+  [[12, 16], [24, 20], [8, 12], [28, 24], [3, 8], [22, 18], [16, 19], [24, 15]],
 ];
 
 /** Úplná shoda tahů (from + path + captures) pro dedup kandidátů v seedu. */

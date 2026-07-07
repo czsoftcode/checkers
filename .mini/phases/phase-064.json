@@ -1,0 +1,44 @@
+{
+  "id": 64,
+  "title": "Kniha: reálný komplex 12-16",
+  "goal": "Naplnit knihu zahájení ověřenými hlavními liniemi komplexu prvního tahu černého 12-16 z Pask „Complete Checkers\" do ~8 půltahů, pro obě barvy enginu, s deterministickým výběrem; legalitu každého půltahu vynutí buildBook, zásah na klíčových pozicích ověří testy proti reálným Position. Mimo rozsah: zrcadlová symetrie/transpozice a náhodný výběr; tím se sedmka prvních tahů černého uzavírá.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit číslování a orientaci 12-16 vůči Pask",
+      "status": "done",
+      "detail": "Potvrdit, že pole 12 a 16 v naší konvenci odpovídají komplexu 12-16 v Pask „Complete Checkers\" (Část 12-16s), a identifikovat trunk ballotů hlavních odpovědí bílého; výstup je poznámka v hlavičce seedu s čísly ballotů."
+    },
+    {
+      "title": "Extrahovat hlavní linie komplexu 12-16 z Pask",
+      "status": "done",
+      "detail": "Vypsat hlavní odpovědi bílého na 12-16 a jejich trunk do ~8 půltahů; zaznamenat odchylky od „prostě první ballot\" (transpozice/mimorozsahové stuby) jako u 11-16."
+    },
+    {
+      "title": "Zakódovat linie 12-16 do SEED_LINES",
+      "status": "done",
+      "detail": "Přidat linie do opening-book.ts tak, aby 11-15 zůstalo první (deterministický první kandidát výchozí pozice) a 12-16 bylo sedmým kandidátem; legalitu každého půltahu vynutí buildBook při startu."
+    },
+    {
+      "title": "Aktualizovat kanárek a miss test na sedm prvních tahů",
+      "status": "done",
+      "detail": "Kanárek: doplnit dokumentovanou pozici po 12-16 a její počet kandidátů. Miss test: po pokrytí všech sedmi prvních tahů už neexistuje „jiný knižní první tah\" jako miss — nahradit prokazatelným missem, ať test dál má zuby."
+    },
+    {
+      "title": "Testy: reálné pozice 12-16 → knižní tah",
+      "status": "done",
+      "detail": "Přehrát klíčové reálné Position z linií 12-16 a ověřit, že lookupBookMove vrací očekávaný knižní tah (obě barvy enginu), ne jen že seed není prázdný."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat změnu do CHANGELOG.md; po případném minor bumpu zkontrolovat, že hlavička nové verze nespolkla předchozí; pustit nezávislého sub-agenta na self-review kontraktu seed ↔ test."
+    }
+  ],
+  "startedAt": "2026-07-07T18:26:35.470Z",
+  "completedAt": "2026-07-07T18:46:36.680Z",
+  "autoCommit": {
+    "preSha": "453be8e8fa970b57c339fea69d2e1d63117fbc2e",
+    "subject": "Phase 64: Kniha: reálný komplex 12-16"
+  }
+}
