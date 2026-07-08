@@ -21,6 +21,8 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
   herní deska pro partii dvou lidí přijde v další fázi (obrazovka je zatím
   placeholder).
 
+## [0.56.0] - 2026-07-08
+
 ### Added
 
 - **Hraní PvP partie na serveru - serverová autorita nad tahem (v3).** Dva
