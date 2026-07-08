@@ -587,3 +587,137 @@ body {
     margin-top: 0.6rem;
   }
 }
+
+/* --- Úvodní místnost (lobby) --------------------------------------------
+   Vycentrovaná karta přes celý viewport (fixed inset:0), nezávislá na layoutu
+   desky – lobby a deska se v DOM nikdy nepřekrývají (přepínač v main.ts montuje
+   právě jednu). Sekce (formulář / roster / odpojení) se přepínají třídou `.hidden`;
+   protože jejich základ nastavuje `display:flex`, potřebují 2třídový override
+   `.lobby-*.hidden { display:none }` (obecné `.hidden` má stejnou specificitu a
+   prohrálo by pořadím – stejný důvod jako u `.modal-overlay.hidden`). */
+.lobby {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+.lobby-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: min(28rem, 100%);
+  box-sizing: border-box;
+  padding: 1.75rem;
+  border-radius: 10px;
+  background: rgba(20, 20, 20, 0.82);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.lobby-title {
+  margin: 0;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.lobby-join {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.lobby-nick {
+  padding: 0.55rem 0.7rem;
+  font-size: 1rem;
+  border: 1px solid #666;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #eee;
+}
+
+.lobby-nick:disabled {
+  opacity: 0.5;
+}
+
+.lobby-card button {
+  padding: 0.55rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #666;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
+}
+
+.lobby-card button:hover:not(:disabled) {
+  background: #4a4a4a;
+}
+
+.lobby-card button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.lobby-msg {
+  margin: 0;
+  font-size: 0.95rem;
+  text-align: center;
+  color: #cdd;
+  overflow-wrap: break-word;
+}
+
+.lobby-room {
+  display: flex;
+  flex-direction: column;
+}
+
+.lobby-room-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.lobby-roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.lobby-roster-item {
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  background: #2f2f2f;
+}
+
+/* Vlastní záznam v rosteru: odliš barvou i tučností, ať hráč hned pozná sebe. */
+.lobby-roster-item.is-self {
+  background: #3a4a2f;
+  font-weight: 600;
+}
+
+.lobby-you {
+  color: #9ab;
+  font-weight: 400;
+}
+
+.lobby-disconnected {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  text-align: center;
+}
+
+/* Sekce přepínané `.hidden` mají v základu display:flex → 2třídový override, ať
+   skrytí vyhraje bez ohledu na pořadí pravidel. */
+.lobby-join.hidden,
+.lobby-room.hidden,
+.lobby-disconnected.hidden {
+  display: none;
+}

@@ -342,6 +342,11 @@
       "id": 68,
       "title": "Párování výzvou: serverové jádro",
       "status": "done"
+    },
+    {
+      "id": 69,
+      "title": "Místnost: vstup a přítomní",
+      "status": "done"
     }
   ]
 }

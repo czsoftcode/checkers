@@ -1074,3 +1074,40 @@ describe('app-shell – dvě kola v Mistrovství', () => {
     expect(created).toHaveLength(1);
   });
 });
+
+describe('app-shell – návrat do místnosti (onExit)', () => {
+  it('bez onExit se tlačítko „Do místnosti" nevykreslí', async () => {
+    const { factory } = fakeFactory();
+    const shell = createAppShell(fakeClient(gameDto(initialPosition())), { createController: factory });
+    document.body.append(shell.element);
+    await tick();
+    expect(shell.element.querySelector('.btn-back-room')).toBeNull();
+  });
+
+  it('s onExit přidá do řady ovládání tlačítko, klik ho zavolá', async () => {
+    const { factory } = fakeFactory();
+    const onExit = vi.fn();
+    const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
+      createController: factory,
+      onExit,
+    });
+    document.body.append(shell.element);
+    await tick();
+    const back = shell.element.querySelector<HTMLElement>('.controls .btn-back-room');
+    expect(back).not.toBeNull();
+    click(back!);
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('tlačítko „Do místnosti" zůstává aktivní i za běhu partie', async () => {
+    const { factory } = fakeFactory();
+    const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
+      createController: factory,
+      onExit: vi.fn(),
+    });
+    document.body.append(shell.element);
+    await tick(); // rozehraná partie → resign aktivní, ale odchod se nezamyká
+    const back = q(shell.element, '.btn-back-room') as HTMLButtonElement;
+    expect(back.disabled).toBe(false);
+  });
+});

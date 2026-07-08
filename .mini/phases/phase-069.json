@@ -1,0 +1,42 @@
+{
+  "id": 69,
+  "title": "Místnost: vstup a přítomní",
+  "goal": "Web klient dostane úvodní obrazovku místnosti: hráč zadá přezdívku, připojí se přes /room/ws a v reálném čase vidí seznam přítomných hráčů (přibývají/ubývají), včetně ošetření obsazené přezdívky a odpojení; párování výzvou a otevření partie jsou vědomě až navazující řez.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Room WS klient: spojení, parsing, roster (modul + testy)",
+      "status": "done",
+      "detail": "Nový room-client.ts: injektovatelná WebSocket továrna, URL z location (ws/wss + host), join{nick} pošle právě jednou na open, parsuje roster|joined|left|nick-taken|error, neznámé typy ignoruje. Drží roster (set/přidej/odeber podle id) a značku ty (porovnání na trimnutou přezdívku). dispose zavře WS a odregistruje listenery. Unit testy s fake WS: nevalidní JSON, neznámý typ, close před/po joinu, odchod neznámého id, duplicita."
+    },
+    {
+      "title": "Lobby: pole přezdívky, vstup, perzistence, nick-taken",
+      "status": "done",
+      "detail": "Obrazovka s polem přezdívky předvyplněným z LocalStorage (analogie LEVEL_STORAGE_KEY), tlačítko Vstoupit do místnosti. nick-taken → navržený nick k potvrzení/přepsání. Prázdná/dlouhá přezdívka (error) → hláška. Pole zamčené během připojování. Styly jen třídami v styles.css (CSP)."
+    },
+    {
+      "title": "Lobby: seznam přítomných + stav spojení + připojit znovu",
+      "status": "done",
+      "detail": "Vykreslení rosteru se zvýrazněným ty, živá reakce na joined/left. Stavový indikátor připojeno/připojuji/odpojeno; při pádu spojení hláška odpojeno + tlačítko Připojit znovu (ruční, žádný auto-reconnect)."
+    },
+    {
+      "title": "Přepínač obrazovek + Hrát proti počítači (main.ts)",
+      "status": "done",
+      "detail": "main.ts místo přímého mountu app-shell → přepínač lobby ↔ deska. Lobby je úvod; Hrát proti počítači (bez přezdívky) mountuje dnešní app-shell; Zpět do místnosti app-shell disposne a vrátí lobby. Přepnutí do sóla zavře room WS, návrat ho otevře znovu — bez duplicit v rosteru a bez zombie spojení."
+    },
+    {
+      "title": "Ruční ověření (dvě záložky) + CHANGELOG + nezávislý self-review",
+      "status": "done",
+      "detail": "Ověřit v prohlížeči: join, roster přibývá/ubývá mezi dvěma záložkami, obsazený nick + návrh, zabití serveru → odpojeno → Připojit znovu, přepnutí sólo↔místnost. Zápis do CHANGELOG. Před reportem nezávislý sub-agent (čerstvý kontext) na chybové/kontraktové cesty dle CLAUDE.md."
+    }
+  ],
+  "startedAt": "2026-07-08T14:35:55.635Z",
+  "resolvedVerify": [
+    "Vizuál lobby ve dvou reálných záložkách prohlížeče"
+  ],
+  "completedAt": "2026-07-08T15:26:09.202Z",
+  "autoCommit": {
+    "preSha": "8b074756a17b631261f758a54c70b4f24d5ee313",
+    "subject": "Phase 69: Místnost: vstup a přítomní"
+  }
+}

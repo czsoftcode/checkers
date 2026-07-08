@@ -130,6 +130,14 @@ export interface AppShellOptions {
    * než se hráč dotkne desky (autoplay policy prohlížeče). Injektovatelný kvůli testu.
    */
   readonly soundPlayer?: SoundPlayer;
+  /**
+   * Návrat do místnosti (lobby). Když je zadán, skořápka přidá do řady ovládání
+   * tlačítko „Do místnosti", které ho zavolá – přepínač obrazovek (main.ts) pak
+   * skořápku disposne a vrátí lobby. Bez něj (sólo mimo místnostní tok, testy)
+   * se tlačítko vůbec nevykreslí. Tlačítko je vždy aktivní: odchod je povolený i
+   * uprostřed partie (sólo proti počítači nemá druhého hráče, o kterého by šlo).
+   */
+  readonly onExit?: () => void;
 }
 
 /** Ovládaná aplikace. `dispose` uklidí i běžící controller (polling). */
@@ -213,6 +221,24 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const resignBtn = button('btn-resign', 'Vzdávám hru');
   const newGameBtn = button('btn-newgame', 'Nová hra');
   controls.append(levelSelect, controlsDivider, offerDrawBtn, resignBtn, newGameBtn);
+  // „Do místnosti" jen když je návrat zapojen (main.ts). Sedí v téže řadě jako
+  // ostatní tlačítka → dědí responzivní chování (na mobilu se zalomí), na rozdíl
+  // od dřívějšího fixního tlačítka v rohu, které se na úzkém displeji nevešlo.
+  // Vždy aktivní (odchod je povolený i za běhu partie), proto ho refreshControls
+  // nezamyká.
+  const onExit = options.onExit;
+  if (onExit !== undefined) {
+    // Oddělovač před „Do místnosti" (stejný jako mezi úrovní a tlačítky): opticky
+    // oddělí navigaci od ovládání partie. Na mobilu ho `.controls-divider` skryje.
+    const exitDivider = document.createElement('span');
+    exitDivider.className = 'controls-divider';
+    exitDivider.setAttribute('aria-hidden', 'true');
+    const exitBtn = button('btn-back-room', 'Do místnosti');
+    exitBtn.addEventListener('click', () => {
+      onExit();
+    });
+    controls.append(exitDivider, exitBtn);
+  }
 
   // Verdikt nabídky remízy (řídí ho výhradně skořápka kolem offerDraw, NE onState –
   // proud stavů z pollingu ho tak nepřepíše). Žije ve stavovém řádku POD deskou.

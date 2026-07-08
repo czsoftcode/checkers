@@ -7,6 +7,24 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-07-08
+
+### Added
+
+- **Úvodní obrazovka místnosti - vstup a přítomní (klient, v3).** Webový klient
+  se nově otevírá do MÍSTNOSTI, ne rovnou do desky. Hráč zadá přezdívku, klient
+  se připojí přes WebSocket `GET /room/ws` a vidí živý seznam přítomných hráčů,
+  který v reálném čase přibývá (`joined`) i ubývá (`left`); vlastní záznam je
+  zvýrazněný a označený „(ty)". Obsazenou přezdívku server odmítne a nabídne
+  volnou variantu - ta se předvyplní do pole k potvrzení nebo přepsání (socket
+  zůstává, stačí poslat znovu). Přezdívka se pamatuje mezi návštěvami. Když
+  spadne spojení, obrazovka to řekne a nabídne tlačítko „Připojit znovu" (žádné
+  automatické znovupřipojování). Vedle vstupu do místnosti zůstává „Hrát proti
+  počítači" - dosavadní sólo hra proti enginu, bez přezdívky; přepnutí na desku a
+  zpět do místnosti spolehlivě uklidí předchozí obrazovku (room WS se při odchodu
+  do sóla zavře, polling desky se při návratu zastaví). Párování výzvou a samotné
+  hraní PvP partie zatím z tohoto UI nejdou - přijdou v navazujících řezech.
+
 ## [0.54.0] - 2026-07-08
 
 ### Added
