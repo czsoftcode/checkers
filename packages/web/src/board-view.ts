@@ -372,6 +372,10 @@ export function createBoardView(
   let lastPosition: Position | null = null;
   // Právě běžící animace tahu, nebo null.
   let running: RunningAnimation | null = null;
+  // Doznívající fade sebraných kamenů (WAAPI): pole → jeho fade. Element se odstraní
+  // až po doběhnutí fadu; když se ale pozice mezitím USADÍ zpět (settle po odmítnutí/
+  // odpojení taženého braní) a pole má zas kámen, fade se zruší a element obnoví.
+  const capturingFades = new Map<Square, Animation>();
 
   function update(state: RenderState, hopMs?: number): Promise<void> {
     // Opakovaný poll během animace vrací tutéž pozici → animaci nepřerušuj, jen
@@ -457,7 +461,13 @@ export function createBoardView(
       if (skip?.has(square) === true) {
         continue;
       }
-      renderPiece(cell, position.board[square - 1] ?? null);
+      const target = position.board[square - 1] ?? null;
+      // Má-li tu pozice zas kámen, ale doznívá tu fade sebraného (rychlé odmítnutí/
+      // odpojení taženého braní), obnov ho místo aby ho doběhlý fade odstranil.
+      if (target !== null) {
+        reviveCaptured(square);
+      }
+      renderPiece(cell, target);
     }
   }
 
@@ -656,17 +666,37 @@ export function createBoardView(
         duration: CAPTURE_FADE_MS,
         fill: 'forwards',
       });
-      fade.finished.then(
-        () => {
+      capturingFades.set(square, fade);
+      // Element odstraň AŽ po doběhnutí fadu – ALE JEN pokud tenhle fade pořád platí.
+      // `reviveCaptured` (usazení pozice zpět po odmítnutí/odpojení taženého braní) ho
+      // z mapy sundá; pak se element ODSTRANIT NESMÍ, jinak by sebraný kámen z desky
+      // zmizel, ačkoli se pozice vrátila na stav PŘED braním.
+      const done = (): void => {
+        if (capturingFades.get(square) === fade) {
+          capturingFades.delete(square);
           piece.remove();
-        },
-        () => {
-          piece.remove();
-        },
-      );
+        }
+      };
+      fade.finished.then(done, done);
     } else {
       piece.remove();
     }
+  }
+
+  /**
+   * Zruší doznívající fade sebraného kamene na `square` (běží-li) a NEodstraní jeho
+   * element. Volá `applyPieces`, když se pole má zas obsadit kamenem – typicky `settle`
+   * po odmítnutí/ztrátě spojení taženého BRANÍ, kdy se deska vrací na pozici před tahem.
+   * `cancel` zruší efekt fadu (opacita zpět na výchozí); z mapy ho sundáme PŘED tím, ať
+   * ho `done` výše po zrušení neodstraní.
+   */
+  function reviveCaptured(square: Square): void {
+    const fade = capturingFades.get(square);
+    if (fade === undefined) {
+      return;
+    }
+    capturingFades.delete(square);
+    fade.cancel();
   }
 
   /** Ukončí běžící animaci (WAAPI + časovače) a dorovná desku na její cíl. */

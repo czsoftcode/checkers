@@ -1,0 +1,40 @@
+{
+  "id": 74,
+  "title": "Tažení kamene v PvP",
+  "goal": "PvP deska dostane tažení kamene myší (drag & drop) jako hra s počítačem: uchopení vlastního kamene, tažení na cílové pole i přes vícenásobný skok, po dokončení se tah pošle serveru (autorita). Při odmítnutí serverem se kámen vrátí na poslední potvrzené pole (deska se celá dorovná, ne jen zvýraznění – dnešní showError to neumí), stejně tak při ztrátě spojení. Drag je jen myší, dotyk/mobil zůstává na ťuknutí (jako u AI). Znovupoužít sdílené pomocníky ze selection.ts (resolveMove, resolveChainTo, capturedOnHop, nextTargets) + drobný lastHopOf. Vědomě mimo řez: vzdání/remíza (todo 40), odveta, sjednocení s AI nad rámec drag callbacků.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Drag callbacky v pvp-controlleru",
+      "status": "done",
+      "detail": "Zapojit DragCallbacks (canDrag/onDragStart/onDrop) do createBoardView (dnes 3. arg undefined). canDrag: jen s pozicí, na tahu, partie běží, nečeká se (pendingMove) a spojení žije; během rozpracované sekvence jen kámen na posledním dopadu (lastHopOf). onDragStart: nastav/pokračuj výběr + setHighlights. onDrop: přes sdílené nextTargets/resolveMove/resolveChainTo/capturedOnHop vrátit hop (meziskok), commit (dokončení → sendMove + zámek) nebo return. Přidat lokální dragging (blok kliku během gesta) a lastHopOf."
+    },
+    {
+      "title": "Optimistické usazení a návrat kamene",
+      "status": "done",
+      "detail": "Po tažení je kámen fyzicky na cíli, ale position zůstává poslední potvrzená (žádný optimismus v datech). Zavést settleNext: applyState pak potvrzený stav USADÍ (view.settle) místo view.update (nepřehraje sklouznutí podruhé). showError a setConnectionLost přepnout ze setHighlights na view.settle(renderState()) – kámen zpět na potvrzenou pozici a sebrané kameny se obnoví (setHighlights pozice kamenů neřeší). Reset settleNext na všech cestách."
+    },
+    {
+      "title": "Testy tažení v PvP",
+      "status": "done",
+      "detail": "Mirror controller-drag.test.ts (pointer eventy + mock elementFromPoint): prosté tažení odešle správný tah a po potvrzení usadí bez druhé animace; vícenásobný skok hop-po-hopu i souvislým tažením; odmítnutí serverem vrátí kámen na potvrzenou pozici (sebrané zpět); zámky (pendingMove/connectionLost/tah soupeře/terminální stav) tažení nedovolí; dotyk (pointerType != mouse) netáhne, jen ťuknutí; klik dál funguje."
+    },
+    {
+      "title": "Ověření + red-team self-review",
+      "status": "done",
+      "detail": "typecheck, lint, pnpm --filter @checkers/web test, build – vše zelené. Fáze sahá na chybovou cestu (návrat při odmítnutí/odpojení) a kontrakt controller<->board-view → spustit nezávislého sub-agenta (čerstvý kontext) na red-team před reportem; self-catchable nálezy opravit."
+    }
+  ],
+  "startedAt": "2026-07-08T20:08:51.480Z",
+  "resolvedVerify": [
+    "Skutečné tažení kamene myší v prohlížeči (plynulost, kámen sleduje kurzor, dopad)",
+    "Po potvrzení TAŽENÉHO tahu se pohyb NEpřehraje podruhé jako sklouznutí",
+    "Vícenásobný skok TAŽENÍM na koncové pole a že mezidopad se vrátí",
+    "Rychlé odmítnutí TAŽENÉHO braní obnoví sebraný kámen (fade-revive)"
+  ],
+  "completedAt": "2026-07-08T21:11:18.169Z",
+  "autoCommit": {
+    "preSha": "b8d6212285090837ffbc67effc5adba8c9c200bc",
+    "subject": "Phase 74: Tažení kamene v PvP"
+  }
+}

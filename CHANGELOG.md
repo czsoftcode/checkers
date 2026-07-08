@@ -7,6 +7,17 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.60.0] - 2026-07-08
+
+### Added
+
+- **Tažení kamene myší na PvP desce (klient, v3).** V partii dvou lidí jde teď kámen
+  zadat i tažením myší, nejen klikáním – prostý tah, braní i vícenásobný skok (táhne
+  se rovnou na koncové pole; skákat po jednotlivých dopadech jde dál klikáním). Při
+  tažení se zeleně zvýrazní pole, kam lze kámen pustit. Když server tah odmítne nebo
+  spadne spojení, kámen se vrátí na poslední potvrzené pole (i s obnovením sebraných
+  kamenů). Tažení je jen myší; dotyk/mobil zůstává na ťuknutí.
+
 ## [0.59.0] - 2026-07-08
 
 ### Changed

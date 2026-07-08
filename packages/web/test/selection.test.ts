@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   capturedOnHop,
   capturesForPrefix,
+  endpointsFor,
   nextTargets,
   resolveChainTo,
   resolveMove,
@@ -66,6 +67,25 @@ describe('targetsFor', () => {
       // Kdyby rules nevynucovala braní, vrátilo by se [15, 16] a test padne.
       expect(targetsFor(pos, 11)).toEqual([]);
     });
+  });
+});
+
+describe('endpointsFor – cíle pro tazeni', () => {
+  it('prosté tahy: koncové pole = jejich cíl (jako targetsFor)', () => {
+    expect(new Set(endpointsFor(initialPosition(), 9))).toEqual(new Set([13, 14]));
+  });
+
+  it('vícenásobný skok: vrátí jen KONCOVÉ pole řetězu, ne mezidopad', () => {
+    // Černý 6 přeskočí bílé 10 a 18: cesta [15, 22]. Tažení míří na konec (22),
+    // klikání naopak na bezprostřední dopad (15).
+    const pos = position('black', { 6: blackMan, 10: whiteMan, 18: whiteMan });
+    expect(endpointsFor(pos, 6)).toEqual([22]);
+    expect(nextTargets(pos, 6, [])).toEqual([15]);
+  });
+
+  it('kámen soupeře i prázdné pole → nic', () => {
+    expect(endpointsFor(initialPosition(), 21)).toEqual([]); // bílý, černý na tahu
+    expect(endpointsFor(initialPosition(), 20)).toEqual([]); // prázdné
   });
 });
 

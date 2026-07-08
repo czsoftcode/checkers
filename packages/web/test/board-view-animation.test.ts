@@ -33,6 +33,7 @@ interface FakeAnimation {
   finished: Promise<void>;
   resolve: () => void;
   cancel: ReturnType<typeof vi.fn>;
+  pause: () => void; // drag lift ho volá (kámen drží posun, dokud ho updateLift nepřepíše)
 }
 
 const animations: FakeAnimation[] = [];
@@ -87,7 +88,7 @@ beforeEach(() => {
       const finished = new Promise<void>((r) => {
         resolve = r;
       });
-      const anim: FakeAnimation = { finished, resolve, cancel: vi.fn() };
+      const anim: FakeAnimation = { finished, resolve, cancel: vi.fn(), pause: () => undefined };
       animations.push(anim);
       return anim as unknown as Animation;
     },
@@ -189,5 +190,58 @@ describe('animace tahu (mockované WAAPI)', () => {
     expect(view.element.querySelectorAll('.piece.moving')).toHaveLength(0);
     expect(hasPiece(view, 15)).toBe(true);
     expect(hasPiece(view, 10)).toBe(false);
+  });
+});
+
+/** Pointer událost (jsdom neumí spolehlivě konstruktor). */
+function pointerEvt(type: string, x: number, y: number): Event {
+  const e = new Event(type, { bubbles: true });
+  Object.assign(e, { pointerId: 1, isPrimary: true, pointerType: 'mouse', button: 0, clientX: x, clientY: y });
+  return e;
+}
+
+/** Odsimuluje tažení z pole `from` na `to` (pole pod bodem puštění přes mock elementFromPoint). */
+function dragTo(view: BoardView, from: number, to: number): void {
+  const toEl = squareEl(view, to);
+  const doc = document as unknown as { elementFromPoint: (x: number, y: number) => Element | null };
+  const original = doc.elementFromPoint;
+  doc.elementFromPoint = () => toEl;
+  try {
+    squareEl(view, from).dispatchEvent(pointerEvt('pointerdown', 0, 0));
+    view.element.dispatchEvent(pointerEvt('pointermove', 20, 20));
+    view.element.dispatchEvent(pointerEvt('pointerup', 40, 40));
+  } finally {
+    doc.elementFromPoint = original;
+  }
+}
+
+describe('usazení desky během doznívajícího fadu sebraného kamene (mockované WAAPI)', () => {
+  // Tažené braní 6 → 15 přes bílého 10; onDrop dodá 'commit' se sebraným 10.
+  const beforeMove = (): Position => position('black', { 6: blackMan, 10: whiteMan });
+
+  it('settle na pozici PŘED braním obnoví sebraný kámen, i když jeho fade doběhne', async () => {
+    const view = createBoardView(() => undefined, SILENT, {
+      canDrag: () => true,
+      onDragStart: () => undefined,
+      onDrop: () => ({ kind: 'commit', landing: 15, captured: [10] }),
+    });
+    document.body.append(view.element);
+    view.settle({ position: beforeMove(), selected: null, path: [], targets: [] });
+
+    // Táhni braní: kámen na 15, sebraný 10 začne mizet (fade běží, element ještě drží).
+    dragTo(view, 6, 15);
+    expect(hasPiece(view, 15)).toBe(true);
+    expect(hasPiece(view, 10)).toBe(true); // fade ještě neodstranil
+
+    // Server tah ODMÍTL → deska se usadí zpět na pozici před tahem (kámen 6, sebraný 10).
+    view.settle({ position: beforeMove(), selected: null, path: [], targets: [] });
+    expect(hasPiece(view, 6)).toBe(true);
+    expect(hasPiece(view, 10)).toBe(true);
+    expect(hasPiece(view, 15)).toBe(false);
+
+    // I když teď doběhnou VŠECHNY fake-animace (včetně fadu sebraného), kámen 10
+    // ZŮSTANE – revive fade zrušil a jeho `finished` handler element neodstraní.
+    await resolveAll();
+    expect(hasPiece(view, 10)).toBe(true);
   });
 });

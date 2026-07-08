@@ -100,6 +100,26 @@ export function targetsFor(position: Position, square: Square): Square[] {
 }
 
 /**
+ * KONCOVÁ pole všech legálních tahů z `from` (poslední dopad každého tahu; duplicity
+ * sloučeny). U prostého tahu je to jeho cílové pole, u vícenásobného skoku KONCOVÉ pole
+ * řetězu (ne mezidopady). Slouží zvýraznění cílů při TAŽENÍ, kdy hráč pouští kámen rovnou
+ * na koncové pole (na rozdíl od klikání hop-po-hopu, které bere {@link nextTargets}).
+ */
+export function endpointsFor(position: Position, from: Square): Square[] {
+  const ends: Square[] = [];
+  for (const move of legalMoves(position)) {
+    if (move.from !== from) {
+      continue;
+    }
+    const last = move.path[move.path.length - 1];
+    if (last !== undefined && !ends.includes(last)) {
+      ends.push(last);
+    }
+  }
+  return ends;
+}
+
+/**
  * Kompletní legální tah z `from`, jehož `path` začíná předponou `prefix` a jehož
  * FINÁLNÍ dopad je `endpoint` – tj. celý zbývající řetěz skoků končící přesně v
  * `endpoint`. Slouží „souvislému tažení" drag & dropu: hráč pustí kámen rovnou na

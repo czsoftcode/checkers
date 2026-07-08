@@ -367,6 +367,11 @@
       "id": 73,
       "title": "Vzhled PvP herní obrazovky",
       "status": "done"
+    },
+    {
+      "id": 74,
+      "title": "Tažení kamene v PvP",
+      "status": "done"
     }
   ]
 }
