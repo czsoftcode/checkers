@@ -7,6 +7,30 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-07-08
+
+### Added
+
+- **Párování výzvou - serverové jádro (dvouhráčová verze v3).** Přítomní hráči v
+  místnosti se nově mohou vzájemně vyzvat na partii, a to po témže spojení
+  `GET /room/ws` jako přihlášení. Klient pošle `{ type: "challenge", targetId }`;
+  server (autorita nad párováním) ověří pravidla - nelze vyzvat sám sebe, hráče,
+  který už hraje, ani poslat druhou výzvu téže dvojici (ať přímou, nebo
+  křížovou) - a vyzvanému doručí `{ type: "challenged", challenge: { id,
+  challengerId, challengerNick } }`. Vyzvaný odpoví `{ type: "accept", challengeId }`
+  nebo `{ type: "reject", challengeId }`. Při přijetí vznikne **partie dvou lidí
+  bez počítače** a oba hráči dostanou `{ type: "challenge-accepted", gameId,
+  color, opponentId }` - vyzyvatel hraje černou a táhne první, vyzvaný bílou.
+  Odmítnutí pošle vyzyvateli `{ type: "challenge-rejected" }`. Když jeden z
+  dvojice během čekání opustí místnost (nebo se spáruje jinam), zaniklé výzvy se
+  zruší a jejich protějšek dostane `{ type: "challenge-cancelled" }`; pozdní
+  přijetí už neplatné výzvy skončí chybou, ne partií. Je to zatím jen serverová
+  vrstva ověřená testem se dvěma reálnými WS klienty; klientské UI výzvy a
+  samotné hraní PvP partie (doručování tahů a kontrola, že tah posílá hráč na
+  tahu) přijdou v dalších řezech. Engine-orientované REST endpointy (čtení stavu,
+  tah, vzdání, remíza, nápověda) na PvP partii zatím vracejí chybu
+  `pvp_not_playable` - partie existuje, ale přes tuto cestu se nehraje.
+
 ## [0.53.0] - 2026-07-08
 
 ### Added

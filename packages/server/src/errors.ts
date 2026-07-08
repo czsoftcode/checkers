@@ -22,6 +22,14 @@ export const ERROR_CODES = {
   engineBusy: 'engine_busy',
   /** Engine selhal při vyhodnocení nabídky (timeout/pád/protokol) – přechodné. */
   engineUnavailable: 'engine_unavailable',
+  /**
+   * Engine-orientovaný REST endpoint (čtení dto, tah, vzdání, remíza, nápověda)
+   * zavolaný na PvP partii (fáze 68). PvP partie se v tomto řezu ještě nehraje ani
+   * nečte přes REST (routování/autorita tahů = todo 36, konec = todo 40) – partie
+   * existuje, ale tato cesta pro ni není. Ne 404 (partie JE), ne 500 (není to chyba
+   * serveru), ne tichý default: distinktní 409, ať klient/test pozná důvod.
+   */
+  pvpNotPlayable: 'pvp_not_playable',
   internal: 'internal_error',
 } as const;
 

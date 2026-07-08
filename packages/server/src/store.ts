@@ -39,8 +39,20 @@ export function opposite(color: Color): Color {
  */
 export type EngineStatus = 'idle' | 'thinking' | 'error';
 
-/** Záznam partie: id + stav pravidel + stav tahu enginu + historie tahů. */
-export interface GameRecord {
+/**
+ * Barvy → skryté session id hráčů v PvP partii (fáze 68). Dvě LIDSKÉ strany,
+ * žádný engine. Vyzyvatel dostává černou (v americké dámě táhne první), vyzvaný
+ * bílou (viz {@link GameStore.createPvp}). Session id přiděluje `RoomPresence`;
+ * je per-spojení, po odpojení zaniká (stabilní identita/reconnection = todo 42),
+ * takže binding je do 42 křehký.
+ */
+export interface PvpPlayers {
+  readonly black: string;
+  readonly white: string;
+}
+
+/** Společná část záznamu partie pro oba režimy (engine i PvP). */
+interface GameRecordBase {
   readonly id: string;
   readonly state: GameState;
   readonly engineStatus: EngineStatus;
@@ -59,6 +71,16 @@ export interface GameRecord {
    * partie čte {@link effectiveResult} = `forcedResult ?? gameResultFromState`.
    */
   readonly forcedResult: GameResult | null;
+}
+
+/**
+ * Partie ČLOVĚK vs. ENGINE (dosavadní model, fáze 18–64). Engine hraje stranu
+ * `opposite(humanColor)`; `level`/`ballotIndex` řídí sílu a zahájení. Diskriminátor
+ * `mode: 'engine'` odděluje tento tvar od PvP – engine-cesty (spouštění tahu,
+ * vzdání, remíza, nápověda, dto) čtou pole níž JEN po zúžení přes `mode`.
+ */
+export interface EngineGameRecord extends GameRecordBase {
+  readonly mode: 'engine';
   /**
    * Úroveň obtížnosti zvolená při založení partie (fáze 35). Fixní po celou
    * partii – tah enginu běží na pozadí (`runEngineMove`) a sílu čte odsud, ne z
@@ -84,16 +106,38 @@ export interface GameRecord {
   readonly humanColor: Color;
 }
 
-interface StoredGame {
+/**
+ * Partie DVOU LIDÍ (V3, fáze 68). Bez enginu, bez úrovně i ballotu – startuje z
+ * výchozího rozestavění (černý na tahu). `players` váže barvu na session id hráče.
+ * V tomto řezu se ještě NEHRAJE (routování a autorita tahů = todo 36); záznam je
+ * jen substrát, na který navazuje párování a pozdější hraní.
+ */
+export interface PvpGameRecord extends GameRecordBase {
+  readonly mode: 'pvp';
+  readonly players: PvpPlayers;
+}
+
+/** Záznam partie: engine, nebo PvP. Diskriminátor `mode` je zdroj pravdy. */
+export type GameRecord = EngineGameRecord | PvpGameRecord;
+
+interface StoredGameBase {
   state: GameState;
   engineStatus: EngineStatus;
   moves: Move[];
   archived: boolean;
   forcedResult: GameResult | null;
+}
+interface EngineStoredGame extends StoredGameBase {
+  mode: 'engine';
   level: GameLevel;
   ballotIndex: number | null;
   humanColor: Color;
 }
+interface PvpStoredGame extends StoredGameBase {
+  mode: 'pvp';
+  players: PvpPlayers;
+}
+type StoredGame = EngineStoredGame | PvpStoredGame;
 
 /**
  * Efektivní výsledek partie: vynucený (vzdání) má přednost, jinak se odvodí z
@@ -132,14 +176,24 @@ export class GameStore {
    * archivace by pak mohla vzít jiný seznam tahů, než jaký v partii byl v okamžiku
    * jejího konce. Move je readonly, stačí mělká kopie pole.
    */
+  private toRecord(id: string, game: EngineStoredGame): EngineGameRecord;
+  private toRecord(id: string, game: PvpStoredGame): PvpGameRecord;
+  private toRecord(id: string, game: StoredGame): GameRecord;
   private toRecord(id: string, game: StoredGame): GameRecord {
-    return {
+    const base: GameRecordBase = {
       id,
       state: game.state,
       engineStatus: game.engineStatus,
       moves: [...game.moves],
       archived: game.archived,
       forcedResult: game.forcedResult,
+    };
+    if (game.mode === 'pvp') {
+      return { ...base, mode: 'pvp', players: game.players };
+    }
+    return {
+      ...base,
+      mode: 'engine',
       level: game.level,
       ballotIndex: game.ballotIndex,
       humanColor: game.humanColor,
@@ -225,7 +279,7 @@ export class GameStore {
     level: GameLevel = DEFAULT_LEVEL,
     humanColor: Color = 'black',
     ballotIndex?: number,
-  ): GameRecord {
+  ): EngineGameRecord {
     if (ballotIndex !== undefined && level !== 'championship') {
       throw new RangeError(
         `ballotIndex zadán pro úroveň '${level}', ale fixní ballot je jen pro 'championship'`,
@@ -237,7 +291,8 @@ export class GameStore {
       seeded =
         ballotIndex !== undefined ? this.applyBallotByIndex(ballotIndex) : this.seedBallot();
     }
-    const game: StoredGame = {
+    const game: EngineStoredGame = {
+      mode: 'engine',
       state: seeded?.state ?? initialGameState(),
       engineStatus: 'idle',
       moves: seeded?.moves ?? [],
@@ -246,6 +301,31 @@ export class GameStore {
       level,
       ballotIndex: seeded?.index ?? null,
       humanColor,
+    };
+    this.games.set(id, game);
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Založí PvP partii dvou lidí (fáze 68). Bez enginu, bez úrovně i ballotu –
+   * startuje z výchozího rozestavění (černý na tahu). Vyzyvatel (`challengerId`)
+   * dostává ČERNOU a táhne první, vyzvaný (`challengedId`) bílou – rozhodnutí z
+   * diskuse fáze 68, deterministické (žádný los). `players` váže barvu na session
+   * id, což je substrát pro pozdější autoritu tahů (todo 36).
+   *
+   * V tomto řezu se partie NEHRAJE: engine-cesty ji odmítnou (viz app), tah/konec
+   * PvP je todo 36/40. `id` se vrací volajícímu (párovací WS), aby ho poslal oběma.
+   */
+  createPvp(challengerId: string, challengedId: string): PvpGameRecord {
+    const id = randomUUID();
+    const game: PvpStoredGame = {
+      mode: 'pvp',
+      state: initialGameState(),
+      engineStatus: 'idle',
+      moves: [],
+      archived: false,
+      forcedResult: null,
+      players: { black: challengerId, white: challengedId },
     };
     this.games.set(id, game);
     return this.toRecord(id, game);
@@ -287,10 +367,15 @@ export class GameStore {
    * `'already-over'` když už byla terminální. Řetězcové signály (ne `undefined`)
    * ať volající rozliší 404 od 409, nedostane tichý `undefined` místo stavu.
    */
-  resign(id: string): GameRecord | 'not-found' | 'already-over' {
+  resign(id: string): EngineGameRecord | 'not-found' | 'already-over' {
     const game = this.games.get(id);
     if (game === undefined) {
       return 'not-found';
+    }
+    if (game.mode === 'pvp') {
+      // Nedosažitelné: vzdání PvP partie (todo 40) route odmítne dřív (pvp_not_playable).
+      // Assertion proti tiché špatné větvi, ne běžná cesta – proto hlasitý throw.
+      throw new Error(`resign: PvP partii ${id} nelze vzdát touto cestou (todo 40)`);
     }
     if (effectiveResult(game) !== 'ongoing') {
       return 'already-over';
@@ -310,10 +395,14 @@ export class GameStore {
    * Vrací nový záznam při úspěchu; `'not-found'` když partie neexistuje;
    * `'already-over'` když už byla terminální.
    */
-  acceptDraw(id: string): GameRecord | 'not-found' | 'already-over' {
+  acceptDraw(id: string): EngineGameRecord | 'not-found' | 'already-over' {
     const game = this.games.get(id);
     if (game === undefined) {
       return 'not-found';
+    }
+    if (game.mode === 'pvp') {
+      // Nedosažitelné: remíza v PvP partii (todo 40) route odmítne dřív (pvp_not_playable).
+      throw new Error(`acceptDraw: PvP partii ${id} nelze remizovat touto cestou (todo 40)`);
     }
     if (effectiveResult(game) !== 'ongoing') {
       return 'already-over';

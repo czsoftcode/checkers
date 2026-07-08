@@ -88,12 +88,48 @@ export interface RoomErrorMessage {
   readonly type: 'error';
   readonly message: string;
 }
+
+/**
+ * Drátové zprávy párování výzvou (fáze 68) – tečou po TÉMŽE room WS jako
+ * presence. Logiku výzev drží `ChallengeRegistry`; route jen serializuje.
+ *  - `challenged`          – JEN vyzvanému: přišla ti výzva (kdo + id k odpovědi),
+ *  - `challenge-accepted`  – OBĚMA spárovaným: vznikla partie `gameId`, tvá barva
+ *                            a soupeř (vyzyvatel černá, vyzvaný bílá),
+ *  - `challenge-rejected`  – vyzyvateli: vyzvaný odmítl,
+ *  - `challenge-cancelled` – protějšku zaniklé výzvy: druhý odešel / spároval se jinam.
+ */
+export interface ChallengedMessage {
+  readonly type: 'challenged';
+  readonly challenge: {
+    readonly id: string;
+    readonly challengerId: string;
+    readonly challengerNick: string;
+  };
+}
+export interface ChallengeAcceptedMessage {
+  readonly type: 'challenge-accepted';
+  readonly gameId: string;
+  readonly color: 'black' | 'white';
+  readonly opponentId: string;
+}
+export interface ChallengeRejectedMessage {
+  readonly type: 'challenge-rejected';
+  readonly challengedId: string;
+}
+export interface ChallengeCancelledMessage {
+  readonly type: 'challenge-cancelled';
+  readonly challengeId: string;
+}
 export type RoomServerMessage =
   | RosterMessage
   | JoinedMessage
   | LeftMessage
   | NickTakenMessage
-  | RoomErrorMessage;
+  | RoomErrorMessage
+  | ChallengedMessage
+  | ChallengeAcceptedMessage
+  | ChallengeRejectedMessage
+  | ChallengeCancelledMessage;
 
 /** readyState otevřeného WebSocketu. `WebSocket.OPEN === 1` dle WHATWG i ws. */
 const WS_OPEN = 1;
@@ -161,6 +197,31 @@ export class RoomPresence {
       } catch (error) {
         console.error(`Místnost: odeslání hráči ${entry.id} selhalo:`, error);
       }
+    }
+  }
+
+  /** Je hráč `id` v místnosti? Pro směrované zprávy (výzva na přítomného). */
+  has(id: string): boolean {
+    return this.players.has(id);
+  }
+
+  /**
+   * Pošle `payload` JEDNOMU hráči podle `id` (směrovaná zpráva – výzva, přijetí,
+   * odmítnutí, zrušení). No-op, když hráč není v místnosti nebo má zavřený socket.
+   * Fire-and-forget jako {@link broadcast}: výjimku z `send` spolkne a zaloguje,
+   * ať jeden vadný socket nezhodí volající cestu. Vrací `true`, když se doručilo.
+   */
+  sendTo(id: string, payload: string): boolean {
+    const entry = this.players.get(id);
+    if (entry?.socket.readyState !== WS_OPEN) {
+      return false;
+    }
+    try {
+      entry.socket.send(payload);
+      return true;
+    } catch (error) {
+      console.error(`Místnost: směrované odeslání hráči ${id} selhalo:`, error);
+      return false;
     }
   }
 

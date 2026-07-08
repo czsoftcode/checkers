@@ -10,7 +10,20 @@ export { buildApp } from './app.js';
 export type { BuildAppOptions } from './app.js';
 export { formatGamePdn, writeGamePdn } from './archive.js';
 export { GameStore, effectiveResult, opposite } from './store.js';
-export type { GameRecord, EngineStatus } from './store.js';
+export type {
+  GameRecord,
+  EngineGameRecord,
+  PvpGameRecord,
+  PvpPlayers,
+  EngineStatus,
+} from './store.js';
+export { ChallengeRegistry } from './challenges.js';
+export type {
+  Challenge,
+  CreateChallengeResult,
+  AcceptChallengeResult,
+  RejectChallengeResult,
+} from './challenges.js';
 export { moveToDto, legalMoveDtos, gameToDto, findLegalMove } from './dto.js';
 export type { MoveDto, GameDto, GameStateMessage } from './dto.js';
 export { GameHub } from './hub.js';
@@ -26,6 +39,10 @@ export type {
   LeftMessage,
   NickTakenMessage,
   RoomErrorMessage,
+  ChallengedMessage,
+  ChallengeAcceptedMessage,
+  ChallengeRejectedMessage,
+  ChallengeCancelledMessage,
 } from './presence.js';
 export { ERROR_CODES, sendError } from './errors.js';
 export type { ErrorCode, ErrorEnvelope } from './errors.js';

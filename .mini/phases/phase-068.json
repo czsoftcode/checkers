@@ -1,0 +1,44 @@
+{
+  "id": 68,
+  "title": "Párování výzvou: serverové jádro",
+  "goal": "Server přes room WS zpracuje životní cyklus výzvy (challenge → přijetí/odmítnutí) a při přijetí vytvoří PvP partii navázanou na oba hráče (dvě lidské barvy, bez enginu), oba dostanou její id; ověřeno integračním testem se dvěma reálnými WS klienty. Klientské UI výzvy a hrany typu „vyzvaný už hraje / odchod vyzvaného během výzvy\" jsou vědomě mimo tento řez (navazující řez: UI párování).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Model PvP partie v GameStore",
+      "status": "done",
+      "detail": "GameRecord/StoredGame o mode: 'engine'|'pvp' a players (barva→sessionId, jen PvP). Nová metoda createPvp(challengerId, challengedId): partie z výchozího rozestavění, bez ballotu/levelu/enginu, vyzyvatel = černá (táhne první). Unit test: PvP záznam s oběma id, černá = vyzyvatel; get(id) ho vrátí."
+    },
+    {
+      "title": "Engine-cesty se u PvP chovají bezpečně",
+      "status": "done",
+      "detail": "maybeTriggerEngine no-op pro mode==='pvp' (nespouštět neexistující engine); dtoFor na PvP nespadne; resign/offer-draw/hint/moves na PvP id vrátí definovanou chybu, ne 500. Test: GET /games/:id a POST /resign na PvP partii nehází 500."
+    },
+    {
+      "title": "Registr výzev + busy stav (modul, unit testy)",
+      "status": "done",
+      "detail": "Čekající výzvy {id, challengerId, challengedId, status}; create/accept/reject + pravidlo pro křížovou (A↔B) a dvojitou (A→B 2×) výzvu; removePlayer(id) zruší všechny výzvy hráče a vrátí dotčené protějšky; busy stav (kdo je v partii) — výzva na/od busy odmítnuta, busy se ruší jen odchodem. Testy bez WS (jako presence)."
+    },
+    {
+      "title": "Room WS: protokol výzvy",
+      "status": "done",
+      "detail": "Handler /room/ws o příchozí challenge/accept/reject; odchozí challenged / challenge-accepted (stejné gameId oběma) / challenge-rejected / challenge-cancelled / error. Tvarová kontrola PŘED přístupem k polím (pozor na JSON.parse('null')); zprávy před join → error; na close zrušit výzvy hráče + uvědomit protějšky (readyState guard, fire-and-forget). Drátové typy vedle RoomServerMessage."
+    },
+    {
+      "title": "Integrační test se dvěma reálnými WS klienty",
+      "status": "done",
+      "detail": "Happy: A vyzve B → přijme → oba stejné gameId, store.get(gameId) PvP-tvaru s oběma id, černá = A. Dále: reject; přijetí zaniklé výzvy (vyzyvatel odpojen → error, ne partie); křížová/dvojitá výzva; vyzvaný už hraje (busy) → error; izolace od herní WS."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zápis do CHANGELOG.md; nezávislý sub-agent (čerstvý kontext) projede unhappy path protokolu a modelu (viz watch-out), nálezy opravit před reportem."
+    }
+  ],
+  "startedAt": "2026-07-08T13:41:34.120Z",
+  "completedAt": "2026-07-08T14:19:51.067Z",
+  "autoCommit": {
+    "preSha": "3a8a6afa6115524c9c6399bc7974a37924cf7fe3",
+    "subject": "Phase 68: Párování výzvou: serverové jádro"
+  }
+}

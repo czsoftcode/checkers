@@ -337,6 +337,11 @@
       "id": 67,
       "title": "Místnost: přítomnost přes WebSocket",
       "status": "done"
+    },
+    {
+      "id": 68,
+      "title": "Párování výzvou: serverové jádro",
+      "status": "done"
     }
   ]
 }

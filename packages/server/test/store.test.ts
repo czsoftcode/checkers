@@ -35,7 +35,13 @@ describe('GameStore – úroveň partie', () => {
     const { id, level } = store.create('beginner');
     expect(level).toBe('beginner');
     playFirstLegal(store, id);
-    expect(store.get(id)?.level).toBe('beginner');
+    // get() vrací union (engine | pvp); zúžení přes `mode` je nutné, ať se čte
+    // `level` jen na engine variantě (PvP partie žádnou úroveň nemá).
+    const rec = store.get(id);
+    if (rec?.mode !== 'engine') {
+      throw new Error('čekal jsem engine partii');
+    }
+    expect(rec.level).toBe('beginner');
   });
 });
 
@@ -186,5 +192,45 @@ describe('GameStore – přijetí remízy (acceptDraw)', () => {
   it('přijetí neexistující partie → "not-found"', () => {
     const store = new GameStore();
     expect(store.acceptDraw('neexistuje')).toBe('not-found');
+  });
+});
+
+describe('GameStore – PvP partie (createPvp, fáze 68)', () => {
+  it('createPvp naváže oba hráče: vyzyvatel černá, vyzvaný bílá, výchozí pozice', () => {
+    const store = new GameStore();
+    const rec = store.createPvp('vyzyvatel-id', 'vyzvany-id');
+    expect(rec.mode).toBe('pvp');
+    expect(rec.players).toEqual({ black: 'vyzyvatel-id', white: 'vyzvany-id' });
+    // Americká dáma: černý (= vyzyvatel) táhne první, výchozí rozestavění.
+    expect(rec.state.position.turn).toBe('black');
+    expect(rec.moves).toEqual([]);
+    expect(rec.forcedResult).toBeNull();
+    expect(effectiveResult(rec)).toBe('ongoing');
+  });
+
+  it('get() vrátí založenou PvP partii se stejnou vazbou hráčů', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    const got = store.get(id);
+    if (got?.mode !== 'pvp') {
+      throw new Error('čekal jsem PvP partii z get()');
+    }
+    expect(got.players).toEqual({ black: 'A', white: 'B' });
+  });
+
+  it('dvě createPvp mají různá id (nezávislé partie)', () => {
+    const store = new GameStore();
+    const a = store.createPvp('A', 'B');
+    const b = store.createPvp('C', 'D');
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it('resign na PvP partii hlasitě throwuje (route ji odmítne dřív, todo 40)', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    // Assertion v store: PvP vzdání není v tomto řezu; nesmí tiše projít jako
+    // engine cesta. Zub: kdyby guard zmizel, opposite(undefined) by dal nesmysl.
+    expect(() => store.resign(id)).toThrow(/PvP/);
+    expect(() => store.acceptDraw(id)).toThrow(/PvP/);
   });
 });

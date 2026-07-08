@@ -19,6 +19,7 @@ import type { GameStateMessage } from './dto.js';
 import { GameHub } from './hub.js';
 import { RoomPresence } from './presence.js';
 import type { RoomServerMessage } from './presence.js';
+import { ChallengeRegistry } from './challenges.js';
 import { ERROR_CODES, sendError } from './errors.js';
 import { LEVELS, STRENGTH_BY_LEVEL, levelUsesBook } from './levels.js';
 import { OPENING_BOOK, lookupBookMove } from './opening-book.js';
@@ -54,7 +55,27 @@ const createGameBodySchema = z.object({
  * Barva člověka je uložená u partie (`GameRecord.humanColor`), engine je vždy
  * druhá strana. Dřívější napevno `'white'` je jen výchozí případ (člověk černý).
  */
+/**
+ * Odmítne engine-orientovaný REST endpoint volaný na PvP partii (fáze 68). PvP
+ * partie existuje, ale v tomto řezu se přes REST nehraje ani nečte (todo 36/40) –
+ * 409 `pvp_not_playable`, ne 404 (partie JE) ani 500 (není to chyba serveru).
+ * JEDNO místo pro tuhle odpověď (GET dto, tah, vzdání, remíza, nápověda).
+ */
+function rejectPvp(reply: FastifyReply, id: string): FastifyReply {
+  return sendError(
+    reply,
+    409,
+    ERROR_CODES.pvpNotPlayable,
+    `Partie ${id} je hra dvou lidí; tato akce pro ni zatím není dostupná.`,
+  );
+}
+
 function engineColorOf(record: GameRecord): Color {
+  if (record.mode === 'pvp') {
+    // Nedosažitelné: engine-cesty PvP partii odmítnou (pvp_not_playable) dřív, než
+    // se sem dostanou. Assertion proti tiché špatné barvě, ne běžná větev.
+    throw new Error(`engineColorOf: PvP partie ${record.id} nemá engine barvu (todo 36)`);
+  }
   return opposite(record.humanColor);
 }
 
@@ -134,6 +155,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   /** GameDto ze záznamu: `result` je EFEKTIVNÍ výsledek (vzdání > pozice). */
   function dtoFor(record: GameRecord): ReturnType<typeof gameToDto> {
+    if (record.mode === 'pvp') {
+      // Nedosažitelné: PvP partie se do dtoFor nedostane – GET /games/:id ji odmítne
+      // 409 (pvp_not_playable) a mutační/broadcast cesty pro PvP neběží (fáze 68).
+      // GameDto je engine-tvaru (level/humanColor/ballot); PvP dto přijde s UI (todo 36).
+      // Backstop assertion, ať se sem nepropadne tiché zkreslení.
+      throw new Error(`dtoFor: PvP partii ${record.id} nelze serializovat do GameDto (todo 36)`);
+    }
     // Ballot tahy: JEN u Mistrovství (`ballotIndex !== null`). Ballot je vždy tři
     // půltahy, které store nasadil jako první tři položky historie (viz store
     // `seedBallot`) – klient je na startu jednou přehraje (animace zahájení).
@@ -167,6 +195,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   // není to veřejný HTTP kontrakt.
   const presence = new RoomPresence();
   app.decorate('roomPresence', presence);
+
+  // Registr čekajících výzev + busy stav párování (fáze 68). Logika mimo route
+  // (viz challenges.ts); route jen serializuje a rozesílá. Dekorace zpřístupní
+  // registr i store integračnímu testu (deterministické čekání na čekající výzvu /
+  // ověření vzniklé PvP partie bez sleepu). Nejde o veřejný HTTP kontrakt.
+  const challenges = new ChallengeRegistry();
+  app.decorate('challengeRegistry', challenges);
+  app.decorate('gameStore', store);
 
   /**
    * Rozešle AKTUÁLNÍ stav partie jejím WS odběratelům. Fire-and-forget vedlejší
@@ -217,7 +253,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     instance.get('/room/ws', { websocket: true }, (socket) => {
       // Referencí na zapsaného hráče se drží stav spojení: null = ještě nevstoupil
       // (nebo dostal nick-taken/error a zkouší znovu). Autorita nad tímto socketem.
-      let me: { id: string } | null = null;
+      // Nick držíme kvůli výzvám (fáze 68): `challenged` nese přezdívku vyzyvatele.
+      let me: { id: string; nick: string } | null = null;
 
       const send = (message: RoomServerMessage): void => {
         try {
@@ -225,6 +262,140 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         } catch (error) {
           console.error('Místnost: odeslání příchozímu selhalo:', error);
         }
+      };
+
+      // Vstup pod přezdívkou (fáze 67). Set `me` = zapsaný hráč (vč. nicku).
+      const handleJoin = (nick: unknown): void => {
+        if (typeof nick !== 'string') {
+          send({ type: 'error', message: 'Chybí přezdívka.' });
+          return;
+        }
+        if (me !== null) {
+          send({ type: 'error', message: 'Už jsi v místnosti.' });
+          return;
+        }
+        const result = presence.join(nick, socket);
+        if (result.status === 'invalid') {
+          send({ type: 'error', message: result.reason });
+          return;
+        }
+        if (result.status === 'nick-taken') {
+          send({ type: 'nick-taken', suggestion: result.suggestion });
+          return;
+        }
+        // Úspěch. Pořadí: hráč už je v rosteru (join ho zapsal) → pošli `roster`
+        // JEN jemu (vč. sebe), teprve pak `joined` VŠEM OSTATNÍM (except = já),
+        // ať nedostane vlastní příchod dvakrát.
+        me = { id: result.player.id, nick: result.player.nick };
+        send({ type: 'roster', players: presence.roster() });
+        presence.broadcast(
+          JSON.stringify({ type: 'joined', player: result.player }),
+          result.player.id,
+        );
+      };
+
+      // Výzva na partii (fáze 68). Jen zapsaný hráč smí vyzývat; cíl musí být v
+      // místnosti. Logiku (sebe-výzva, busy, dvojitá/křížová) drží registr →
+      // `rejected` se vrátí vyzyvateli jako `error`. Úspěch: `challenged` cíli.
+      const handleChallenge = (targetId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        if (typeof targetId !== 'string') {
+          send({ type: 'error', message: 'Chybí id vyzvaného hráče.' });
+          return;
+        }
+        if (!presence.has(targetId)) {
+          send({ type: 'error', message: 'Vyzvaný hráč není v místnosti.' });
+          return;
+        }
+        const result = challenges.create(me.id, targetId);
+        if (result.status === 'rejected') {
+          send({ type: 'error', message: result.reason });
+          return;
+        }
+        presence.sendTo(
+          targetId,
+          JSON.stringify({
+            type: 'challenged',
+            challenge: {
+              id: result.challenge.id,
+              challengerId: me.id,
+              challengerNick: me.nick,
+            },
+          }),
+        );
+      };
+
+      // Přijetí výzvy (fáze 68). Přijmout smí jen vyzvaný. Úspěch: vznikne PvP
+      // partie (vyzyvatel černá, vyzvaný bílá) a OBA dostanou její id + svou barvu.
+      // Vedlejší zrušené výzvy obou hráčů → protějškům `challenge-cancelled`.
+      const handleAccept = (challengeId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        if (typeof challengeId !== 'string') {
+          send({ type: 'error', message: 'Chybí id výzvy.' });
+          return;
+        }
+        const result = challenges.accept(me.id, challengeId);
+        if (result.status === 'gone') {
+          send({ type: 'error', message: 'Výzva už neplatí.' });
+          return;
+        }
+        const { challengerId, challengedId } = result.challenge;
+        const game = store.createPvp(challengerId, challengedId);
+        presence.sendTo(
+          challengerId,
+          JSON.stringify({
+            type: 'challenge-accepted',
+            gameId: game.id,
+            color: 'black',
+            opponentId: challengedId,
+          }),
+        );
+        presence.sendTo(
+          challengedId,
+          JSON.stringify({
+            type: 'challenge-accepted',
+            gameId: game.id,
+            color: 'white',
+            opponentId: challengerId,
+          }),
+        );
+        // Protějšek zaniklé vedlejší výzvy = ten z dvojice, který se PRÁVĚ nespároval.
+        const paired = new Set([challengerId, challengedId]);
+        for (const c of result.cancelled) {
+          const counterpart = paired.has(c.challengerId) ? c.challengedId : c.challengerId;
+          presence.sendTo(
+            counterpart,
+            JSON.stringify({ type: 'challenge-cancelled', challengeId: c.id }),
+          );
+        }
+      };
+
+      // Odmítnutí výzvy (fáze 68). Odmítnout smí jen vyzvaný; úspěch → vyzyvateli
+      // `challenge-rejected`. Cizí/neznámé id → `error`, socket žije dál.
+      const handleReject = (challengeId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        if (typeof challengeId !== 'string') {
+          send({ type: 'error', message: 'Chybí id výzvy.' });
+          return;
+        }
+        const result = challenges.reject(me.id, challengeId);
+        if (result.status === 'gone') {
+          send({ type: 'error', message: 'Výzva už neplatí.' });
+          return;
+        }
+        presence.sendTo(
+          result.challenge.challengerId,
+          JSON.stringify({ type: 'challenge-rejected', challengedId: result.challenge.challengedId }),
+        );
       };
 
       socket.on('message', (raw: Buffer) => {
@@ -238,43 +409,34 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         // Pozor: `JSON.parse('null')` je platný JSON a vrátí `null` (nespadne na
         // catch výš) – čtení `.type` na `null` by hodilo TypeError MIMO try a
         // shodilo handler. Proto tvarová kontrola PŘED přístupem k `.type`.
-        // Primitiva a pole tady taky nechceme (join je objekt), odmítni je čistě.
+        // Primitiva a pole tady taky nechceme (zprávy jsou objekty), odmítni čistě.
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
           send({ type: 'error', message: 'Neplatná zpráva (očekávám objekt).' });
           return;
         }
-        const msg = parsed as { type?: unknown; nick?: unknown };
-        if (msg.type !== 'join') {
-          send({ type: 'error', message: 'Neznámý typ zprávy.' });
-          return;
+        const msg = parsed as {
+          type?: unknown;
+          nick?: unknown;
+          targetId?: unknown;
+          challengeId?: unknown;
+        };
+        switch (msg.type) {
+          case 'join':
+            handleJoin(msg.nick);
+            return;
+          case 'challenge':
+            handleChallenge(msg.targetId);
+            return;
+          case 'accept':
+            handleAccept(msg.challengeId);
+            return;
+          case 'reject':
+            handleReject(msg.challengeId);
+            return;
+          default:
+            send({ type: 'error', message: 'Neznámý typ zprávy.' });
+            return;
         }
-        if (typeof msg.nick !== 'string') {
-          send({ type: 'error', message: 'Chybí přezdívka.' });
-          return;
-        }
-        if (me !== null) {
-          send({ type: 'error', message: 'Už jsi v místnosti.' });
-          return;
-        }
-
-        const result = presence.join(msg.nick, socket);
-        if (result.status === 'invalid') {
-          send({ type: 'error', message: result.reason });
-          return;
-        }
-        if (result.status === 'nick-taken') {
-          send({ type: 'nick-taken', suggestion: result.suggestion });
-          return;
-        }
-        // Úspěch. Pořadí: hráč už je v rosteru (join ho zapsal) → pošli `roster`
-        // JEN jemu (vč. sebe), teprve pak `joined` VŠEM OSTATNÍM (except = já),
-        // ať nedostane vlastní příchod dvakrát.
-        me = { id: result.player.id };
-        send({ type: 'roster', players: presence.roster() });
-        presence.broadcast(
-          JSON.stringify({ type: 'joined', player: result.player }),
-          result.player.id,
-        );
       });
 
       socket.on('close', () => {
@@ -285,6 +447,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         presence.remove(id);
         // `left` všem zbylým – hráč už je odebraný, except není třeba.
         presence.broadcast(JSON.stringify({ type: 'left', player: { id } }));
+        // Odchod ruší jeho čekající výzvy (vyzyvatele i vyzvaného) a jeho busy stav.
+        // Každý protějšek zaniklé výzvy dostane `challenge-cancelled` (fire-and-forget;
+        // sendTo hlídá otevřenost socketu). Bez toho by protějšek čekal na mrtvou výzvu.
+        const cancelled = challenges.removePlayer(id);
+        for (const c of cancelled) {
+          const counterpart = c.challengerId === id ? c.challengedId : c.challengerId;
+          presence.sendTo(
+            counterpart,
+            JSON.stringify({ type: 'challenge-cancelled', challengeId: c.id }),
+          );
+        }
       });
     });
 
@@ -352,6 +525,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (record === undefined) {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
     }
+    if (record.mode === 'pvp') {
+      return rejectPvp(reply, req.params.id);
+    }
     return reply.send(dtoFor(record));
   });
 
@@ -361,6 +537,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   // Bez kontroly, kdo je na tahu – vzdát lze kdykoli za běhu, i když engine
   // zrovna přemýšlí (jeho běžící job po probuzení uvidí terminál a nezahraje).
   app.post<{ Params: { id: string } }>('/games/:id/resign', async (req, reply) => {
+    // PvP partii odmítni PŘED store.resign (ten na PvP hlasitě throwuje). Vzdání
+    // druhému člověku je todo 40, tady jen bezpečné odmítnutí (ne 500).
+    const existing = store.get(req.params.id);
+    if (existing?.mode === 'pvp') {
+      return rejectPvp(reply, req.params.id);
+    }
     const outcome = store.resign(req.params.id);
     if (outcome === 'not-found') {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
@@ -391,6 +573,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const record = store.get(req.params.id);
     if (record === undefined) {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
+    }
+    if (record.mode === 'pvp') {
+      return rejectPvp(reply, req.params.id); // PvP remíza druhému člověku = todo 40
     }
     if (effectiveResult(record) !== 'ongoing') {
       return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
@@ -471,6 +656,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (record === undefined) {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
     }
+    if (record.mode === 'pvp') {
+      return rejectPvp(reply, req.params.id); // nápověda enginem v PvP nedává smysl
+    }
     if (effectiveResult(record) !== 'ongoing') {
       return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
     }
@@ -523,6 +711,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const record = store.get(req.params.id);
     if (record === undefined) {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
+    }
+    if (record.mode === 'pvp') {
+      // Hraní PvP partie (routování + autorita tahu podle hráče na tahu) je todo 36.
+      // Tady jen bezpečné odmítnutí, ať PvP tah neprojde nezabezpečenou engine cestou.
+      return rejectPvp(reply, req.params.id);
     }
 
     const parsed = moveBodySchema.safeParse(req.body);
@@ -592,6 +785,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (engine === undefined) {
       return;
     }
+    if (record.mode === 'pvp') {
+      // PvP partie nemá engine stranu → žádný tah enginu. Obranný no-op: dnes se
+      // sem PvP záznam nedostane (POST /games zakládá jen engine partie), ale
+      // guard drží invariant, kdyby budoucí cesta zavolala trigger na PvP.
+      return;
+    }
     if (effectiveResult(record) !== 'ongoing') {
       return;
     }
@@ -639,6 +838,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     try {
       const record = store.get(id);
       if (record === undefined) {
+        return;
+      }
+      if (record.mode === 'pvp') {
+        // Nedosažitelné: runEngineMove běží jen po maybeTriggerEngine, který PvP
+        // odmítne. Guard zúží typ (dále se čte record.level) a drží invariant.
         return;
       }
       if (
