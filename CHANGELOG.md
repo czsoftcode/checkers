@@ -7,6 +7,26 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-07-08
+
+### Added
+
+- **Místnost přítomnosti přes WebSocket (základ dvouhráčové verze v3).** Server
+  nově drží jednu společnou místnost přítomných hráčů. Klient se připojí na
+  `GET /room/ws` a pošle zprávu `{ type: "join", nick: "…" }`; server hráči
+  přidělí skryté session `id` (přezdívka je jen jmenovka, na kterou se pak
+  navěsí párování), zapíše ho a odpoví mu celým seznamem přítomných
+  `{ type: "roster", players: [{ id, nick }, …] }`. Ostatním rozešle příchod
+  `{ type: "joined", player: … }` a při odpojení odchod `{ type: "left", … }`.
+  Přezdívka musí být unikátní (porovnání bez ohledu na velikost písmen); při
+  kolizi server neodmítne natvrdo, ale pošle `{ type: "nick-taken", suggestion }`
+  s volnou variantou (`Honza_1`, `Honza_2`, …) a spojení nechá otevřené pro nový
+  pokus. Prázdná i příliš dlouhá přezdívka (nad 24 znaků) skončí zprávou
+  `{ type: "error", … }`. Je to zatím jen serverová vrstva ověřená testem se
+  dvěma reálnými WS klienty; klientská obrazovka místnosti, rozlišení
+  volný/hraje, stabilní identita při reconnectu a úklid nečinných spojení jsou
+  vědomě mimo tento řez.
+
 ## [0.52.0] - 2026-07-08
 
 ### Added

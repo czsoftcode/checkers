@@ -15,6 +15,18 @@ export { moveToDto, legalMoveDtos, gameToDto, findLegalMove } from './dto.js';
 export type { MoveDto, GameDto, GameStateMessage } from './dto.js';
 export { GameHub } from './hub.js';
 export type { HubSocket } from './hub.js';
+export { RoomPresence, NICK_MAX_LENGTH } from './presence.js';
+export type {
+  RoomSocket,
+  RoomPlayer,
+  JoinResult,
+  RoomServerMessage,
+  RosterMessage,
+  JoinedMessage,
+  LeftMessage,
+  NickTakenMessage,
+  RoomErrorMessage,
+} from './presence.js';
 export { ERROR_CODES, sendError } from './errors.js';
 export type { ErrorCode, ErrorEnvelope } from './errors.js';
 export {

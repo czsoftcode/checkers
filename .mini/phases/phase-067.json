@@ -1,0 +1,34 @@
+{
+  "id": 67,
+  "title": "Místnost: přítomnost přes WebSocket",
+  "goal": "Server drží jednu společnou místnost přítomných hráčů se vstupem pod přezdívkou přes WS; nově příchozí dostane aktuální seznam přítomných, ostatní real-time zprávu o příchodu i o odchodu — ověřeno testem se dvěma reálnými WS klienty. Klientská obrazovka místnosti, stav volný/hraje (až s párováním, todo 38), stabilní identita/reconnection (todo 42) a úklid zombie/limity (todo 45) jsou mimo tento řez.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Presence modul: registr přítomných hráčů",
+      "status": "done",
+      "detail": "Čistý modul (presence.ts / RoomHub): globální množina hráčů {id,nick,socket}, přidělení session id, case-insensitive unikátnost + návrh volného suffixu (_1,_2…), validace (trim, prázdná→odmítnout, délka 1–24). Vrací výsledek join (ok / nick-taken+suggestion / invalid), NEřeší transport. Broadcast helper (po jednom, try/catch, readyState guard) jako v hub.ts. Unit test s fake socketem."
+    },
+    {
+      "title": "WS route /room/ws: lifecycle spojení",
+      "status": "done",
+      "detail": "Route v buildApp (WS plugin už z fáze 66, neregistrovat podruhé). Parse JSON, dispatch join přes presence modul. Úspěch: přidat → roster (vč. sebe) jen novému → joined všem ostatním. Duplicita → nick-taken+suggestion (socket otevřený, žádný zápis). Prázdná/dlouhá → error. Druhý join na už připojeném socketu → error. Nevalidní JSON / zpráva před join / neznámý type → nespadnout. close → left jen když se socket opravdu připojil."
+    },
+    {
+      "title": "Integrační test: dva reální WS klienti",
+      "status": "done",
+      "detail": "app.listen({port:0}) + knihovna ws (jako fáze 66). (a) B po join vidí A v rosteru, A dostane joined(B); po zavření A dostane B left(A). (b) B s přezdívkou A → nick-taken+suggestion, B není v rosteru, A nedostane nic. (c) prázdná / >24 znaků → error, žádný zápis. (d) izolace: odběratel /games/:id/ws z fáze 66 nedostane zprávy místnosti."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zápis do CHANGELOG.md. Před reportem nezávislý sub-agent (čerstvý kontext) projede chybové cesty a kontrakt zpráv místnosti — fáze sahá na vstupní bod procesu (WS) i drátový kontrakt, self-review sub-agentem povinný dle CLAUDE.md."
+    }
+  ],
+  "startedAt": "2026-07-08T12:57:09.400Z",
+  "completedAt": "2026-07-08T13:14:55.093Z",
+  "autoCommit": {
+    "preSha": "f4e9f0721767892f406abe35996902a73e24f721",
+    "subject": "Phase 67: Místnost: přítomnost přes WebSocket"
+  }
+}

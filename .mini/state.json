@@ -332,6 +332,11 @@
       "id": 66,
       "title": "WebSocket: push stavu partie",
       "status": "done"
+    },
+    {
+      "id": 67,
+      "title": "Místnost: přítomnost přes WebSocket",
+      "status": "done"
     }
   ]
 }

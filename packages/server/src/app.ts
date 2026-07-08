@@ -17,6 +17,8 @@ import { formatGamePdn, writeGamePdn } from './archive.js';
 import { findLegalMove, gameToDto, legalMoveDtos, moveToDto } from './dto.js';
 import type { GameStateMessage } from './dto.js';
 import { GameHub } from './hub.js';
+import { RoomPresence } from './presence.js';
+import type { RoomServerMessage } from './presence.js';
 import { ERROR_CODES, sendError } from './errors.js';
 import { LEVELS, STRENGTH_BY_LEVEL, levelUsesBook } from './levels.js';
 import { OPENING_BOOK, lookupBookMove } from './opening-book.js';
@@ -159,6 +161,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   // do budoucna i případné metriky. Není to veřejný HTTP kontrakt.
   app.decorate('gameHub', hub);
 
+  // Registr přítomných hráčů v jedné společné místnosti (fáze 67) – globální
+  // real-time vrstva vedle per-partie hubu. Dekorace zpřístupní počet přítomných
+  // integračnímu testu (deterministické čekání na zápis hráče, bez sleepu);
+  // není to veřejný HTTP kontrakt.
+  const presence = new RoomPresence();
+  app.decorate('roomPresence', presence);
+
   /**
    * Rozešle AKTUÁLNÍ stav partie jejím WS odběratelům. Fire-and-forget vedlejší
    * efekt mutačních cest (tah člověka/enginu, vzdání, remíza) – volá se AŽ po
@@ -198,6 +207,87 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         });
       },
     );
+
+    // Místnost přítomnosti (fáze 67). Vstup je ZPRÁVOU, ne připojením: klient po
+    // otevření pošle `{ type:'join', nick }`. Server přidělí session id, zapíše
+    // hráče a pošle mu `roster` (vč. sebe), ostatním `joined`. Duplicita →
+    // `nick-taken` (socket zůstává, klient zkusí návrh). Prázdná/dlouhá → `error`.
+    // Dvojí join na tomtéž socketu → `error` (přejmenování není v tomto řezu).
+    // `close` odhlásí a rozešle `left` – JEN pokud se hráč opravdu zapsal.
+    instance.get('/room/ws', { websocket: true }, (socket) => {
+      // Referencí na zapsaného hráče se drží stav spojení: null = ještě nevstoupil
+      // (nebo dostal nick-taken/error a zkouší znovu). Autorita nad tímto socketem.
+      let me: { id: string } | null = null;
+
+      const send = (message: RoomServerMessage): void => {
+        try {
+          socket.send(JSON.stringify(message));
+        } catch (error) {
+          console.error('Místnost: odeslání příchozímu selhalo:', error);
+        }
+      };
+
+      socket.on('message', (raw: Buffer) => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(raw.toString());
+        } catch {
+          send({ type: 'error', message: 'Neplatná zpráva (očekávám JSON).' });
+          return;
+        }
+        // Pozor: `JSON.parse('null')` je platný JSON a vrátí `null` (nespadne na
+        // catch výš) – čtení `.type` na `null` by hodilo TypeError MIMO try a
+        // shodilo handler. Proto tvarová kontrola PŘED přístupem k `.type`.
+        // Primitiva a pole tady taky nechceme (join je objekt), odmítni je čistě.
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          send({ type: 'error', message: 'Neplatná zpráva (očekávám objekt).' });
+          return;
+        }
+        const msg = parsed as { type?: unknown; nick?: unknown };
+        if (msg.type !== 'join') {
+          send({ type: 'error', message: 'Neznámý typ zprávy.' });
+          return;
+        }
+        if (typeof msg.nick !== 'string') {
+          send({ type: 'error', message: 'Chybí přezdívka.' });
+          return;
+        }
+        if (me !== null) {
+          send({ type: 'error', message: 'Už jsi v místnosti.' });
+          return;
+        }
+
+        const result = presence.join(msg.nick, socket);
+        if (result.status === 'invalid') {
+          send({ type: 'error', message: result.reason });
+          return;
+        }
+        if (result.status === 'nick-taken') {
+          send({ type: 'nick-taken', suggestion: result.suggestion });
+          return;
+        }
+        // Úspěch. Pořadí: hráč už je v rosteru (join ho zapsal) → pošli `roster`
+        // JEN jemu (vč. sebe), teprve pak `joined` VŠEM OSTATNÍM (except = já),
+        // ať nedostane vlastní příchod dvakrát.
+        me = { id: result.player.id };
+        send({ type: 'roster', players: presence.roster() });
+        presence.broadcast(
+          JSON.stringify({ type: 'joined', player: result.player }),
+          result.player.id,
+        );
+      });
+
+      socket.on('close', () => {
+        if (me === null) {
+          return; // nikdy nevstoupil → nic neodhlašuj ani nerozesílej
+        }
+        const id = me.id;
+        presence.remove(id);
+        // `left` všem zbylým – hráč už je odebraný, except není třeba.
+        presence.broadcast(JSON.stringify({ type: 'left', player: { id } }));
+      });
+    });
+
     done();
   });
 
