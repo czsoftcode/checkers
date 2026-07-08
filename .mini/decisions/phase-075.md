@@ -1,0 +1,7 @@
+# Optický skok v PvP jištěný tvrdým zámkem místo pollingu
+
+## Decision
+PvP deska během skládání vícenásobného skoku ukazuje kámen opticky na mezidopadu a schovává sebrané kameny (effectivePosition), shodně pro tažení i klikání. Rozdělaný skok se na server neposílá; konzistenci místo pollingu drží tvrdý zámek: po prvním meziskoku je deska zamčená do dokončení (klik mimo povinný dopad se ignoruje, přetáhnout jde jen kámen na posledním dopadu). Vědomé zrušení skoku se záměrně nedělá; jediný únik ze zámku je dokončení, odmítnutí serverem, nebo ztráta spojení (oba srovnají desku zpět přes view.settle).
+
+## Why
+Tím se obrací dosavadní invariant PvP desky (nehýbe se opticky). Zvažované alternativy jsme zamítli: (1) ponechat neoptimistický model (kámen sedí na výchozím poli) by nedal paritu s hrou proti AI a hop-po-hopu skok by neměl vizuální zpětnou vazbu. (2) hra proti AI si optický rozpracovaný stav umí srovnat pollingem – PvP polling nemá (jen server push), takže by lokální optika mohla driftovat od serveru bez cesty k nápravě. Zámek tenhle drift vylučuje: dokud se skok neodešle, server o něm neví, takže optika je čistě lokální a plně vratná. (3) přidat tlačítko/gesto zrušit skok jsme odložili – do řetězu nejde spadnout omylem (meziskok se potvrdí jen trefou na zvýrazněný povinný dopad), takže cena zámku (uvíznutí ve vědomě špatně zvolené větvi) je malá; zrušení je kandidát na pozdější todo, kdyby při hraní vadilo.

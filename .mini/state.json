@@ -372,6 +372,11 @@
       "id": 74,
       "title": "Tažení kamene v PvP",
       "status": "done"
+    },
+    {
+      "id": 75,
+      "title": "Skok po krocích tažením v PvP",
+      "status": "done"
     }
   ]
 }

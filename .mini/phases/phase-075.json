@@ -1,0 +1,49 @@
+{
+  "id": 75,
+  "title": "Skok po krocích tažením v PvP",
+  "goal": "Hop-po-hopu vícenásobný skok TAŽENÍM myší na PvP desce (parita s hrou proti AI): kámen jde pustit i na mezidopad, zůstane na dopadu a čeká na další skok. Deska se ZAMKNE do dokončení skoku (žádná úniková cesta → žádný optimistický drift, který PvP bez pollingu neumí sám srovnat); jediné vědomé ZRUŠENÍ skoku srovná desku zpět na potvrzenou pozici (view.settle). Rozdělaný skok se ukazuje opticky (kámen na mezidopadu, sebrané pryč) shodně u tažení i klikání. Ztráta spojení lock přebije a srovná zpět. Vizuálně dát najevo 'dokonči skok', ať to nevypadá zamrzle. Vědomě mimo řez: vzdání/remíza (todo 40), reconnection (todo 42).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Optimistický render rozdělaného skoku v renderState",
+      "status": "done",
+      "detail": "Přidat lastHopOf + effectivePosition (import capturesForPrefix ze ./selection.js); přepsat renderState tak, že při selection.path.length > 0 je position = effectivePosition (kámen na posledním dopadu, sebrané schované), selected = lastHop, path = [from, …předchozí]. Cíle = VŽDY nextTargets (zrušit dnešní dragging ? endpointsFor : nextTargets) – i tažení svítí bezprostřední další dopad. Výstup: mid-jump zobrazení má kámen na dopadu a sebrané pryč."
+    },
+    {
+      "title": "Hop-po-hopu tažení + míchání s klikáním",
+      "status": "done",
+      "detail": "onDrop: legální MEZIdopad → posun selection + návrat { kind: 'hop', landing, captured } (kámen zůstane), poslední dopad → commit; souvislé tažení na koncové pole (resolveChainTo) zachovat. canDrag: během sekvence povolit jen kámen na lastHopOf (zrušit dnešní blok path.length > 0); onDragStart v sekvenci pokračuje. advance (klik): mezidopad posune kámen OPTICKY (settle místo setHighlights), dokončení víceskoku nastaví settleNext = true (jako drag-commit). Výstup: drop na mezidopad kámen nechá a nic nepošle; další skok (táhnutím i klikem) dojede a pošle celou cestu."
+    },
+    {
+      "title": "Tvrdý zámek do dokončení skoku",
+      "status": "done",
+      "detail": "Při rozdělaném skoku (selection.path.length > 0) handleClick přijme jen klik na nextTargets (advance); klik na jiný vlastní kámen / prázdno / soupeře výběr NEzruší a nepřepne (žádné vědomé zrušení). canDrag mimo lastHop false. Ověřit, že showError i setConnectionLost zámek přebijí a přes view.settle srovnají desku zpět i z optického mezistavu. Výstup: mid-jump nejde utéct jinam; jediný únik je dokončení, odmítnutí serverem, nebo ztráta spojení."
+    },
+    {
+      "title": "Přepsat kontrakt/komentáře + zvýraznění dokonči skok",
+      "status": "done",
+      "detail": "Přepsat hlavičkový doc-komentář pvp-controller.ts (dnes staví na deska se NEhýbe optimisticky – po fázi se opticky hýbe během skládání skoku; zdůvodnit: dokud se skok neodešle, server nic neví, optika je lokální a vratná přes settle) i dotčené inline komentáře. Ověřit, že board-view zvýrazňuje nextTargets během mezistavu (= vizuální výzva dokonči skok). Výstup: v kódu nezůstane protichůdné odůvodnění."
+    },
+    {
+      "title": "Testy: obrácené případy + nové",
+      "status": "done",
+      "detail": "Změnit dva testy, kterým se obrací chování: dopad na MEZIpole … se vrátí → nyní HOP (kámen zůstane, nic neodešle); při TAŽENÍ svítí KONCOVÉ pole → nyní nextTargets. Přidat: hop-po-hopu tažení pošle celou cestu; míchání drag+klik v jednom skoku; optika (sebraný kámen na mezidopadu zmizí); zámek (mid-jump klik na jiný kámen/prázdno nic neudělá); ztráta spojení i showError uprostřed skoku srovnají desku zpět na potvrzenou pozici."
+    },
+    {
+      "title": "Ověření + nezávislý adversarial self-review",
+      "status": "done",
+      "detail": "pnpm -r typecheck, lint a pnpm -r test zelené. Dle CLAUDE.md pustit nezávislého sub-agenta (čerstvý kontext) na unhappy path: drop mimo desku, drop na nelegální pole, ztráta spojení / odmítnutí serverem / push stavu uprostřed skoku, proměna man→king na konci řetězu."
+    }
+  ],
+  "startedAt": "2026-07-08T21:29:29.793Z",
+  "resolvedVerify": [
+    "Optika a plynulost rozdělaného skoku v reálném prohlížeči (myš)",
+    "Vizuální výzva 'dokonči skok' čitelná dost, ať to nevypadá zamrzle",
+    "Klikací víceskok: poslední dopad se ukáže až po serveru (parita s AI)"
+  ],
+  "completedAt": "2026-07-08T22:07:54.820Z",
+  "autoCommit": {
+    "preSha": "5022d800a885df039b76fc9ffe945bbf0f3ba1e8",
+    "subject": "Phase 75: Skok po krocích tažením v PvP"
+  }
+}

@@ -117,7 +117,7 @@ interface Sent {
   from: number;
   path: number[];
 }
-function mount(myColor: Color, opts: { sendResult?: boolean } = {}) {
+function mount(myColor: Color, opts: { sendResult?: boolean; throwOnSend?: boolean } = {}) {
   const sendResult = opts.sendResult ?? true;
   const sent: Sent[] = [];
   const statuses: PvpStatus[] = [];
@@ -126,6 +126,9 @@ function mount(myColor: Color, opts: { sendResult?: boolean } = {}) {
     myColor,
     sendMove: (from, path) => {
       sent.push({ from, path: [...path] });
+      if (opts.throwOnSend === true) {
+        throw new Error('WS send selhal (readyState závod)'); // transport vyhodil
+      }
       return sendResult; // false = spojení pryč (tah neodešel)
     },
     onStatus: (s) => statuses.push(s),
@@ -326,13 +329,17 @@ describe('createPvpController – tažení myší (drag & drop)', () => {
     expect(h.sent).toEqual([{ from: move.from, path: [...move.path] }]);
   });
 
-  it('dopad na MEZIpole vícenásobného skoku se vrátí (nic neodešle)', () => {
+  it('dopad na MEZIpole vícenásobného skoku KÁMEN NECHÁ (hop) a nic neodešle', () => {
     const { position, move } = findDoubleJump();
+    const captured = move.captures[0]!;
     const h = mount('black');
     h.controller.applyState(pvpDto(position));
     drag(h.controller.element, move.from, move.path[0]!); // první (mezi)dopad, ne konec
     expect(h.sent).toEqual([]); // nedokončený řetěz → žádné odeslání
-    expect(hasPiece(h.controller.element, move.from)).toBe(true); // kámen zpět na výchozí
+    // Kámen ZŮSTANE na mezidopadu, výchozí pole prázdné, sebraný opticky pryč.
+    expect(hasPiece(h.controller.element, move.path[0]!)).toBe(true);
+    expect(hasPiece(h.controller.element, move.from)).toBe(false);
+    expect(hasPiece(h.controller.element, captured)).toBe(false);
   });
 
   it('odmítnutí serverem po tažení vrátí kámen na potvrzenou pozici', () => {
@@ -411,17 +418,18 @@ describe('createPvpController – tažení myší (drag & drop)', () => {
     expect(h4.sent).toEqual([]);
   });
 
-  it('při TAŽENÍ svítí KONCOVÉ pole vícenásobného skoku, ne mezidopad', () => {
+  it('při TAŽENÍ svítí BEZPROSTŘEDNÍ dopad (hop-po-hopu), ne koncové pole', () => {
     const { position, move } = findDoubleJump();
     const h = mount('black');
     h.controller.applyState(pvpDto(position));
     const root = h.controller.element;
-    // Uchop kámen (pointerdown) → zapne tažení a zvýrazní koncová pole (kam se pustí).
+    // Uchop kámen (pointerdown) → zapne tažení a zvýrazní bezprostřední dopady (kam smí
+    // pustit další skok), shodně s klikáním – ne koncové pole celého řetězu.
     squareEl(root, move.from).dispatchEvent(pointer('pointerdown', 0, 0));
     const endpoint = move.path[move.path.length - 1]!;
     const intermediate = move.path[0]!;
-    expect(squareEl(root, endpoint).classList.contains('target')).toBe(true);
-    expect(squareEl(root, intermediate).classList.contains('target')).toBe(false);
+    expect(squareEl(root, intermediate).classList.contains('target')).toBe(true);
+    expect(squareEl(root, endpoint).classList.contains('target')).toBe(false);
     root.dispatchEvent(pointer('pointerup', 0, 0)); // ukliď gesto
   });
 
@@ -453,5 +461,125 @@ describe('createPvpController – tažení myší (drag & drop)', () => {
     tap(h.controller.element, simple.from);
     click(h.controller.element, simple.path[0]!);
     expect(h.sent).toEqual([{ from: simple.from, path: [simple.path[0]!] }]);
+  });
+});
+
+describe('createPvpController – hop-po-hopu vícenásobný skok', () => {
+  it('tažení hop-po-hopu: mezidopad (hop) a pak koncové pole odešle celou cestu', () => {
+    const { position, move } = findDoubleJump();
+    const h = mount('black');
+    h.controller.applyState(pvpDto(position));
+    drag(h.controller.element, move.from, move.path[0]!); // hop na mezidopad
+    expect(h.sent).toEqual([]); // rozdělaný skok se neposílá
+    drag(h.controller.element, move.path[0]!, move.path[1]!); // dojezd tažením na konec
+    expect(h.sent).toEqual([{ from: move.from, path: [...move.path] }]);
+  });
+
+  it('míchání: klik na mezidopad, dokončení TAŽENÍM pošle celou cestu', () => {
+    const { position, move } = findDoubleJump();
+    const h = mount('black');
+    h.controller.applyState(pvpDto(position));
+    click(h.controller.element, move.from); // výběr klikem
+    click(h.controller.element, move.path[0]!); // hop klikem (optický settle)
+    expect(hasPiece(h.controller.element, move.path[0]!)).toBe(true); // kámen na mezidopadu
+    drag(h.controller.element, move.path[0]!, move.path[1]!); // dojezd tažením
+    expect(h.sent).toEqual([{ from: move.from, path: [...move.path] }]);
+  });
+
+  it('míchání: tažení na mezidopad, dokončení KLIKEM pošle celou cestu', () => {
+    const { position, move } = findDoubleJump();
+    const h = mount('black');
+    h.controller.applyState(pvpDto(position));
+    drag(h.controller.element, move.from, move.path[0]!); // hop tažením
+    // Prohlížeč po gestu vyšle jeden `click` (spolkne ho suppressNextClick); teprve
+    // NÁSLEDNÝ klik hráče na koncové pole tah dokončí.
+    click(h.controller.element, move.path[0]!); // spolknutý post-gesto klik
+    click(h.controller.element, move.path[1]!); // skutečné dokončení klikem
+    expect(h.sent).toEqual([{ from: move.from, path: [...move.path] }]);
+  });
+
+  it('klik hop-po-hopu ukáže kámen na mezidopadu a schová sebraný (optika jako u tažení)', () => {
+    const { position, move } = findDoubleJump();
+    const captured = move.captures[0]!;
+    const h = mount('black');
+    h.controller.applyState(pvpDto(position));
+    click(h.controller.element, move.from);
+    click(h.controller.element, move.path[0]!); // hop klikem
+    expect(hasPiece(h.controller.element, move.path[0]!)).toBe(true);
+    expect(hasPiece(h.controller.element, move.from)).toBe(false);
+    expect(hasPiece(h.controller.element, captured)).toBe(false);
+    expect(h.sent).toEqual([]); // rozdělaný skok se neposílá
+  });
+
+  it('tvrdý zámek: uprostřed skoku klik mimo dopad nic nezruší, skok jde dokončit', () => {
+    const { position, move } = findDoubleJump();
+    const h = mount('black');
+    h.controller.applyState(pvpDto(position));
+    click(h.controller.element, move.from); // výběr
+    click(h.controller.element, move.path[0]!); // hop klikem → deska zamčená do dokončení
+    click(h.controller.element, move.from); // stray klik na (opticky prázdné) výchozí pole
+    // Zámek: výběr se nezrušil – kámen pořád na mezidopadu, nic se neodeslalo.
+    expect(hasPiece(h.controller.element, move.path[0]!)).toBe(true);
+    expect(h.sent).toEqual([]);
+    // A skok jde pořád dokončit (kdyby stray klik zrušil výběr, tohle by nic neposlalo).
+    click(h.controller.element, move.path[1]!);
+    expect(h.sent).toEqual([{ from: move.from, path: [...move.path] }]);
+  });
+
+  it('ztráta spojení uprostřed skoku srovná desku zpět na potvrzenou pozici', () => {
+    const { position, move } = findDoubleJump();
+    const captured = move.captures[0]!;
+    const h = mount('black');
+    h.controller.applyState(pvpDto(position));
+    drag(h.controller.element, move.from, move.path[0]!); // hop (nic neodesláno)
+    h.controller.setConnectionLost();
+    expect(hasPiece(h.controller.element, move.from)).toBe(true); // kámen zpět
+    expect(hasPiece(h.controller.element, move.path[0]!)).toBe(false); // mezidopad prázdný
+    expect(hasPiece(h.controller.element, captured)).toBe(true); // sebraný obnoven
+    expect(h.statuses.at(-1)!.myTurn).toBe(false);
+  });
+
+  it('showError uprostřed skoku srovná desku zpět a vrátí na tah', () => {
+    const { position, move } = findDoubleJump();
+    const captured = move.captures[0]!;
+    const h = mount('black');
+    h.controller.applyState(pvpDto(position));
+    drag(h.controller.element, move.from, move.path[0]!); // hop (nic neodesláno)
+    h.controller.showError('Nelegální tah.');
+    expect(hasPiece(h.controller.element, move.from)).toBe(true);
+    expect(hasPiece(h.controller.element, move.path[0]!)).toBe(false);
+    expect(hasPiece(h.controller.element, captured)).toBe(true);
+    expect(h.errors).toEqual(['Nelegální tah.']);
+    expect(h.statuses.at(-1)!.myTurn).toBe(true);
+  });
+
+  it('výjimka z sendMove (transport) se bere jako neodesláno – deska se srovná, nezamkne', () => {
+    // Regrese: kdyby výjimka z `sendMove` propadla z onDrop, deska by nespustila
+    // finishDrag – tažený kámen by zůstal zvednutý a vstup odemčený bez hlášky.
+    const { position, move } = findSingleCapture();
+    const captured = move.captures[0]!;
+    const h = mount('black', { throwOnSend: true });
+    h.controller.applyState(pvpDto(position));
+    drag(h.controller.element, move.from, move.path[0]!); // dokončení → sendMove VYHODÍ
+    expect(h.sent).toHaveLength(1); // pokus proběhl
+    expect(h.errors.at(-1)).toContain('Spojení není dostupné'); // ohlášeno jako neodesláno
+    expect(h.statuses.at(-1)!.myTurn).toBe(true); // nezamčeno, pořád na tahu
+    expect(hasPiece(h.controller.element, move.from)).toBe(true); // kámen zpět
+    expect(hasPiece(h.controller.element, captured)).toBe(true); // sebraný obnoven
+  });
+
+  it('když se DOKONČENÝ hop-po-hopu skok neodešle (spojení pryč), deska se srovná zpět', () => {
+    const { position, move } = findDoubleJump();
+    const captured0 = move.captures[0]!;
+    const h = mount('black', { sendResult: false });
+    h.controller.applyState(pvpDto(position));
+    drag(h.controller.element, move.from, move.path[0]!); // hop (neodesílá se)
+    drag(h.controller.element, move.path[0]!, move.path[1]!); // dokončení → sendMove=false
+    expect(h.sent).toHaveLength(1); // pokus o odeslání proběhl
+    expect(h.errors.at(-1)).toContain('Spojení není dostupné');
+    // Usazeno zpět na potvrzenou pozici (kámen na výchozím, sebraný obnoven), nezamčeno.
+    expect(hasPiece(h.controller.element, move.from)).toBe(true);
+    expect(hasPiece(h.controller.element, captured0)).toBe(true);
+    expect(h.statuses.at(-1)!.myTurn).toBe(true);
   });
 });

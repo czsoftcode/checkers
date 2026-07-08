@@ -7,20 +7,32 @@
  * Tok:
  *  - stav partie přichází PUSHEM přes herní WS (viz `game-socket`) → `applyState`
  *    ho převezme, překreslí (animace tahu z rozdílu pozic) a odemkne vstup;
- *  - hráč na tahu KLIKÁNÍM sestaví legální tah (i vícenásobný skok); po dokončení
- *    se tah POŠLE (`sendMove`) a vstup se ZAMKNE – deska se NEhýbe optimisticky,
- *    kámen zůstane na výchozím poli, dokud nedorazí autoritativní stav ze serveru
- *    (ten pak tah animuje jako jeden pohyb);
- *  - hráč může tah zadat i TAŽENÍM MYŠÍ (drag & drop, jen myš – dotyk jede na
- *    ťuknutí). Tažení řeší CELÝ tah v JEDNOM gestu: kámen se pustí rovnou na cílové
- *    pole (u vícenásobného skoku na KONCOVÉ pole řetězu, mezidopad se vrátí – doskákat
- *    hop-po-hopu jde klikáním). Tažení kámen fyzicky přesune, takže je z principu
- *    optimistické; po odeslání se ZAMKNE a čeká na potvrzený stav, který se pak jen
- *    USADÍ (`view.settle`, ne druhé sklouznutí). Míchat tažení s rozklikanou sekvencí
- *    NEjde – jinak by se optimistický (tažený) a neoptimistický (klikaný) model rozešly;
+ *  - hráč na tahu sestaví legální tah KLIKÁNÍM i TAŽENÍM MYŠÍ (drag & drop; dotyk
+ *    jede jen na ťuknutí). Vícenásobný skok jde skládat HOP-PO-HOPU oběma způsoby:
+ *    kámen jde pustit/ťuknout i na mezidopad, tam ZŮSTANE a čeká na další skok.
+ *    Rozdělaný skok se ukazuje OPTIMISTICKY a shodně u tažení i klikání
+ *    (`effectivePosition`): kámen je opticky na posledním dopadu a dosud sebrané
+ *    kameny jsou schované. Server je potvrdí až s CELÝM tahem – proto se rozdělaný
+ *    (nedokončený) skok NIKDY neposílá; posílá se (`sendMove`) až dokončený řetěz;
+ *  - POZOR – oproti dřívějšku se deska během skládání skoku HÝBE OPTIMISTICKY. Je to
+ *    bezpečné: dokud se skok neodešle, server o něm neví (jeho potvrzená pozice je
+ *    pořád ta před tahem), takže optika je čistě LOKÁLNÍ a plně vratná přes
+ *    `view.settle`. Není tu žádný drift, který by šlo se serverem rozejít;
+ *  - PvP nemá polling (jen server push), takže si rozdělaný stav neumí sám srovnat.
+ *    Proto se místo pollingu použije ZÁMEK: jakmile hráč potvrdí první meziskok
+ *    (`selection.path.length > 0`), deska je ZAMČENÁ do dokončení skoku – klik mimo
+ *    povinný dopad se ignoruje, přetáhnout jde jen kámen na posledním dopadu (skok se
+ *    musí dokončit). Vědomé „zrušení skoku" se ZÁMĚRNĚ nedělá (todo): do řetězu nejde
+ *    spadnout omylem (meziskok se potvrdí jen trefou na zvýrazněný povinný dopad).
+ *    Jediný únik ze zámku je dokončení skoku, odmítnutí serverem, nebo ztráta spojení;
+ *  - po odeslání dokončeného tahu se vstup ZAMKNE (`pendingMove`) a čeká na potvrzený
+ *    stav. U víceskoku i u tažení už kámen opticky „doskákal", takže se potvrzení jen
+ *    USADÍ (`view.settle` + `settleNext`, ne druhé sklouznutí); prostý jednodopadový
+ *    tah kámen na výchozím poli nechal, ten server animuje jako jeden pohyb;
  *  - odmítnutí tahu serverem (`showError`) i ztráta spojení (`setConnectionLost`) vrátí
- *    kámen na poslední POTVRZENOU pozici tím, že desku celou USADÍ (`view.settle` –
- *    vrátí i optimisticky sebrané kameny), ne jen srovnají zvýraznění.
+ *    desku na poslední POTVRZENOU pozici tím, že ji celou USADÍ (`view.settle` – vrátí
+ *    kámen z optického dopadu na výchozí pole i obnoví optimisticky sebrané kameny),
+ *    ne jen srovnají zvýraznění.
  *
  * Server je JEDINÁ autorita nad legalitou; klientský výběr je jen UX (počítá tahy
  * ze STEJNÉ knihovny `rules` jako server). Vzdání/remíza (todo 40), reconnection
@@ -31,7 +43,7 @@ import type { Color, GameResult, Position, Square } from '@checkers/rules';
 
 import { createBoardView } from './board-view.js';
 import type { DropOutcome, RenderState } from './board-view.js';
-import { capturedOnHop, endpointsFor, nextTargets, resolveChainTo, resolveMove, selectableAt } from './selection.js';
+import { capturedOnHop, capturesForPrefix, nextTargets, resolveChainTo, resolveMove, selectableAt } from './selection.js';
 import { createSoundPlayer } from './sound.js';
 import type { SoundPlayer } from './sound.js';
 import type { PvpGameDto } from './server-client.js';
@@ -105,9 +117,11 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
   // `true` mezi `onDragStart` a `onDrop` – blokuje souběžný klik během gesta.
   let dragging = false;
   // `true`, když příští `applyState` má stav USADIT (`view.settle`) místo animovat:
-  // tah byl dokončen TAŽENÍM, kámen už je rukou na cíli, takže sklouznutí by se přehrálo
-  // podruhé. Nastaví ho `commitDrag`, spotřebuje první `applyState`; resetují ho i
-  // `showError`/`setConnectionLost` (tažený tah se nepotvrdil → žádné usazení).
+  // tah byl dokončen TAŽENÍM nebo VÍCESKOKEM, kámen už opticky „doskákal" na cíl, takže
+  // sklouznutí by se přehrálo podruhé. Nastaví ho `commitDrag` i `advance` (víceskok);
+  // spotřebuje ho první `applyState`; resetují ho i `showError`/`setConnectionLost`
+  // (nepotvrzený tah → žádné usazení). Prostý jednodopadový tah ho nechává `false`
+  // (kámen zůstal na výchozím poli → server ho animuje jako jeden pohyb).
   let settleNext = false;
   let disposed = false;
 
@@ -124,6 +138,24 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     );
   }
 
+  /**
+   * Odešle tah serveru a vrátí, zda odešel. `sendMove` má vracet boolean, ale transport
+   * (WS `socket.send`) může ve vzácném ZÁVODĚ stavu spojení VYHODIT (readyState se změní
+   * mezi kontrolou a odesláním). To je I/O selhání, ne programová chyba – a nesmí
+   * propadnout ven z `onDrop`: deska by pak nespustila `finishDrag`, tažený kámen by
+   * zůstal zvednutý a vstup odemčený bez hlášky. Výjimku proto zaloguj (se stackem) a ber
+   * ji jako „neodešlo" – volající pak jede stejnou vratnou cestou jako u `false`. `catch`
+   * obaluje ZÁMĚRNĚ jen volání `sendMove`, ať nemaskuje chybu ve zbytku controlleru.
+   */
+  function trySend(from: Square, path: readonly Square[]): boolean {
+    try {
+      return options.sendMove(from, path);
+    } catch (error) {
+      console.error('Odeslání tahu selhalo (transport), beru jako neodeslané:', error);
+      return false;
+    }
+  }
+
   /** `true`, pokud `square` je jedním z aktuálně nabízených dalších dopadů. */
   function isTarget(square: Square): boolean {
     return (
@@ -137,11 +169,19 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     if (dragging || !canInput() || position === null) {
       return; // mimo tah / zamčeno / bez pozice / uprostřed tažení – klik zahoď
     }
-    if (square === null) {
-      selection = null;
-    } else if (selection !== null && isTarget(square)) {
+    if (selection !== null && square !== null && isTarget(square)) {
       advance(square);
       return; // advance si řídí překreslení sám (i po odeslání tahu)
+    }
+    // TVRDÝ ZÁMEK: uprostřed rozdělaného skoku (path > 0) se klik mimo povinný dopad
+    // IGNORUJE – žádné zrušení ani přepnutí kamene. Skok se musí dokončit (jediný únik
+    // je dokončení, odmítnutí serverem, nebo ztráta spojení). Zámek platí až po prvním
+    // meziskoku; čerstvý výběr kamene (path === 0) jde ještě volně měnit/zrušit.
+    if (selection !== null && selection.path.length > 0) {
+      return;
+    }
+    if (square === null) {
+      selection = null;
     } else if (selectableAt(position, square) && selection?.from !== square) {
       // Nový výběr vlastního kamene (i přepnutí z jiného). Klik na už vybraný výchozí
       // kámen sem nespadne (padá do else a výběr se zruší).
@@ -159,73 +199,92 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     }
     const path = [...selection.path, square];
     if (nextTargets(position, selection.from, path).length > 0) {
-      // Skok ještě pokračuje (další povinný dopad) – jen prodluž trasu a zvýrazni
-      // nové cíle. Kámen se NEhýbe (zůstává na výchozím poli), server ho přesune celý.
+      // Skok ještě pokračuje (další povinný dopad) – prodluž trasu a kámen OPTICKY
+      // usaď na tento dopad (`settle` → `effectivePosition`: kámen na dopadu, sebrané
+      // zmizí), ať zobrazení klikání sedí s tažením. Server ho přesune celý až s tahem;
+      // rozdělaný skok se neposílá.
       selection = { from: selection.from, path };
-      view.setHighlights(renderState());
+      view.settle(renderState());
       return;
     }
     // Sekvence úplná → pošli serveru výchozí pole a CELOU naklikanou cestu (smí mít
     // duplicity u kruhového skoku dámy – posílá se tak, jak je).
     const from = selection.from;
+    const multi = path.length > 1; // víceskok už kámen opticky doskákal (settle po hopech)
     selection = null;
-    view.setHighlights(renderState()); // zhasni zvýraznění; kámen zůstává na výchozím poli
-    const sent = options.sendMove(from, path);
+    view.setHighlights(renderState()); // zhasni zvýraznění; kameny nech, kde opticky jsou
+    const sent = trySend(from, path);
     if (!sent) {
       // Tah NEodešel (spojení pryč). NEZAMYKEJ desku (jinak by zamrzla do čekání na
-      // stav, který nedorazí) – zůstávám na tahu a můžu zkusit znovu. Ohlas hlášku.
+      // stav, který nedorazí) – zůstávám na tahu a můžu zkusit znovu. U víceskoku ale
+      // kámen opticky „doskákal" na mezidopady → USAĎ desku zpět na potvrzenou pozici
+      // (settle vrátí kámen na výchozí pole i obnoví sebrané). Pak ohlas hlášku.
+      settleNext = false;
+      view.settle(renderState());
       options.onError?.('Spojení není dostupné, tah se neodeslal. Zkus to znovu.');
       return;
     }
-    // Odesláno → zamkni vstup a čekej na autoritativní stav; deska se do té doby
-    // nehýbe (žádné optimistické vykreslení).
+    // Odesláno → zamkni vstup a čekej na autoritativní stav. Víceskok už kámen opticky
+    // doskákal → potvrzení jen USAĎ (`settleNext`); prostý tah kámen na výchozím poli
+    // nechal → server ho animuje jako jeden pohyb.
     pendingMove = true;
+    settleNext = multi;
     emitStatus(); // po odeslání už nejsem „na tahu" (čekám na potvrzení serveru)
   }
 
   /**
    * Smí se kámen na `square` právě táhnout? Stejné podmínky jako klik (`canInput`),
-   * navíc: ne uprostřed jiného gesta a ne, když už běží rozklikaná vícenásobná
-   * sekvence (`selection.path.length > 0`). Tažení totiž řeší CELÝ tah v jednom gestu
-   * a kámen fyzicky přesune; klikaná sekvence kámen NEhýbe (neoptimistická) – kombinace
-   * by desku rozhodila. `canDrag` je jen UX předfiltr, legalitu drží `onDrop` + server.
+   * navíc ne uprostřed jiného gesta. Během rozpracovaného skoku
+   * (`selection.path.length > 0`) je tažitelný JEN kámen na posledním dopadu
+   * (`lastHopOf`) – tam kámen opticky stojí a odtud skáče dál (tvrdý zámek); jinak
+   * libovolný vlastní kámen. Tažení i klikání teď staví na STEJNÉM optimistickém
+   * modelu (`effectivePosition`), takže je lze v jednom skoku míchat. `canDrag` je jen
+   * UX předfiltr, legalitu drží `onDrop` + server.
    */
   function canDrag(square: Square): boolean {
     if (dragging || !canInput() || position === null) {
       return false;
     }
     if (selection !== null && selection.path.length > 0) {
-      return false;
+      return square === lastHopOf(selection);
     }
     return selectableAt(position, square);
   }
 
-  /** Tažení začalo na `square`: čerstvý výběr (žádné pokračování klikané sekvence) + zvýrazni cíle. */
+  /**
+   * Tažení začalo na `square`: buď čerstvý výběr, nebo POKRAČOVÁNÍ rozpracovaného skoku,
+   * když se zvedá kámen na posledním dopadu (míchání klik→tažení). Zvýrazni cíle;
+   * kameny se nepřekreslují (`setHighlights`) – tažený kámen je zvednutý deskou.
+   */
   function onDragStart(square: Square): void {
     if (!canDrag(square)) {
       return;
     }
     dragging = true;
-    selection = { from: square, path: [] };
+    const continuing =
+      selection !== null && selection.path.length > 0 && square === lastHopOf(selection);
+    if (!continuing) {
+      selection = { from: square, path: [] };
+    }
     view.setHighlights(renderState());
   }
 
   /**
-   * Kámen zvednutý z `origin` byl puštěn nad polem `to` (`null` = mimo desku). Tažení
-   * dokončí CELÝ tah v jednom gestu: buď jeden dopad, který tah končí, nebo souvislý
-   * řetěz skoků na koncové pole (`resolveChainTo`). Mezidopad nedokončeného řetězu ani
-   * nelegální/mimo puštění → kámen se VRÁTÍ (`{ kind: 'return' }`) a rozpracovaný výběr
-   * se zruší (klikat jde znovu). Legalitu ověří i server.
+   * Kámen zvednutý z `origin` (poslední dopad, nebo výchozí pole) byl puštěn nad polem
+   * `to` (`null` = mimo desku). Skok jde skládat HOP-PO-HOPU: puštění na povinný
+   * MEZIdopad → kámen ZŮSTANE na `to` a čeká na další skok (`{ kind: 'hop' }`); puštění
+   * na dopad, který tah dokončí → odešle se a kámen zůstane na cíli (`{ kind: 'commit' }`).
+   * Puštění rovnou na KONCOVÉ pole souvislého řetězu (`resolveChainTo`) tah taky dokončí.
+   * Nelegální/mimo puštění → kámen se VRÁTÍ (`{ kind: 'return' }`) a rozpracovaný skok
+   * ZŮSTANE rozdělaný (tvrdý zámek – jde jen zkusit znovu). Legalitu ověří i server.
    */
   function onDrop(origin: Square, to: Square | null): DropOutcome {
     dragging = false;
-    // Vrácení kamene: srovnej zvýraznění zpět do KLIK režimu (`dragging` je už false →
-    // renderState dá `nextTargets`, ne koncová pole), ať po nepovedeném/tapovém puštění
-    // nezůstanou svítit koncová pole tažení. Výběr se ZÁMĚRNĚ NEruší: myší ťuknutí na
-    // kámen jde taky přes drag (onDragStart+onDrop bez pohybu), následný `click` je
-    // potlačený – kdyby se výběr zrušil, kámen by se myší nedal vybrat. „Return" tu nikdy
-    // nenechá drift: bez `hop` větve se kámen buď dokončí (commit), nebo vrátí, nic se
-    // optimisticky neodklidí.
+    // Vrácení kamene: srovnej zvýraznění podle stavu. Výběr se ZÁMĚRNĚ NERUŠÍ: myší
+    // ťuknutí na kámen jde taky přes drag (onDragStart+onDrop bez pohybu), následný
+    // `click` je potlačený – kdyby se výběr zrušil, kámen by se myší nedal vybrat.
+    // Uprostřed rozdělaného skoku „return" nechá kámen opticky na posledním dopadu
+    // (deska zamčená), nic se nevrací na server.
     const bounce = (): DropOutcome => {
       view.setHighlights(renderState());
       return { kind: 'return' };
@@ -233,34 +292,47 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     if (position === null || !canInput() || selection === null || to === null) {
       return bounce();
     }
-    if (origin !== selection.from) {
-      return bounce(); // zvednuto z jiného pole než kde je výběr → jen vrať
+    if (origin !== lastHopOf(selection)) {
+      return bounce(); // zvednuto z jiného pole než kde kámen opticky stojí → jen vrať
     }
     const from = selection.from;
-    // Jeden dopad, který tah DOKONČÍ (žádný další povinný skok z `to`).
-    if (nextTargets(position, from, []).includes(to) && nextTargets(position, from, [to]).length === 0) {
-      const move = resolveMove(position, from, [to]);
-      if (move !== null) {
-        return commitDrag(move.from, move.path, to, capturedOnHop(position, from, [], to));
+    const prefix = selection.path;
+    // `to` je bezprostřední povinný dopad z aktuální pozice v řetězu.
+    if (nextTargets(position, from, prefix).includes(to)) {
+      const newPath = [...prefix, to];
+      const captured = capturedOnHop(position, from, prefix, to);
+      if (nextTargets(position, from, newPath).length > 0) {
+        // Meziskok: kámen ZŮSTANE na `to` a čeká na další skok. Deska ho na dopad usadí
+        // (`hop` níže) a sebrané schová; každé další překreslení odvodí totéž zobrazení
+        // z výběru (`effectivePosition`), takže se sebraný kámen „nevzkřísí".
+        selection = { from, path: newPath };
+        view.setHighlights(renderState());
+        return { kind: 'hop', landing: to, captured };
       }
-      return bounce();
+      // Tento dopad tah DOKONČÍ.
+      const move = resolveMove(position, from, newPath);
+      if (move === null) {
+        return bounce(); // obrana: dopad bez pokračování by měl jít vyřešit
+      }
+      return commitDrag(move.from, move.path, to, captured);
     }
-    // Vícenásobný skok: kámen musí dopadnout rovnou na KONCOVÉ pole řetězu (souvislé
-    // tažení). Mezipole = nedokončený řetěz → vrať (doskákat jde klikáním). Výběr
-    // necháme být, ať jde hned zkusit znovu.
-    const chain = resolveChainTo(position, from, [], to);
+    // `to` není bezprostřední dopad → zkus celý řetěz končící v `to` (souvislé tažení
+    // přes víc skoků v jednom gestu). `captures` mimo už sebrané (`prefix`).
+    const chain = resolveChainTo(position, from, prefix, to);
     if (chain !== null) {
-      return commitDrag(chain.from, chain.path, to, chain.captures);
+      return commitDrag(chain.from, chain.path, to, chain.captures.slice(prefix.length));
     }
     return bounce();
   }
 
   /**
    * Společný konec tažení, kdy tah dokončí: pošli ho serveru a podle výsledku dej desce
-   * verdikt. `sent === false` (spojení pryč) → NEZAMYKEJ, vrať kámen a ohlas hlášku
-   * (zůstávám na tahu, jde zkusit znovu). Odesláno → zamkni, nastav `settleNext` (kámen
-   * je rukou na cíli, potvrzený stav se jen usadí) a nech kámen na `landing`; sebrané
-   * kameny (`captured`) nech desku odklidit.
+   * verdikt. `sent === false` (spojení pryč) → NEZAMYKEJ a USAĎ desku zpět na potvrzenou
+   * pozici (`view.settle`; u víceskoku už kámen opticky doskákal / předchozí hopy sebraly
+   * kameny → jen „return" by je neobnovil), ohlas hlášku (zůstávám na tahu, jde zkusit
+   * znovu); vrácené `{ kind: 'return' }` navíc vrátí tažený kámen z ruky. Odesláno →
+   * zamkni, nastav `settleNext` (kámen už je na cíli, potvrzený stav se jen usadí) a nech
+   * kámen na `landing`; sebrané kameny (`captured`) nech desku odklidit.
    */
   function commitDrag(
     from: Square,
@@ -268,10 +340,14 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     landing: Square,
     captured: readonly Square[],
   ): DropOutcome {
-    const sent = options.sendMove(from, path);
+    const sent = trySend(from, path);
     if (!sent) {
       selection = null;
-      view.setHighlights(renderState());
+      settleNext = false;
+      // settle je bezpečné volat synchronně před návratem: `finishDrag` (v desce) běží
+      // AŽ po tomto `onDrop`; settle mezitím tažený kámen z ruky odstraní/obnoví pozici,
+      // takže následné „return" už jen animuje odpojený element (neškodné).
+      view.settle(renderState());
       options.onError?.('Spojení není dostupné, tah se neodeslal. Zkus to znovu.');
       return { kind: 'return' };
     }
@@ -282,7 +358,42 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     return { kind: 'commit', landing, captured: [...captured] };
   }
 
-  /** Stav k vykreslení: bez výběru holá pozice, s výběrem výchozí kámen + trasa + cíle. */
+  /** Pole, na kterém pohyblivý kámen právě opticky STOJÍ (poslední dopad, nebo výchozí). */
+  function lastHopOf(sel: Selection): Square {
+    return sel.path.length > 0 ? (sel.path[sel.path.length - 1] ?? sel.from) : sel.from;
+  }
+
+  /**
+   * „Optimistická" pozice pro ZOBRAZENÍ rozpracovaného skoku: pohyblivý kámen je
+   * přesunutý z výchozího pole na poslední dopad a dosud sebrané kameny jsou schované.
+   * Server je potvrdí až s celým tahem, ale klient je ukazuje hned, aby kámen „zůstal"
+   * na dopadu a čekal na další skok. Proměna (man→king) se NEřeší – tu potvrdí server na
+   * konci tahu. Prázdné výchozí pole (obrana) → beze změny.
+   */
+  function effectivePosition(pos: Position, sel: Selection): Position {
+    const moving = pos.board[sel.from - 1] ?? null;
+    if (moving === null) {
+      return pos;
+    }
+    const captured = capturesForPrefix(pos, sel.from, sel.path);
+    const landing = lastHopOf(sel);
+    const board = pos.board.slice();
+    board[sel.from - 1] = null;
+    for (const c of captured) {
+      board[c - 1] = null;
+    }
+    board[landing - 1] = moving;
+    return { board, turn: pos.turn };
+  }
+
+  /**
+   * Stav k vykreslení. Bez výběru holá pozice. S vybraným kamenem bez dopadů (path === 0)
+   * výběr výchozího kamene + jeho cíle. S rozpracovaným skokem (path > 0) kámen OPTICKY
+   * na posledním dopadu (`effectivePosition`, sebrané schované), `selected` na tom dopadu,
+   * `path` = trasa (výchozí pole + předchozí dopady) a cíle = BEZPROSTŘEDNÍ další dopady
+   * (`nextTargets`) – shodně pro tažení i klikání (zvýrazněné povinné dopady jsou zároveň
+   * vizuální výzva „dokonči skok").
+   */
   function renderState(): RenderState {
     if (position === null) {
       // Prázdná deska před prvním stavem: pozice ještě není. Tenhle stav se pro
@@ -292,19 +403,19 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     if (selection === null) {
       return { position, selected: null, path: [], targets: [] };
     }
-    // Kámen zůstává na výchozím poli (žádné optimistické „doskočení"): `selected` je
-    // výchozí pole, `path` naklikané mezidopady (trasa). Cíle se liší podle způsobu
-    // zadání: při TAŽENÍ svítí KONCOVÁ pole tahů (`endpointsFor` – kam se dá pustit,
-    // včetně konce vícenásobného skoku), protože tažení řeší celý tah v jednom gestu;
-    // při KLIKÁNÍ svítí bezprostřední další dopady (`nextTargets`), aby šlo skákat
-    // hop-po-hopu. Během tažení je `path` vždy prázdná (drag nepokračuje klik-sekvenci).
+    if (selection.path.length === 0) {
+      return {
+        position,
+        selected: selection.from,
+        path: [],
+        targets: nextTargets(position, selection.from, []),
+      };
+    }
     return {
-      position,
-      selected: selection.from,
-      path: [...selection.path],
-      targets: dragging
-        ? endpointsFor(position, selection.from)
-        : nextTargets(position, selection.from, selection.path),
+      position: effectivePosition(position, selection),
+      selected: lastHopOf(selection),
+      path: [selection.from, ...selection.path.slice(0, -1)],
+      targets: nextTargets(position, selection.from, selection.path),
     };
   }
 

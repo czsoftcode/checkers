@@ -7,6 +7,23 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.61.0] - 2026-07-08
+
+### Added
+
+- **Vícenásobný skok tažením po jednotlivých dopadech na PvP desce (klient, v3).**
+  V partii dvou lidí jde teď kámen při skákání pustit i na mezidopad – zůstane tam
+  a čeká na další skok (dřív se z mezidopadu vracel a doskákat šlo jen klikáním).
+  Rozdělaný skok je vidět opticky: kámen sedí na dopadu, přeskočené kameny zmizí
+  a zvýrazní se, kam smí skočit dál. Tažení a klikání jde v jednom skoku míchat.
+
+### Changed
+
+- **Během rozehraného skoku je PvP deska zamčená do jeho dokončení.** Jakmile hráč
+  skočí první skok, může už jen doskočit – klik jinam se ignoruje. Je to pojistka
+  proti tomu, aby se rozehraný stav rozešel se serverem (deska se srovná zpět jen
+  při odmítnutí tahu serverem nebo ztrátě spojení).
+
 ## [0.60.0] - 2026-07-08
 
 ### Added
