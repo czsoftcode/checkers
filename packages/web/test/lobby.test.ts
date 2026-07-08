@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createLobby } from '../src/lobby.js';
-import type { RoomWebSocket } from '../src/room-client.js';
+import type { GameLink } from '../src/lobby.js';
+import type { ChallengeAcceptedInfo, RoomWebSocket } from '../src/room-client.js';
 
 /** Ovladatelný fake socketu (viz room-client.test) – lobby jede přes REÁLNÝ room-client. */
 class FakeSocket implements RoomWebSocket {
@@ -40,7 +41,7 @@ const activeLobbies: { dispose(): void }[] = [];
 function mountLobby() {
   const sockets: FakeSocket[] = [];
   const onPlayVsComputer = vi.fn();
-  const onGameStart = vi.fn();
+  const onGameStart = vi.fn<(info: ChallengeAcceptedInfo, link: GameLink) => void>();
   const lobby = createLobby({
     onPlayVsComputer,
     onGameStart,
@@ -278,7 +279,42 @@ describe('createLobby – výzvy', () => {
 
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g1', color: 'white', opponentId: '2' });
     expect(h.onGameStart).toHaveBeenCalledTimes(1);
-    expect(h.onGameStart).toHaveBeenCalledWith({ gameId: 'g1', color: 'white', opponentNick: 'Eva' });
+    // Druhý argument je herní most (GameLink) – tvar ověřují testy mostu níž.
+    expect(h.onGameStart.mock.calls[0]![0]).toEqual({ gameId: 'g1', color: 'white', opponentNick: 'Eva' });
+    const link = h.onGameStart.mock.calls[0]![1];
+    expect(typeof link.move).toBe('function');
+    expect(typeof link.onError).toBe('function');
+  });
+
+  it('herní most: link.move pošle {type:move, gameId, from, path} po room WS', () => {
+    const h = joinedLobby();
+    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click(); // vyzvi Evu (odchozí)
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    h.sockets[0]!.sent.length = 0; // zahoď challenge
+    const link = h.onGameStart.mock.calls[0]![1];
+    const ok = link.move(9, [13, 22]);
+    expect(ok).toBe(true);
+    expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'move', gameId: 'g7', from: 9, path: [13, 22] })]);
+  });
+
+  it('herní most: za běhu partie míří chyba z room WS do hry, ne do notice lobby', () => {
+    const h = joinedLobby();
+    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    const link = h.onGameStart.mock.calls[0]![1];
+    const gameErrors: string[] = [];
+    const unsub = link.onError((m) => gameErrors.push(m));
+
+    h.sockets[0]!.message({ type: 'error', message: 'Nelegální tah.' });
+    expect(gameErrors).toEqual(['Nelegální tah.']); // dorazilo do hry
+    expect(h.notice.classList.contains('hidden')).toBe(true); // lobby notice se nedotklo
+
+    // Po odregistraci (návrat do místnosti) se chyba zas chová jako lobby notice.
+    unsub();
+    h.sockets[0]!.message({ type: 'error', message: 'Výzva už neplatí.' });
+    expect(gameErrors).toEqual(['Nelegální tah.']); // do hry už nic nepřišlo
+    expect(h.notice.classList.contains('hidden')).toBe(false);
+    expect(h.notice.textContent).toBe('Výzva už neplatí.');
   });
 
   it('Odmítnout pošle reject a banner zmizí', () => {

@@ -152,6 +152,19 @@ export interface RoomClient {
    * z lokálního seznamu odebere (server vyzvanému na jeho odmítnutí nic neposílá).
    */
   reject(challengeId: string): void;
+  /**
+   * Pošle PvP tah partie `gameId` po ROOM WS (`{type:'move', gameId, from, path}`).
+   * Zápisová cesta PvP jde tudy VĚDOMĚ (fáze 70): partie je na serveru navázaná na
+   * session id tohoto spojení, takže tah musí odejít po témže socketu. `path` jsou
+   * VŠECHNA dopadová pole tahu (u vícenásobného skoku každý meziskok), `captures`
+   * server neposíláme – odvodí si je sám (autorita). No-op mimo otevřené spojení /
+   * před joinem; server je stejně autorita a chybný/neúčastnický tah odmítne (`error`).
+   *
+   * Vrací `true`, když tah SKUTEČNĚ odešel po drátě, a `false`, když se zahodil
+   * (zavřený socket / před joinem / po dispose). Volající (deska) podle toho pozná,
+   * že tah neodešel, a nezamkne se do čekání na stav, který nikdy nedorazí.
+   */
+  move(gameId: string, from: number, path: readonly number[]): boolean;
   dispose(): void;
 }
 
@@ -528,6 +541,19 @@ export function createRoomClient(
       socket.send(JSON.stringify({ type: 'reject', challengeId }));
       incoming.delete(challengeId);
       handlers.onIncomingChallenges?.([...incoming.values()]);
+    },
+    move(gameId: string, from: number, path: readonly number[]): boolean {
+      // Táhnout smí jen zapsaný hráč otevřeným socketem (v partii jsem, protože jsem
+      // se do místnosti připojil a spároval – `joined` drží po celou hru). Kopie
+      // `path` (ne readonly odkaz), ať se serializuje pole hodnot, ne živý odkaz.
+      if (disposed || !joined) {
+        return false;
+      }
+      if (socket?.readyState !== WS_OPEN) {
+        return false; // spojení pryč → tah NEodešel; volající se nezamkne
+      }
+      socket.send(JSON.stringify({ type: 'move', gameId, from, path: [...path] }));
+      return true;
     },
     dispose(): void {
       disposed = true;

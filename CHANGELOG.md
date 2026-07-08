@@ -7,6 +7,28 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.58.0] - 2026-07-08
+
+### Added
+
+- **Hratelná PvP deska v prohlížeči (klient, v3).** Po přijetí výzvy odehrají dva
+  lidé celou partii proti sobě v prohlížeči. Herní obrazovka vykreslí desku
+  orientovanou podle vlastní barvy (vlastní kameny dole); hráč na tahu zadá tah
+  klikáním (výběr kamene → cílové pole, u vícenásobného skoku postupně přes
+  všechny dopady). Server je autorita: tah se odešle a deska se pohne až po
+  potvrzeném stavu ze serveru (žádné optimistické tahy). Soupeřův tah se objeví v
+  reálném čase. Řádek stavu ukazuje, kdo je na tahu, a po přirozeném konci partie
+  výsledek (výhra/prohra/remíza). Odmítnutý tah (mimo pořadí, nelegální) se ukáže
+  jako hláška a deska zůstane na posledním platném stavu. Při ztrátě spojení se
+  deska zamkne a upozorní, místo aby tiše přijímala tahy „do prázdna".
+
+### Fixed
+
+- **Vývojová proxy neprotahovala WebSocket stavu partie.** Dev proxy přeposílala
+  cesty `/games` bez podpory WebSocket upgrade, takže herní deska pro partii dvou
+  lidí by v dev režimu nedostala stav a zůstala by na „Připojuji k partii…".
+  Doplněn `ws: true` na `/games` (projeví se po restartu dev serveru).
+
 ## [0.57.0] - 2026-07-08
 
 ### Added

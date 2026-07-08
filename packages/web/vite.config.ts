@@ -17,7 +17,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/games': { target: 'http://127.0.0.1:3000' },
+      // `/games` nese REST (POST/GET partie) I WebSocket stavu partie (`/games/:id/ws`,
+      // fáze 66/72). `ws: true` zapne upgrade spojení (běžné HTTP requesty proxy dál
+      // obsluhuje) – bez něj by se PvP stav klientovi nikdy nedoručil (deska by visela
+      // na „Připojuji k partii…"). Engine deska jede REST pollingem, tam WS netřeba.
+      '/games': { target: 'http://127.0.0.1:3000', ws: true },
       // Místnost jede po WebSocketu (`/room/ws`); `ws: true` zapne upgrade spojení,
       // jinak by ho dev proxy neprotáhla a lobby by se lokálně nepřipojilo.
       '/room': { target: 'http://127.0.0.1:3000', ws: true },

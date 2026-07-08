@@ -1,0 +1,48 @@
+{
+  "id": 72,
+  "title": "Klient: hratelná PvP deska",
+  "goal": "Po přijetí výzvy odehrají dva lidé partii v prohlížeči: herní obrazovka vykreslí desku orientovanou podle vlastní barvy ze stavu pushnutého přes /games/:id/ws, hráč na tahu zadá legální tah (včetně vícenásobného skoku), klient ho pošle po room WS ({type:'move', gameId, from, path}), server-autoritativní stav dorazí oběma a překreslí desku, po přirozeném konci se ukáže výsledek; vzdání/remíza (todo 40), reconnection (todo 42) a timeout nečinnosti (todo 43) jsou vědomě mimo řez.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "room-client: metoda move + unit testy",
+      "status": "done",
+      "detail": "Přidat move(gameId, from, path) do RoomClient — odešle {type:'move', gameId, from, path}, jen po otevřeném socketu (jinak no-op). Vitest s fake WS: správný odchozí JSON; no-op před joinem/otevřením."
+    },
+    {
+      "title": "Lobby → herní most (odeslání tahu + chyby tahu)",
+      "status": "done",
+      "detail": "Lobby vystaví přes onGameStart(info, link) most nad room_client: link.move(from, path) uzavře gameId; link.onError(handler) registruje herní handler. room_client.onError při aktivní hře nasměruje chybu do herního handleru, jinak stávající chování lobby (notice). Unit test routování s fake WS: chyba za běhu hry → herní handler, ne lobby notice; po konci hry zpět do lobby."
+    },
+    {
+      "title": "Herní WS klient stavu partie",
+      "status": "done",
+      "detail": "Nový game-socket.ts: createGameSocket(gameId, { onState, onClosed }, { url?, socketFactory? }) — otevře /games/:id/ws, parsuje GameStateMessage, zúží game.mode==='pvp', předá PvpGameDto. Neznámá partie / close / pád → onClosed (neblokuje). Vitest s fake WS: validní zpráva → onState; rozbitá/cizí/null zpráva nespadne; close → onClosed."
+    },
+    {
+      "title": "PvP controller (deska, klik-tah, vícenásobný skok)",
+      "status": "done",
+      "detail": "Nový pvp-controller.ts: createBoardView(onClick, player, undefined, myColor); klik-tah přes selection.ts (selectableAt, nextTargets, resolveChainTo) vč. vícenásobného skoku. applyState(dto) uloží pozici/legalMoves/result, překreslí, uvolní zámek. Po dokončení tahu ZAMKNE vstup (žádné optimistické vykreslení) a zavolá sendMove(from, path). showError(msg) odemkne a překreslí z posledního stavu (kámen zpět) + hláška. Gating: výběr jen na tahu, bez zámku, partie běží. Stav/výsledek přes onStatus. Vitest se zuby: legální sekvence vydá správné {from,path}; klik mimo tah/na cizí kámen se ignoruje; showError vrátí desku; terminální result desku zamkne."
+    },
+    {
+      "title": "Přestavba game-screen.ts na hratelnou obrazovku + napojení v main.ts",
+      "status": "done",
+      "detail": "Z placeholderu na reálnou obrazovku: hlavička (barva, soupeř), deska PvP controlleru, řádek stavu (na tahu / soupeř přemýšlí / výsledek), Zpět do místnosti (beze změny). Otevře herní WS (krok 3) → controller.applyState; sendMove přes most (krok 2); registruje controller.showError jako sink chyb tahu. dispose zavře herní WS, odregistruje sink, controller.dispose(). main.ts (showGame) napojí most a uklidí při odchodu / Zpět do místnosti."
+    },
+    {
+      "title": "CSS herní obrazovky + ruční ověření 2 prohlížeči",
+      "status": "done",
+      "detail": "Styly desky, řádku stavu a výsledku ve styles.css (třídy, žádné inline styly/skripty — CSP). Ruční průchod: dva prohlížeče odehrají partii vč. vícenásobného skoku, tah se objeví oběma, po přirozeném konci se ukáže výsledek; nelegální / mimo-pořadí tah je odmítnut a deska zůstane správná."
+    }
+  ],
+  "startedAt": "2026-07-08T17:55:46.739Z",
+  "resolvedVerify": [
+    "Vizuální průchod dvěma prohlížeči (klikací UX)",
+    "Restart vite dev serveru kvůli změně proxy"
+  ],
+  "completedAt": "2026-07-08T18:50:34.692Z",
+  "autoCommit": {
+    "preSha": "d48c3c6a472ddd9b0809d275c690df83d94cc623",
+    "subject": "Phase 72: Klient: hratelná PvP deska"
+  }
+}

@@ -434,3 +434,63 @@ describe('createRoomClient – výzvy', () => {
     expect(events.outgoing).toHaveLength(before); // žádná změna
   });
 });
+
+describe('createRoomClient – tah (move)', () => {
+  /** Připojený klient (Jan=já) – tah smí odejít jen po úspěšném joinu. */
+  function joined() {
+    const h = harness();
+    h.client.join('Jan');
+    h.sockets[0]!.open();
+    h.sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }] });
+    const sock = h.sockets[0]!;
+    sock.sent.length = 0; // zahoď join, ať asserty vidí jen zprávy tahu
+    return { ...h, sock };
+  }
+
+  it('move po joinu pošle {type:move, gameId, from, path} a vrátí true', () => {
+    const { sock, client } = joined();
+    const ok = client.move('g1', 9, [13]);
+    expect(ok).toBe(true);
+    expect(sock.sent).toEqual([JSON.stringify({ type: 'move', gameId: 'g1', from: 9, path: [13] })]);
+  });
+
+  it('move vícenásobného skoku pošle celou cestu (i s duplicitou u kruhového skoku)', () => {
+    const { sock, client } = joined();
+    // Cesta smí obsahovat opakované pole (kruhový skok dámy) – kopíruje se prvek po prvku.
+    client.move('g1', 9, [18, 25, 18]);
+    expect(sock.sent).toEqual([JSON.stringify({ type: 'move', gameId: 'g1', from: 9, path: [18, 25, 18] })]);
+  });
+
+  it('move serializuje kopii path – pozdější mutace vstupu odeslané pole nezmění', () => {
+    const { sock, client } = joined();
+    const path = [13, 22];
+    client.move('g1', 9, path);
+    path.push(31); // mutace po odeslání nesmí protéct do už poslané zprávy
+    expect(sock.sent).toEqual([JSON.stringify({ type: 'move', gameId: 'g1', from: 9, path: [13, 22] })]);
+  });
+
+  it('move před vstupem do místnosti je no-op a vrátí false (otevřeno, roster nedorazil)', () => {
+    const { sockets, client } = harness();
+    client.join('Jan');
+    sockets[0]!.open(); // otevřeno, ale nejsem „joined" (roster nedorazil)
+    const ok = client.move('g1', 9, [13]);
+    expect(ok).toBe(false);
+    expect(sockets[0]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Jan' })]);
+  });
+
+  it('move po pádu spojení je no-op a vrátí false (zavřený socket)', () => {
+    const { sock, client } = joined();
+    sock.fireClose(); // spojení spadlo → socket CLOSED
+    const ok = client.move('g1', 9, [13]);
+    expect(ok).toBe(false);
+    expect(sock.sent).toEqual([]); // nic se neposlalo
+  });
+
+  it('move po dispose je no-op a vrátí false', () => {
+    const { sock, client } = joined();
+    client.dispose();
+    const ok = client.move('g1', 9, [13]);
+    expect(ok).toBe(false);
+    expect(sock.sent).toEqual([]);
+  });
+});

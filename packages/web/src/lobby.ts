@@ -36,14 +36,36 @@ const NICK_STORAGE_KEY = 'checkers.roomNick';
  */
 const NICK_MAX_LENGTH = 24;
 
+/**
+ * Most z herní obrazovky zpět k živému room WS (drží ho lobby). Herní obrazovka
+ * NEmá vlastní room socket – tahy MUSÍ jít po témže spojení, na které je partie na
+ * serveru navázaná session id (fáze 70). Lobby proto při startu partie předá tento
+ * úzký most: odeslání tahu (s uzavřeným `gameId`) a registraci příjmu chyb tahu.
+ */
+export interface GameLink {
+  /**
+   * Pošle tah aktuální partie po room WS (`gameId` je uzavřený). `path` = všechna
+   * dopadová pole. Vrací `true`, když tah odešel, `false`, když spojení není dostupné
+   * (deska pak tah nezamkne a ohlásí, že se neodeslal).
+   */
+  move(from: number, path: readonly number[]): boolean;
+  /**
+   * Zaregistruje handler chyb tahu (odmítnutí serverem) na dobu běhu partie. Vrací
+   * odregistraci – herní obrazovka ji zavolá ve svém `dispose` (návrat do místnosti).
+   * Dokud je registrovaný, chyby z room WS míří sem, ne do (odpojeného) pohledu místnosti.
+   */
+  onError(handler: (message: string) => void): () => void;
+}
+
 export interface LobbyOptions {
   /** Přepnutí na sólo hru proti počítači (dnešní deska). Řídí ho caller (`main.ts`). */
   readonly onPlayVsComputer: () => void;
   /**
    * Přijata výzva → přechod do PvP hry se svým gameId a barvou. Řídí ho caller
    * (`main.ts`), který lobby při přechodu NEzavírá (room WS musí žít – fáze 70).
+   * `link` je most zpět k živému room WS (odeslání tahu + příjem chyb tahu).
    */
-  readonly onGameStart: (info: ChallengeAcceptedInfo) => void;
+  readonly onGameStart: (info: ChallengeAcceptedInfo, link: GameLink) => void;
   /** URL WS místnosti – jen pro testy; jinak se odvodí z `location`. */
   readonly roomUrl?: string;
   /** Náhrada tovární funkce socketu – jen pro testy (fake socket). */
@@ -164,6 +186,10 @@ export function createLobby(options: LobbyOptions): Lobby {
   // Aktuální pohled – rozhoduje, kam mířit serverovou chybu: PŘED vstupem na formulář
   // nicku, PO vstupu (`joined`) jen jako hláška (viz `onError`).
   let currentView: View = 'entry';
+  // Handler chyb tahu za běhu PvP partie (registruje ho herní obrazovka přes `GameLink`).
+  // Když je nastavený, chyby z room WS jdou do hry, ne do (odpojeného) pohledu místnosti.
+  // `null` mimo partii → chyby řeší běžná cesta lobby (notice / formulář nicku).
+  let activeGameErrorHandler: ((message: string) => void) | null = null;
 
   const room_client = createRoomClient(
     {
@@ -182,7 +208,22 @@ export function createLobby(options: LobbyOptions): Lobby {
         renderOutgoing(pending);
       },
       onChallengeAccepted: (info) => {
-        options.onGameStart(info);
+        // Most zpět k živému room WS pro herní obrazovku. `move` uzavírá `gameId`
+        // této partie; `onError` směruje chyby tahu do hry, dokud je registrovaný.
+        const link: GameLink = {
+          move: (from, path) => room_client.move(info.gameId, from, path),
+          onError: (handler) => {
+            activeGameErrorHandler = handler;
+            return () => {
+              // Odregistruj JEN sebe – kdyby mezitím naskočila jiná partie, její
+              // handler nechceme shodit (v tomto řezu nenastane, ale je to bezpečné).
+              if (activeGameErrorHandler === handler) {
+                activeGameErrorHandler = null;
+              }
+            };
+          },
+        };
+        options.onGameStart(info, link);
       },
       onNotice: (text) => {
         showNotice(text);
@@ -195,6 +236,13 @@ export function createLobby(options: LobbyOptions): Lobby {
         nickInput.select();
       },
       onError: (text) => {
+        // Za běhu PvP partie je chyba z room WS odmítnutý tah (jediná odchozí operace
+        // ve hře je `move` – roster ani výzvy se z herní obrazovky neposílají). Doruč ji
+        // herní obrazovce; pohled místnosti je mezitím odpojený z DOM, notice by nikdo neviděl.
+        if (activeGameErrorHandler !== null) {
+          activeGameErrorHandler(text);
+          return;
+        }
         // Server posílá `error` i pro CHYBY VÝZEV (vyzvaný už hraje, dvojitá/křížová
         // výzva, „výzva už neplatí"). Když už jsem v místnosti, NEvyhazuj na formulář
         // nicku (re-join by byl no-op → zásek na „Připojuji…") – ukaž jen hlášku a

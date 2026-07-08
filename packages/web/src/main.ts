@@ -20,7 +20,7 @@ import { createAppShell } from './app-shell.js';
 import { createLobby } from './lobby.js';
 import { createGameScreen } from './game-screen.js';
 import { createHttpClient } from './server-client.js';
-import type { Lobby } from './lobby.js';
+import type { GameLink, Lobby } from './lobby.js';
 import type { ChallengeAcceptedInfo } from './room-client.js';
 import './analytics.js';
 import './styles.css';
@@ -78,11 +78,13 @@ function showSolo(): void {
 /**
  * Přejde na PvP herní obrazovku po přijetí výzvy. Lobby ZŮSTÁVÁ naživu (room WS
  * drží PvP session i tahy – fáze 70); jen se odpojí z DOM tím, že `replaceChildren`
- * vloží herní obrazovku. „Zpět do místnosti" lobby zas připojí.
+ * vloží herní obrazovku. „Zpět do místnosti" lobby zas připojí. `link` je most z
+ * lobby k živému room WS (odeslání tahu + příjem chyb tahu); herní obrazovka ho
+ * ve `dispose` odregistruje, room WS ale NEzavírá (drží ho lobby).
  */
-function showGame(info: ChallengeAcceptedInfo): void {
+function showGame(info: ChallengeAcceptedInfo, link: GameLink): void {
   clearTransient();
-  const game = createGameScreen(info, { onBackToRoom: backToRoom });
+  const game = createGameScreen(info, { onBackToRoom: backToRoom, link });
   transientDispose = () => {
     game.dispose();
   };

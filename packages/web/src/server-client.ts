@@ -79,6 +79,23 @@ export interface GameDto {
 }
 
 /**
+ * Stav PvP partie v drátovém tvaru (fáze 66/70). Zrcadlí serverový `PvpGameDto`
+ * (`packages/server/src/dto.ts`): žádný engine, žádná úroveň ani ballot – jen
+ * pozice, výsledek a legální tahy. Diskriminátor `mode:'pvp'` odlišuje tento tvar
+ * od engine `GameDto` uvnitř téže obálky `game-state`. Vlastní barvu hráče DTO
+ * NEnese – klient ji zná z `challenge-accepted` (fáze 71), server-push ji nedovodí.
+ * Web na balíček server nezávisí (nesváže build graf) → ručně držená kopie, shodu
+ * hlídá serverový `dto.test.ts` + ruční e2e.
+ */
+export interface PvpGameDto {
+  readonly mode: 'pvp';
+  readonly id: string;
+  readonly position: Position;
+  readonly result: GameResult;
+  readonly legalMoves: MoveDto[];
+}
+
+/**
  * Výsledek nabídky remízy. `accepted` = zda engine remízu přijal; `game` je
  * stav partie PO rozhodnutí (při přijetí `result: 'draw'`, při odmítnutí
  * nezměněný). Jiný tvar než holé `GameDto` – nabídka nese i verdikt.
@@ -272,6 +289,41 @@ function isMoveDto(value: unknown): value is MoveDto {
     Array.isArray(record.captures) &&
     record.captures.every((n) => typeof n === 'number')
   );
+}
+
+/** Platná hodnota `GameResult` (kopie z `@checkers/rules`, jen pro runtime guard). */
+function isGameResult(value: unknown): value is GameResult {
+  return (
+    value === 'ongoing' || value === 'black-wins' || value === 'white-wins' || value === 'draw'
+  );
+}
+
+/**
+ * Runtime guard tvaru `PvpGameDto` (drátový PvP stav v obálce `game-state`).
+ * Ověří diskriminátor `mode:'pvp'`, `id`, `position` (board + turn), `result` a
+ * `legalMoves` do hloubky – rozbité/cizí pole se má zachytit tady, ne až při
+ * vykreslení desky. Engine `GameDto` (jiný `mode`) tímto guardem NEprojde.
+ */
+export function isPvpGameDto(value: unknown): value is PvpGameDto {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.mode !== 'pvp' || typeof record.id !== 'string') {
+    return false;
+  }
+  if (!isGameResult(record.result)) {
+    return false;
+  }
+  if (!Array.isArray(record.legalMoves) || !record.legalMoves.every(isMoveDto)) {
+    return false;
+  }
+  const position = record.position;
+  if (typeof position !== 'object' || position === null) {
+    return false;
+  }
+  const pos = position as Record<string, unknown>;
+  return Array.isArray(pos.board) && (pos.turn === 'black' || pos.turn === 'white');
 }
 
 /**

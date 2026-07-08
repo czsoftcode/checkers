@@ -797,7 +797,9 @@ body {
   gap: 0.5rem;
   align-items: center;
   text-align: center;
-  max-width: 28rem;
+  /* Bez pevného max-width: karta se přizpůsobí šířce desky (ta má vlastní
+     responsivní --board-size), jinak by z úzké karty přetekla. */
+  max-width: 100%;
 }
 
 .game-title {
@@ -809,16 +811,23 @@ body {
   font-size: 1.05rem;
 }
 
-.game-id {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #9ab;
+/* Řádek stavu: kdo je na tahu / výsledek partie. Neutrální, výrazný. */
+.game-status {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #cde;
 }
 
-.game-note {
-  margin: 0.3rem 0 0.6rem;
-  color: #bbb;
-  font-style: italic;
+/* Hláška odmítnutého tahu (chyba z room WS). Skrytá, dokud nic nepřijde. */
+.game-error {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #e88;
+}
+
+.game-error.hidden {
+  display: none;
 }
 
 .game-back-btn {
