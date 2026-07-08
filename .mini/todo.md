@@ -36,3 +36,16 @@
 - [x] 52 střídání barvy po každé hře (2× LocalStorage) + pravidlo 2 kol v Mistrovství.
 - [x] nové kameny
 - [x] ballot souradnice do LocalStorage?
+- [x] první stavební řez endgame DB pro ≤4 kameny
+- [x] [V3] Real-time transport (WebSocket): server pushuje stav partie jen zúčastněné dvojici. Nejmenší hratelný řez: dvě připojení → jedna partie, tah jednoho se objeví druhému real-time; klient přijímá push a překresluje desku. Základ všeho ostatního v3.
+- [ ] [V3] Autorita v real-time: server ověří, že tah posílá hráč, který je v DANÉ partii a je NA TAHU; odmítne tah od diváka, mimo pořadí nebo z cizí partie. Bezpečnostní jádro dvouhráčového modelu.
+- [ ] [V3] Přezdívka + model místnosti: vstup do aplikace pod přezdívkou (bez účtu), server drží seznam přítomných v jedné společné místnosti, real-time aktualizace příchodů/odchodů; klientská obrazovka místnosti (kdo je volný / hraje).
+- [ ] [V3] Párování výzvou: klik na přezdívku → výzva → přijetí/odmítnutí → vznik partie a přesun obou do hry. Ošetřit hrany: vyzvaný už hraje, odmítnutí, odchod vyzvaného, dvojitá/křížová výzva.
+- [ ] [V3] Víc souběžných partií: server spravuje N nezávislých her, směruje zprávy jen účastníkům, izoluje stavy. Škálování řezu z bodu Real-time transport na N partií.
+- [ ] [V3] PvP remíza a vzdání: nabídka remízy i vzdání míří DRUHÉMU ČLOVĚKU (ne "AI rozhodne"), přijme/odmítne; konec partie → nová hra / návrat do místnosti.
+- [ ] [V3] Orientace desky v PvP: každý hráč vidí desku ze své strany; zachovat dosavadní volbu barvy a otočení v dvouhráčovém kontextu (kdo je bílý/černý v konkrétní partii).
+- [ ] [V3] Reconnection: partie žije v paměti serveru; hráč po krátkém výpadku klienta naváže do rozehrané partie (session token / identifikace). Soupeři se zobrazí "soupeř odpojen / čekám".
+- [ ] [V3] Timeout nečinnosti / opuštění partie: nečinná nebo opuštěná partie se po timeoutu uvolní; soupeř dostane jasný výsledek (výhra opuštěním), partie neblokuje. Náhrada za chybějící šachové hodiny.
+- [ ] [V3] AI jako volitelný soupeř v novém UI: zachovat "hrát proti počítači" (dnešní tok člověk vs. engine) i režim Výuka, zapadající do místnosti/lobby toku; ověření stejnou serverovou cestou. Aby pivot na PvP nerozbil existující hodnotu.
+- [ ] [V3] Robustnost WS a úklid: limit velikosti/frekvence zpráv na spojení (analogie engine LineBuffer, todo 25), úklid odpojených spojení a dohraných partií bez zombie stavů; N souběžných partií + hráčů bez zamrznutí (navazuje na hardening todo 22).
+- [ ] [V3/ops] WebSocket přes nginx: reverse proxy (nginx-dama.softcode.cz.conf) musí umět WS upgrade (Upgrade/Connection hlavičky, timeouty); ověřit deploy.sh a produkční provoz. Jinak real-time v produkci tiše nefunguje, i když lokálně ano.

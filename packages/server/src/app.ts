@@ -8,12 +8,15 @@
  */
 
 import Fastify from 'fastify';
+import websocket from '@fastify/websocket';
 import { z } from 'zod';
 import { THREE_MOVE_BALLOTS } from '@checkers/rules';
 import type { Color, Move } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { formatGamePdn, writeGamePdn } from './archive.js';
 import { findLegalMove, gameToDto, legalMoveDtos, moveToDto } from './dto.js';
+import type { GameStateMessage } from './dto.js';
+import { GameHub } from './hub.js';
 import { ERROR_CODES, sendError } from './errors.js';
 import { LEVELS, STRENGTH_BY_LEVEL, levelUsesBook } from './levels.js';
 import { OPENING_BOOK, lookupBookMove } from './opening-book.js';
@@ -148,6 +151,56 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     );
   }
 
+  // Registr WS odběratelů partií (fáze 66). Push je aditivní: web klient dnes
+  // stav dál polluje, hub jen navíc rozešle nový stav odběratelům dané partie.
+  const hub = new GameHub();
+  // Diagnostický přístup k hubu (počet odběratelů) – využívá ho integrační test
+  // k deterministickému čekání na registraci odběru (bez arbitrárního sleepu),
+  // do budoucna i případné metriky. Není to veřejný HTTP kontrakt.
+  app.decorate('gameHub', hub);
+
+  /**
+   * Rozešle AKTUÁLNÍ stav partie jejím WS odběratelům. Fire-and-forget vedlejší
+   * efekt mutačních cest (tah člověka/enginu, vzdání, remíza) – volá se AŽ po
+   * změně stavu, nikdy nesmí shodit REST odpověď ani tah enginu (o izolaci
+   * chyb se stará hub). Bez odběratelů je to no-op. Kontrakt drátu = `GameDto`
+   * v obálce `{ type: 'game-state', game }`, stejný tvar jako REST.
+   */
+  function broadcast(record: GameRecord): void {
+    const message: GameStateMessage = { type: 'game-state', game: dtoFor(record) };
+    hub.broadcast(record.id, JSON.stringify(message));
+  }
+
+  // WS plugin + endpoint v samostatném pluginu registrovaném AŽ ZA ním: tím je
+  // zaručeno pořadí bootu (plugin nastaví `onRoute`/`websocket` dřív, než se
+  // route s `websocket: true` přidá). buildApp je synchronní, proto ne `await`,
+  // ale fronta pluginů to vyřeší při `ready`/`listen`/`inject`.
+  app.register(websocket);
+  // Callback (ne async) forma pluginu: encapsulace zaručí pořadí bootu, `done()`
+  // ho uzavře; async bez `await` by lint (require-await) odmítl.
+  app.register((instance, _opts, done) => {
+    // Odběr stavu partie přes WebSocket. Odběr je daný PŘIPOJENÍM na `:id`,
+    // klient přes WS nic neposílá (zápisová cesta = REST). Na `close` se socket
+    // odhlásí (bez toho by hub i broadcast rostly o mrtvá spojení). Neznámá
+    // partie: nezaregistruj a čistě zavři – neblokuj spojení na prázdno.
+    instance.get<{ Params: { id: string } }>(
+      '/games/:id/ws',
+      { websocket: true },
+      (socket, req) => {
+        const id = req.params.id;
+        if (store.get(id) === undefined) {
+          socket.close();
+          return;
+        }
+        hub.subscribe(id, socket);
+        socket.on('close', () => {
+          hub.unsubscribe(id, socket);
+        });
+      },
+    );
+    done();
+  });
+
   app.post('/games', (req, reply) => {
     // Prázdné/chybějící tělo → `{}` → zod doplní výchozí úroveň. Neznámá úroveň
     // je klientská chyba (400), ne tichý default.
@@ -227,6 +280,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
     // Partie je teď terminální (výhra enginu) → archivuj právě jednou (markArchived).
     await maybeArchive(outcome);
+    broadcast(outcome); // soupeř uvidí konec partie (vzdání) real-time
     return reply.send(dtoFor(outcome));
   });
 
@@ -302,6 +356,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
     // Partie je teď terminální (draw) → archivuj právě jednou (markArchived).
     await maybeArchive(outcome);
+    broadcast(outcome); // soupeř uvidí přijatou remízu real-time
     return reply.send({ accepted: true, game: dtoFor(outcome) });
   });
 
@@ -436,6 +491,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     // Odpověď nese stav HNED po tahu člověka (engine ještě nedotáhl); jen
     // engineStatus už může být `thinking`, proto se čte čerstvý záznam.
     const fresh = store.get(next.id) ?? next;
+    // Push odběratelům partie: soupeř uvidí tah člověka i případný přechod na
+    // `thinking` (engine dotáhne vlastním pushem níž). Aditivní k REST odpovědi.
+    broadcast(fresh);
     return reply.send(dtoFor(fresh));
   });
 
@@ -551,19 +609,35 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         effectiveResult(current) !== 'ongoing' ||
         current.state.position.turn !== engineColorOf(current)
       ) {
-        store.setEngineStatus(id, 'idle');
+        // Stav se během přemýšlení změnil (typicky člověk vzdal / přijal remízu):
+        // engine netáhne, jen se srovná status na `idle`. Push, ať odběratel
+        // nezůstane viset na `thinking` bez pollingu.
+        const idled = store.setEngineStatus(id, 'idle');
+        if (idled !== undefined) {
+          broadcast(idled);
+        }
         return;
       }
 
       const legal = findLegalMove(current.state.position, move.from, move.path);
       if (legal === undefined) {
         console.error(`Engine vrátil nelegální tah pro partii ${id}, odmítám.`);
-        store.setEngineStatus(id, 'error');
+        // Push `error`: bez tahu enginu tu není applyMove, tedy ani přirozený
+        // broadcast bod – jinak odběratel visí na `thinking` do pollingu.
+        const errored = store.setEngineStatus(id, 'error');
+        if (errored !== undefined) {
+          broadcast(errored);
+        }
         return;
       }
 
-      const afterEngine = store.applyMove(id, legal);
-      store.setEngineStatus(id, 'idle');
+      store.applyMove(id, legal);
+      // Návrat `setEngineStatus` nese tah (applyMove výš) I status `idle` –
+      // broadcast jím pushne odběratelům hotový tah enginu (nahrazuje polling).
+      const afterEngine = store.setEngineStatus(id, 'idle');
+      if (afterEngine !== undefined) {
+        broadcast(afterEngine);
+      }
 
       // Tah enginu mohl partii ukončit (bílý vyhrál / remíza) – archivuj.
       // Uvnitř try schválně: kdyby zápis/sestavení házelo, spadne to do větve
@@ -574,7 +648,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       }
     } catch (error) {
       console.error(`Tah enginu selhal pro partii ${id}:`, error);
-      store.setEngineStatus(id, 'error');
+      const errored = store.setEngineStatus(id, 'error');
+      if (errored !== undefined) {
+        broadcast(errored);
+      }
     }
   }
 

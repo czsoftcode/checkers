@@ -12,7 +12,9 @@ export { formatGamePdn, writeGamePdn } from './archive.js';
 export { GameStore, effectiveResult, opposite } from './store.js';
 export type { GameRecord, EngineStatus } from './store.js';
 export { moveToDto, legalMoveDtos, gameToDto, findLegalMove } from './dto.js';
-export type { MoveDto, GameDto } from './dto.js';
+export type { MoveDto, GameDto, GameStateMessage } from './dto.js';
+export { GameHub } from './hub.js';
+export type { HubSocket } from './hub.js';
 export { ERROR_CODES, sendError } from './errors.js';
 export type { ErrorCode, ErrorEnvelope } from './errors.js';
 export {

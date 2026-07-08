@@ -7,7 +7,22 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-07-08
+
 ### Added
+
+- **Real-time push stavu partie přes WebSocket (základ dvouhráčové verze v3).**
+  Server umí nově rozeslat aktuální stav partie připojeným klientům přes
+  WebSocket na adrese `GET /games/:id/ws` - jakmile se partie změní (tah
+  člověka, tah počítače, vzdání i přijatá remíza), všichni, kdo tu konkrétní
+  partii sledují, dostanou nový stav okamžitě, místo aby se museli opakovaně
+  ptát dotazem (polling). Zpráva má tvar `{ type: "game-state", game: … }`, kde
+  `game` je stejný stav jako v REST odpovědích; diskriminátor `type` nechává
+  místo pro pozdější typy zpráv (místnost, výzvy). Je to zatím jen serverová
+  vrstva ověřená testem se dvěma připojenými klienty: push jde jen účastníkům
+  dané partie a nikomu jinému (izolace dvojice). Web klient se v této fázi
+  nemění a stav dál polluje - push je aditivní. Vědomě mimo tento řez zůstává
+  úklid nečinných spojení a limity velikosti/frekvence zpráv.
 
 - **Rešerše endgame databáze: rozhodovací dokument a měřicí skript.** Než se
   začne stavět endgame databáze (nejtěžší kus v2), vznikl podklad pro

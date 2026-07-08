@@ -1,0 +1,39 @@
+{
+  "id": 66,
+  "title": "WebSocket: push stavu partie",
+  "goal": "Přidat @fastify/websocket a WS endpoint pro odběr konkrétní partie; když se na tu partii aplikuje tah (přes stávající REST cestu), server rozešle nový stav všem spojením přihlášeným k té partii — ověřeno testem se dvěma WS klienty na jedné partii. Úklid odpojených spojení a limity zpráv se v tomto řezu neřeší.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Hub spojení (čistý modul) + závislost",
+      "status": "done",
+      "detail": "Přidat @fastify/websocket do packages/server. Nový hub.ts: Map<gameId, Set<socket>> s subscribe/unsubscribe/broadcast(gameId, message). broadcast guarduje readyState===OPEN a posílá do každého socketu v try/catch (mrtvý socket neshodí ostatní). Unit test s fake sockety: broadcast jde jen do socketů daného gameId, přeskočí neotevřené, unsubscribe odebere."
+    },
+    {
+      "title": "WS endpoint GET /games/:id/ws",
+      "status": "done",
+      "detail": "Zaregistrovat @fastify/websocket v buildApp PŘED routami. Endpoint připojí socket do hubu pod :id, na close ho odebere. Neexistující :id → čistě zavřít, nezaregistrovat. API ověřit přes Context7. Ověřeno v integračním testu (krok 4)."
+    },
+    {
+      "title": "Broadcast po změnách stavu",
+      "status": "done",
+      "detail": "V buildApp helper broadcast(record) = hub.broadcast(record.id, { type: 'game-state', game: dtoFor(record) }). Volat po lidském tahu (POST /moves), tahu enginu (maybeTriggerEngine), resign, offer-draw a na engine-error přechodu. Fire-and-forget vedlejší efekt — nesmí shodit REST odpověď ani tah enginu. Polling zůstává funkční."
+    },
+    {
+      "title": "Integrační test: dva WS klienti na jedné partii",
+      "status": "done",
+      "detail": "app.listen({ port: 0 }) + reálný ws klient. Zuby: dva klienti na téže partii → po POST /moves OBA dostanou game-state obálku se správným novým stavem; klient JINÉ partie nedostane nic (izolace dvojice). Ověřit i push po resign a offer-draw a po tahu enginu (pokud deterministické). close odebere odběratele."
+    },
+    {
+      "title": "CHANGELOG + nezávislý self-review sub-agentem",
+      "status": "done",
+      "detail": "Zapsat změnu do CHANGELOG. Fáze sahá na vstupní bod (nový endpoint) a chybové cesty (broadcast na mrtvý/zavřený socket, neznámé id) → pustit nezávislého sub-agenta s čerstvým kontextem jako self-review před reportem."
+    }
+  ],
+  "startedAt": "2026-07-08T12:07:06.243Z",
+  "completedAt": "2026-07-08T12:38:41.740Z",
+  "autoCommit": {
+    "preSha": "b1327ab0fa2d40a30cf4bb0b4d6b054d4e779d4d",
+    "subject": "Phase 66: WebSocket: push stavu partie"
+  }
+}

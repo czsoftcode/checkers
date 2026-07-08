@@ -61,6 +61,19 @@ export interface GameDto {
   readonly humanColor: Color;
 }
 
+/**
+ * Zpráva pushnutá přes WebSocket odběratelům partie (fáze 66). Obálka s
+ * diskriminátorem `type` je kontrakt server↔klient pro celé V3: nechá místo pro
+ * pozdější typy zpráv (presence/místnost, výzvy) bez rozbití. `game` je TÝŽ
+ * `GameDto` jako v REST odpovědích – žádný nový tvar stavu, klient parsuje jednu
+ * strukturu. Zatím jediný typ je `game-state`; až přibude druhý, tohle se rozšíří
+ * na diskriminovanou unii.
+ */
+export interface GameStateMessage {
+  readonly type: 'game-state';
+  readonly game: GameDto;
+}
+
 /** Přepis `Move` z `rules` do drátového tvaru (kopie polí, ne readonly odkaz). */
 export function moveToDto(move: Move): MoveDto {
   return { from: move.from, path: [...move.path], captures: [...move.captures] };

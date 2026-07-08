@@ -327,6 +327,11 @@
       "id": 65,
       "title": "Endgame DB: rešerše a rozsah",
       "status": "done"
+    },
+    {
+      "id": 66,
+      "title": "WebSocket: push stavu partie",
+      "status": "done"
     }
   ]
 }
