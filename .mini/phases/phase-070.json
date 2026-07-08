@@ -1,0 +1,39 @@
+{
+  "id": 70,
+  "title": "PvP tah: serverová autorita",
+  "goal": "Server na PvP partii přijme tah jen od hráče, který je v té partii a je NA TAHU, ověří legalitu sdílenou knihovnou rules a odmítne nelegální / mimo pořadí / z cizí partie čistou chybou (ne pádem); po platném tahu rozešle nový stav OBĚMA hráčům přes /games/:id/ws a čtení stavu PvP partie přestane padat; ověřeno integračním testem se dvěma WS klienty včetně odmítnutých cest. Klientské UI PvP desky a výzev jsou vědomě mimo tento řez.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "PvP serializace do DTO (dto.ts + dtoFor)",
+      "status": "done",
+      "detail": "Rozšířit DTO o diskriminátor mode: engine DTO dostane mode:'engine', přidat PvpGameDto (mode:'pvp', jen id/position/result/legalMoves, žádná falešná engine pole). dtoFor na PvP záznamu už NEhází, vrací reálný PvP DTO (pozice, kdo na tahu, výsledek přes effectiveResult, legalMoves). GameStateMessage.game přijme sjednocený tvar. Zuby: dto.test pokryje PvP DTO (má position/turn/result/legalMoves, nemá level/engineStatus/humanColor)."
+    },
+    {
+      "title": "GET /games/:id vrací PvP DTO; engine-only endpointy dál 409",
+      "status": "done",
+      "detail": "Z GET /games/:id sundat guard pvp_not_playable → 200 + PvP DTO. resign/offer-draw/hint na PvP ZŮSTÁVAJÍ 409 (todo 40). Upravit pvp-endpoints.test: GET případ na 200 + kontrola tvaru PvP DTO; resign/draw/hint zůstávají 409."
+    },
+    {
+      "title": "Vytáhnout sdílený helper tryApplyMove(record, from, path)",
+      "status": "done",
+      "detail": "Čistá funkce s diskriminovaným výsledkem (game-over / illegal+legalMoves / ok+nový záznam): kontrola effectiveResult!=='ongoing', findLegalMove, applyMove. BEZ engine triggeru a BEZ archivu (zůstávají jen v REST engine cestě). POST /moves se přepíše, aby ho volal – chování i api.test beze změny. Autorita čí-je-tah a mapování výsledku na kanál (sendError vs. WS error) zůstává u volajícího."
+    },
+    {
+      "title": "Room-WS move handler s autoritou hráče",
+      "status": "done",
+      "detail": "Do dispatche room WS přidat case 'move' + handleMove(gameId,from,path): tvarová kontrola PŘED přístupem k polím (reuse moveBodySchema na {from,path}), me===null → error; načíst partii (neexistuje/není pvp → error); členství (me.id ∈ players → barva, jinak error); na tahu (position.turn===barva, jinak error); pak tryApplyMove → game-over/illegal na error, na ok broadcast nového stavu OBĚMA přes game hub /games/:id/ws. PvP tudy NEvolá archiv ani engine."
+    },
+    {
+      "title": "Integrační test: dva WS klienti, hra + odmítnuté cesty + izolace",
+      "status": "done",
+      "detail": "Nový test (reálný listen({port:0}), vzor fáze 66-68): dva klienti join → challenge/accept → gameId+barvy → oba otevřou game WS. Ověří: (a) legální tah černého → OBA game-state, turn přehozený; (b) mimo pořadí (bílý první) → error, žádný push, stav beze změny; (c) nelegální tah → error; (d) neúčastník/cizí gameId → error, žádná aplikace; (e) GET /games/:id na PvP = 200; (f) izolace: room move nepošle nic po místnosti, roster odběratel nedostane herní stav."
+    }
+  ],
+  "startedAt": "2026-07-08T15:59:50.330Z",
+  "completedAt": "2026-07-08T16:22:27.447Z",
+  "autoCommit": {
+    "preSha": "0f1e26e73794b4e6a20c8bb8075ba8df8c252fb6",
+    "subject": "Phase 70: PvP tah: serverová autorita"
+  }
+}

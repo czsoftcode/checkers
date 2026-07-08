@@ -250,6 +250,10 @@ describe('WS push – s enginem', () => {
     const first = JSON.parse(rawThinking) as GameStateMessage;
     const second = JSON.parse(rawEngine) as GameStateMessage;
     expect(first.type).toBe('game-state');
+    // Engine partie → DTO má engine tvar (zúžení přes `mode` po přidání PvP DTO, fáze 70).
+    if (first.game.mode !== 'engine' || second.game.mode !== 'engine') {
+      throw new Error('očekávám engine-partii (mode engine)');
+    }
     expect(first.game.engineStatus).toBe('thinking');
     expect(second.game.engineStatus).toBe('idle');
     // Engine odehrál → je zase na tahu černý (člověk).
@@ -273,6 +277,9 @@ describe('WS push – s enginem', () => {
     }
     const last = JSON.parse(rawLast) as GameStateMessage;
     expect(last.type).toBe('game-state');
+    if (last.game.mode !== 'engine') {
+      throw new Error('očekávám engine-partii (mode engine)');
+    }
     expect(last.game.engineStatus).toBe('error'); // ne 'thinking' – odběratel se dozví selhání
     expect(errSpy).toHaveBeenCalled();
 

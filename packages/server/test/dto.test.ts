@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { initialGameState, legalMoves } from '@checkers/rules';
 import type { Cell, Color, Position } from '@checkers/rules';
-import { findLegalMove, gameToDto, moveToDto } from '../src/index.js';
+import { findLegalMove, gameToDto, moveToDto, pvpGameToDto } from '../src/index.js';
 
 /** Postaví pozici z výčtu obsazených polí; zbytek desky je prázdný. */
 function positionWith(pieces: readonly (readonly [number, Cell])[], turn: Color): Position {
@@ -34,6 +34,7 @@ describe('gameToDto', () => {
     expect(dto.ballotIndex).toBeNull();
     expect(dto.ballotMoves).toBeNull();
     expect(dto.humanColor).toBe('black');
+    expect(dto.mode).toBe('engine');
     expect(dto.legalMoves).toHaveLength(7);
     // Kontrakt tvaru tahu na drátě: { from, path, captures }, prostý tah bez braní.
     for (const move of dto.legalMoves) {
@@ -60,6 +61,28 @@ describe('gameToDto', () => {
     const dto = gameToDto('m', initialGameState(), 'idle', 'ongoing', 'championship', 3, moves, 'black');
     expect(dto.ballotIndex).toBe(3);
     expect(dto.ballotMoves).toEqual(moves);
+  });
+});
+
+describe('pvpGameToDto', () => {
+  it('PvP tvar: mode pvp, pozice/turn/result/legalMoves, žádná engine pole', () => {
+    const dto = pvpGameToDto('g1', initialGameState(), 'ongoing');
+    expect(dto.mode).toBe('pvp');
+    expect(dto.id).toBe('g1');
+    expect(dto.position.turn).toBe('black');
+    expect(dto.result).toBe('ongoing');
+    expect(dto.legalMoves).toHaveLength(7);
+    // Engine-specifická pole na PvP DTO NESMÍ existovat (ne falešně null) – kdyby
+    // se sem protáhla, klient by je omylem četl jako platný stav enginu/úrovně.
+    const keys = Object.keys(dto).sort();
+    expect(keys).toEqual(['id', 'legalMoves', 'mode', 'position', 'result']);
+  });
+
+  it('result se PŘEDÁVÁ zvenčí (efektivní výsledek), DTO ho neodvozuje', () => {
+    // Rozehraná pozice, ale vnucený výsledek (simulace budoucího konce PvP).
+    const dto = pvpGameToDto('g2', initialGameState(), 'black-wins');
+    expect(dto.result).toBe('black-wins');
+    expect(dto.position.turn).toBe('black');
   });
 });
 

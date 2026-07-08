@@ -14,8 +14,8 @@ import { THREE_MOVE_BALLOTS } from '@checkers/rules';
 import type { Color, Move } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { formatGamePdn, writeGamePdn } from './archive.js';
-import { findLegalMove, gameToDto, legalMoveDtos, moveToDto } from './dto.js';
-import type { GameStateMessage } from './dto.js';
+import { findLegalMove, gameToDto, legalMoveDtos, moveToDto, pvpGameToDto } from './dto.js';
+import type { AnyGameDto, GameStateMessage, MoveDto } from './dto.js';
 import { GameHub } from './hub.js';
 import { RoomPresence } from './presence.js';
 import type { RoomServerMessage } from './presence.js';
@@ -33,6 +33,19 @@ const moveBodySchema = z.object({
   from: z.number().int().min(1).max(32),
   path: z.array(z.number().int().min(1).max(32)).min(1),
 });
+
+/**
+ * Výsledek sdíleného jádra aplikace tahu ({@link buildApp} → `tryApplyMove`, fáze
+ * 70). Diskriminovaná unie, ať si každý transport (REST vs. room WS) namapuje
+ * výstup na SVŮJ kanál a chybové texty. `illegal` nese legální tahy (klient si
+ * opraví nabídku); `vanished` = partie zmizela mezi čtením a zápisem (v jednom
+ * procesu prakticky nenastane, ale nesmí to spadnout na `undefined`).
+ */
+type ApplyMoveResult =
+  | { readonly kind: 'game-over' }
+  | { readonly kind: 'illegal'; readonly legalMoves: MoveDto[] }
+  | { readonly kind: 'vanished' }
+  | { readonly kind: 'ok'; readonly record: GameRecord };
 
 /**
  * Tělo POST /games: volitelná úroveň obtížnosti a barva člověka. Chybí-li `level`
@@ -154,13 +167,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   /** GameDto ze záznamu: `result` je EFEKTIVNÍ výsledek (vzdání > pozice). */
-  function dtoFor(record: GameRecord): ReturnType<typeof gameToDto> {
+  function dtoFor(record: GameRecord): AnyGameDto {
     if (record.mode === 'pvp') {
-      // Nedosažitelné: PvP partie se do dtoFor nedostane – GET /games/:id ji odmítne
-      // 409 (pvp_not_playable) a mutační/broadcast cesty pro PvP neběží (fáze 68).
-      // GameDto je engine-tvaru (level/humanColor/ballot); PvP dto přijde s UI (todo 36).
-      // Backstop assertion, ať se sem nepropadne tiché zkreslení.
-      throw new Error(`dtoFor: PvP partii ${record.id} nelze serializovat do GameDto (todo 36)`);
+      // PvP tvar (fáze 70): bez engine-specifických polí. `effectiveResult` platí
+      // i pro PvP (forcedResult je zatím vždy null – vzdání/remíza PvP je todo 40 –
+      // takže se výsledek odvodí čistě z pozice).
+      return pvpGameToDto(record.id, record.state, effectiveResult(record));
     }
     // Ballot tahy: JEN u Mistrovství (`ballotIndex !== null`). Ballot je vždy tři
     // půltahy, které store nasadil jako první tři položky historie (viz store
@@ -214,6 +226,32 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   function broadcast(record: GameRecord): void {
     const message: GameStateMessage = { type: 'game-state', game: dtoFor(record) };
     hub.broadcast(record.id, JSON.stringify(message));
+  }
+
+  /**
+   * Sdílené jádro aplikace tahu (fáze 70): konec partie → legalita proti `rules`
+   * → `applyMove`. Vědomě NEobsahuje autoritu „čí je tah" (tu řeší volající podle
+   * režimu: engine barva u REST, členství + pořadí u PvP room WS), engine trigger
+   * ani archivaci (zůstávají v REST engine cestě). Nepushuje – na `ok` broadcastuje
+   * volající sám (REST po engine triggeru, WS hned). Vrací výsledek, ne HTTP/WS
+   * odpověď, ať ho každý transport namapuje na svůj kanál.
+   */
+  function tryApplyMove(record: GameRecord, from: number, path: readonly number[]): ApplyMoveResult {
+    // Tah do už skončené partie → konec. PŘED hledáním legálního tahu: remíza
+    // opakováním / 80 půltahů může mít legální tahy, ale partie je u konce.
+    // Přes efektivní výsledek → chytí i vzdanou (u PvP zatím nenastane, todo 40).
+    if (effectiveResult(record) !== 'ongoing') {
+      return { kind: 'game-over' };
+    }
+    const move = findLegalMove(record.state.position, from, path);
+    if (move === undefined) {
+      return { kind: 'illegal', legalMoves: legalMoveDtos(record.state.position) };
+    }
+    const next = store.applyMove(record.id, move);
+    if (next === undefined) {
+      return { kind: 'vanished' };
+    }
+    return { kind: 'ok', record: next };
   }
 
   // WS plugin + endpoint v samostatném pluginu registrovaném AŽ ZA ním: tím je
@@ -398,6 +436,84 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         );
       };
 
+      // PvP tah (fáze 70). Autorita stojí na `me.id` – identitu hráče přiřadil
+      // server TOMUTO socketu při joinu, NEČTE se z klientovy zprávy (session id
+      // sice roster zveřejňuje, tady se ale nedá podvrhnout, kdo tah poslal). Řetěz
+      // ověření: zapsán → partie existuje a je PvP → hráč je JEJÍ účastník (z toho
+      // barva) → je NA TAHU → legalita (sdílené `tryApplyMove`). Každý zádrhel =
+      // `error` vyzývateli, socket žije dál a STAV SE NEMĚNÍ. Na úspěch broadcast
+      // nového stavu OBĚMA přes game hub `/games/:id/ws`; PvP tudy NEvolá engine
+      // ani archiv (konec/vzdání/remíza PvP = todo 40).
+      const handleMove = (gameId: unknown, from: unknown, path: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        if (typeof gameId !== 'string') {
+          send({ type: 'error', message: 'Chybí id partie.' });
+          return;
+        }
+        // Tvar tahu přes STEJNÉ schema jako REST (jediný zdroj pravdy o tvaru).
+        // Tvarová kontrola PŘED přístupem k polím – špatný typ from/path → čistý error.
+        const parsedMove = moveBodySchema.safeParse({ from, path });
+        if (!parsedMove.success) {
+          send({ type: 'error', message: 'Neplatný tah: očekávám { from: 1–32, path: [1–32, …] }.' });
+          return;
+        }
+        const record = store.get(gameId);
+        if (record === undefined) {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return;
+        }
+        if (record.mode !== 'pvp') {
+          // Engine partie se přes místnost nehraje (jede REST + engine autorita).
+          send({ type: 'error', message: 'Tato partie se v místnosti nehraje.' });
+          return;
+        }
+        // Členství → barva. Neúčastník (me.id ∉ players, i tah na cizí partii) →
+        // odmítnutí, ne aplikace.
+        const myColor: Color | null =
+          record.players.black === me.id
+            ? 'black'
+            : record.players.white === me.id
+              ? 'white'
+              : null;
+        if (myColor === null) {
+          send({ type: 'error', message: 'Nejsi hráčem této partie.' });
+          return;
+        }
+        // Konec partie PŘED autoritou pořadí – stejné pořadí jako REST /moves:
+        // v terminální pozici (PvP může doběhnout pravidly) dostane i hráč, který
+        // není nominálně na tahu, čitelné „konec", ne matoucí „nejsi na tahu".
+        // `tryApplyMove` konec kontroluje taky (backstop), ale hláška by tam byla
+        // až po autoritě pořadí – proto explicitně tady.
+        if (effectiveResult(record) !== 'ongoing') {
+          send({ type: 'error', message: 'Partie je u konce.' });
+          return;
+        }
+        // Pořadí: táhnout smíš, jen když je na tahu TVÁ barva (jinak mimo pořadí).
+        if (record.state.position.turn !== myColor) {
+          send({ type: 'error', message: 'Nejsi na tahu.' });
+          return;
+        }
+        const applied = tryApplyMove(record, parsedMove.data.from, parsedMove.data.path);
+        if (applied.kind === 'game-over') {
+          // Nedosažitelné: konec odchycen výše. Backstop pro typovou úplnost.
+          send({ type: 'error', message: 'Partie je u konce.' });
+          return;
+        }
+        if (applied.kind === 'illegal') {
+          // Stav se nemění; klientova deska je dál správná (žádný push netřeba).
+          send({ type: 'error', message: 'Nelegální tah.' });
+          return;
+        }
+        if (applied.kind === 'vanished') {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return;
+        }
+        broadcast(applied.record);
+      };
+
       socket.on('message', (raw: Buffer) => {
         let parsed: unknown;
         try {
@@ -419,6 +535,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           nick?: unknown;
           targetId?: unknown;
           challengeId?: unknown;
+          gameId?: unknown;
+          from?: unknown;
+          path?: unknown;
         };
         switch (msg.type) {
           case 'join':
@@ -432,6 +551,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
             return;
           case 'reject':
             handleReject(msg.challengeId);
+            return;
+          case 'move':
+            handleMove(msg.gameId, msg.from, msg.path);
             return;
           default:
             send({ type: 'error', message: 'Neznámý typ zprávy.' });
@@ -525,9 +647,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (record === undefined) {
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
     }
-    if (record.mode === 'pvp') {
-      return rejectPvp(reply, req.params.id);
-    }
+    // Čtení stavu funguje pro OBA režimy (fáze 70): `dtoFor` PvP serializuje bez
+    // engine polí. Zápisové/engine-závislé cesty (moves REST, resign, draw, hint)
+    // PvP dál odmítají – PvP se hraje výhradně přes room WS (todo 36) a končí až
+    // s todo 40.
     return reply.send(dtoFor(record));
   });
 
@@ -728,9 +851,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       );
     }
 
-    // Tah do už skončené partie → 409 game_over. Kontroluje se PŘED hledáním
-    // legálního tahu: remíza opakováním / 80 půltahů může mít legální tahy, ale
-    // partie je u konce. Přes efektivní výsledek → chytí i vzdanou partii.
+    // Tah do už skončené partie → 409 game_over. Kontroluje se PŘED autoritou
+    // barvy i hledáním legálního tahu: remíza opakováním / 80 půltahů může mít
+    // legální tahy, ale partie je u konce. Přes efektivní výsledek → chytí i
+    // vzdanou. Pořadí (konec před autoritou) je záměrné – nechává game_over vyhrát
+    // i v pozici, kde je nominálně na tahu engine.
     if (effectiveResult(record) !== 'ongoing') {
       return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
     }
@@ -749,18 +874,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       );
     }
 
-    const move = findLegalMove(record.state.position, parsed.data.from, parsed.data.path);
-    if (move === undefined) {
+    // Sdílené jádro: legalita + applyMove (autorita „čí je tah" už proběhla výše).
+    const applied = tryApplyMove(record, parsed.data.from, parsed.data.path);
+    if (applied.kind === 'illegal') {
       return sendError(reply, 409, ERROR_CODES.illegalMove, 'Nelegální tah', {
-        legalMoves: legalMoveDtos(record.state.position),
+        legalMoves: applied.legalMoves,
       });
     }
-
-    const next = store.applyMove(record.id, move);
-    if (next === undefined) {
+    if (applied.kind === 'game-over') {
+      // Nedosažitelné: konec je odchycen výše. Backstop pro typovou úplnost.
+      return sendError(reply, 409, ERROR_CODES.gameOver, 'Partie je u konce');
+    }
+    if (applied.kind === 'vanished') {
       // Partie zmizela mezi get a applyMove – v jednom procesu se nestane.
       return sendError(reply, 404, ERROR_CODES.gameNotFound, `Partie ${req.params.id} neexistuje`);
     }
+    const next = applied.record;
 
     // Když partii ukončil PRÁVĚ tento tah člověka (černý vyhrál/remíza), archivuj
     // na disk. `maybeTriggerEngine` níž je s tímhle vzájemně vyloučené (spustí se

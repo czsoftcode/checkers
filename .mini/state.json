@@ -347,6 +347,11 @@
       "id": 69,
       "title": "Místnost: vstup a přítomní",
       "status": "done"
+    },
+    {
+      "id": 70,
+      "title": "PvP tah: serverová autorita",
+      "status": "done"
     }
   ]
 }

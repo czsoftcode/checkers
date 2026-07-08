@@ -24,8 +24,8 @@ export type {
   AcceptChallengeResult,
   RejectChallengeResult,
 } from './challenges.js';
-export { moveToDto, legalMoveDtos, gameToDto, findLegalMove } from './dto.js';
-export type { MoveDto, GameDto, GameStateMessage } from './dto.js';
+export { moveToDto, legalMoveDtos, gameToDto, pvpGameToDto, findLegalMove } from './dto.js';
+export type { MoveDto, GameDto, PvpGameDto, AnyGameDto, GameStateMessage } from './dto.js';
 export { GameHub } from './hub.js';
 export type { HubSocket } from './hub.js';
 export { RoomPresence, NICK_MAX_LENGTH } from './presence.js';

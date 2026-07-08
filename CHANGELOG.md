@@ -7,6 +7,30 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.56.0] - 2026-07-08
+
+### Added
+
+- **Hraní PvP partie na serveru - serverová autorita nad tahem (v3).** Dva
+  spárovaní hráči nově mohou odehrát tahy proti sobě. Tah se posílá po témže
+  spojení `GET /room/ws` jako přihlášení a párování: `{ type: "move", gameId,
+  from, path }`. Server je autorita - přijme tah JEN od hráče, který je
+  účastníkem té partie a je právě NA TAHU, a jen pokud je tah legální podle
+  pravidel. Kdo tah poslal, server pozná z identity spojení (přiřazené při
+  vstupu do místnosti), ne z obsahu zprávy, takže se nikdo nemůže vydávat za
+  soupeře. Nelegální tah, tah mimo pořadí, tah v cizí partii i tah před vstupem
+  do místnosti server odmítne čistou chybou (`{ type: "error", message }`),
+  spojení zůstává a stav partie se nemění. Po platném tahu server rozešle nový
+  stav OBĚMA hráčům přes `GET /games/:id/ws`.
+
+### Changed
+
+- **Čtení stavu partie dvou lidí funguje.** `GET /games/:id` nově vrací i stav
+  PvP partie (pole `mode: "pvp"` s pozicí, výsledkem a legálními tahy; bez
+  položek specifických pro hru proti počítači). Akce vázané na počítač (tah přes
+  REST, vzdání, nabídka remízy, nápověda) pro PvP partii dál vracejí čitelné
+  odmítnutí `pvp_not_playable`, ne chybu serveru.
+
 ## [0.55.0] - 2026-07-08
 
 ### Added

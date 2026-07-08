@@ -1,17 +1,18 @@
 /**
- * Fáze 68: engine-orientované REST endpointy na PvP partii nesmí házet 500.
+ * Fáze 68 + 70: chování engine-orientovaných REST endpointů na PvP partii.
  *
- * PvP partie (dva lidé, žádný engine) vzniká párováním přes WS; přes REST se v
- * tomto řezu NEHRAJE ani NEČTE (routování/autorita = todo 36, konec = todo 40).
- * GameDto i tah/vzdání/remíza/nápověda jsou engine-tvaru – na PvP záznam by
- * naivně sáhly na chybějící pole (level/humanColor) a spadly by 500. Kontrakt:
- * distinktní 409 `pvp_not_playable`, ne 404 (partie JE) a ne 500 (chyba serveru).
+ * PvP partie (dva lidé, žádný engine) vzniká párováním přes WS. ČTENÍ stavu už
+ * funguje (fáze 70): GET /games/:id vrací PvP DTO (bez engine polí). Zápisové /
+ * engine-závislé cesty (tah přes REST, vzdání, remíza, nápověda) PvP dál odmítají
+ * distinktním 409 `pvp_not_playable` – PvP se hraje výhradně přes room WS (todo 36)
+ * a končí až s todo 40. Ani jedna z nich nesmí spadnout 500 na chybějící pole.
  *
  * PvP partii sem dodá přímo `gameStore` přes dekoraci app (REST endpoint pro její
  * založení není – vzniká jen párováním). Ověřuje se přes `app.inject` (bez WS).
  *
- * Zuby: kdyby kterýkoli guard `mode === 'pvp'` zmizel, endpoint by na PvP záznamu
- * spadl (500 z engineColorOf/dtoFor assertions, nebo z RangeError) → test padne.
+ * Zuby: kdyby guard `mode === 'pvp'` na zápisové cestě zmizel, endpoint by na PvP
+ * záznamu spadl (500 z engineColorOf/store.resign, nebo z RangeError) → test padne.
+ * A kdyby se čtení rozbilo (dtoFor by PvP neuměl), GET by nevrátil 200 DTO.
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -46,12 +47,19 @@ function store(): GameStore {
 }
 
 describe('PvP partie na engine REST endpointech (fáze 68)', () => {
-  it('GET /games/:id vrátí 409 pvp_not_playable, ne 500 ani GameDto', async () => {
+  it('GET /games/:id vrátí 200 PvP DTO (fáze 70: čtení stavu funguje), ne 409 ani 500', async () => {
     app = buildApp({ openingBook: NO_BOOK });
     const { id } = store().createPvp('A', 'B');
     const res = await app.inject({ method: 'GET', url: `/games/${id}` });
-    expect(res.statusCode).toBe(409);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('pvp_not_playable');
+    expect(res.statusCode).toBe(200);
+    const dto = res.json<Record<string, unknown>>();
+    expect(dto.mode).toBe('pvp');
+    expect(dto.id).toBe(id);
+    expect((dto.position as { turn: string }).turn).toBe('black');
+    expect(dto.result).toBe('ongoing');
+    expect(Array.isArray(dto.legalMoves)).toBe(true);
+    // Engine-specifická pole se do PvP DTO nesmí protáhnout (ne falešně null).
+    expect(Object.keys(dto).sort()).toEqual(['id', 'legalMoves', 'mode', 'position', 'result']);
   });
 
   it('POST /games/:id/moves vrátí 409 pvp_not_playable, ne 500', async () => {

@@ -38,7 +38,7 @@
 - [x] ballot souradnice do LocalStorage?
 - [x] první stavební řez endgame DB pro ≤4 kameny
 - [x] [V3] Real-time transport (WebSocket): server pushuje stav partie jen zúčastněné dvojici. Nejmenší hratelný řez: dvě připojení → jedna partie, tah jednoho se objeví druhému real-time; klient přijímá push a překresluje desku. Základ všeho ostatního v3.
-- [ ] [V3] Autorita v real-time: server ověří, že tah posílá hráč, který je v DANÉ partii a je NA TAHU; odmítne tah od diváka, mimo pořadí nebo z cizí partie. Bezpečnostní jádro dvouhráčového modelu.
+- [x] [V3] Autorita v real-time: server ověří, že tah posílá hráč, který je v DANÉ partii a je NA TAHU; odmítne tah od diváka, mimo pořadí nebo z cizí partie. Bezpečnostní jádro dvouhráčového modelu.
 - [x] [V3] Přezdívka + model místnosti: vstup do aplikace pod přezdívkou (bez účtu), server drží seznam přítomných v jedné společné místnosti, real-time aktualizace příchodů/odchodů; klientská obrazovka místnosti (kdo je volný / hraje).
 - [x] [V3] Párování výzvou: klik na přezdívku → výzva → přijetí/odmítnutí → vznik partie a přesun obou do hry. Ošetřit hrany: vyzvaný už hraje, odmítnutí, odchod vyzvaného, dvojitá/křížová výzva.
 - [ ] [V3] Víc souběžných partií: server spravuje N nezávislých her, směruje zprávy jen účastníkům, izoluje stavy. Škálování řezu z bodu Real-time transport na N partií.

@@ -19,11 +19,15 @@ export interface MoveDto {
 }
 
 /**
- * Stav partie ve tvaru pro drát (odpověď GET /games/:id i POST /moves).
- * `engineStatus` je serverová informace o tahu enginu na pozadí – klient
- * (M5) podle ní pozná při pollingu, jestli engine přemýšlí / selhal.
+ * Stav partie ČLOVĚK vs. ENGINE ve tvaru pro drát (odpověď GET /games/:id i
+ * POST /moves). `engineStatus` je serverová informace o tahu enginu na pozadí –
+ * klient (M5) podle ní pozná při pollingu, jestli engine přemýšlí / selhal.
+ * Diskriminátor `mode: 'engine'` odděluje tento tvar od {@link PvpGameDto} (dva
+ * lidé, bez enginu/úrovně/ballotu) – klient nejdřív zúží přes `mode`, teprve pak
+ * čte engine-specifická pole.
  */
 export interface GameDto {
+  readonly mode: 'engine';
   readonly id: string;
   readonly position: Position;
   readonly result: GameResult;
@@ -62,16 +66,35 @@ export interface GameDto {
 }
 
 /**
+ * Stav partie DVOU LIDÍ (PvP, V3) ve tvaru pro drát. Oproti {@link GameDto} bez
+ * engine-specifických polí (`engineStatus`/`level`/`ballotIndex`/`ballotMoves`/
+ * `humanColor`) – ta pro partii bez enginu nemají smysl, a tak se nesmí objevit
+ * (ne falešně `null`). Klient si svou barvu drží z `challenge-accepted`, takže
+ * do stavu nepatří ani session id hráčů (jsou navíc veřejná přes roster). Kdo je
+ * na tahu, plyne z `position.turn`.
+ */
+export interface PvpGameDto {
+  readonly mode: 'pvp';
+  readonly id: string;
+  readonly position: Position;
+  readonly result: GameResult;
+  readonly legalMoves: MoveDto[];
+}
+
+/** Stav partie na drátě: engine, nebo PvP. Diskriminátor `mode` je zdroj pravdy. */
+export type AnyGameDto = GameDto | PvpGameDto;
+
+/**
  * Zpráva pushnutá přes WebSocket odběratelům partie (fáze 66). Obálka s
  * diskriminátorem `type` je kontrakt server↔klient pro celé V3: nechá místo pro
  * pozdější typy zpráv (presence/místnost, výzvy) bez rozbití. `game` je TÝŽ
- * `GameDto` jako v REST odpovědích – žádný nový tvar stavu, klient parsuje jednu
- * strukturu. Zatím jediný typ je `game-state`; až přibude druhý, tohle se rozšíří
- * na diskriminovanou unii.
+ * DTO jako v REST odpovědích – žádný nový tvar stavu, klient parsuje jednu
+ * strukturu, jen ji zúží přes `game.mode` (engine vs. PvP). Zatím jediný typ je
+ * `game-state`; až přibude druhý, tohle se rozšíří na diskriminovanou unii.
  */
 export interface GameStateMessage {
   readonly type: 'game-state';
-  readonly game: GameDto;
+  readonly game: AnyGameDto;
 }
 
 /** Přepis `Move` z `rules` do drátového tvaru (kopie polí, ne readonly odkaz). */
@@ -103,6 +126,7 @@ export function gameToDto(
   humanColor: Color,
 ): GameDto {
   return {
+    mode: 'engine',
     id,
     position: state.position,
     result,
@@ -112,6 +136,22 @@ export function gameToDto(
     ballotIndex,
     ballotMoves,
     humanColor,
+  };
+}
+
+/**
+ * Stav PvP partie v drátovém tvaru. `result` se – stejně jako u {@link gameToDto}
+ * – PŘEDÁVÁ zvenčí (efektivní výsledek přes `effectiveResult`), DTO ho neodvozuje.
+ * Kdo je na tahu, klient čte z `position.turn`; server je autorita nad legalitou
+ * (`legalMoves`).
+ */
+export function pvpGameToDto(id: string, state: GameState, result: GameResult): PvpGameDto {
+  return {
+    mode: 'pvp',
+    id,
+    position: state.position,
+    result,
+    legalMoves: legalMoveDtos(state.position),
   };
 }
 
