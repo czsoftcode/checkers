@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createRoomClient } from '../src/room-client.js';
-import type { RoomClient, RoomWebSocket, RosterEntry } from '../src/room-client.js';
+import type {
+  ChallengeAcceptedInfo,
+  IncomingChallenge,
+  OutgoingChallenge,
+  RoomClient,
+  RoomWebSocket,
+  RosterEntry,
+} from '../src/room-client.js';
 
 /**
  * Ovladatelný fake WebSocketu: testy ručně spouští `open`/`message`/`error`/`close`
@@ -63,6 +70,10 @@ function harness(options: { connectTimeoutMs?: number } = {}) {
     nickTaken: [] as string[],
     error: [] as string[],
     disconnected: 0,
+    incoming: [] as IncomingChallenge[][],
+    outgoing: [] as (OutgoingChallenge | null)[],
+    accepted: [] as ChallengeAcceptedInfo[],
+    notice: [] as string[],
   };
   const client = createRoomClient(
     {
@@ -73,6 +84,10 @@ function harness(options: { connectTimeoutMs?: number } = {}) {
       onDisconnected: () => {
         events.disconnected += 1;
       },
+      onIncomingChallenges: (c) => events.incoming.push(c),
+      onOutgoingChallenge: (p) => events.outgoing.push(p),
+      onChallengeAccepted: (i) => events.accepted.push(i),
+      onNotice: (m) => events.notice.push(m),
     },
     {
       url: 'ws://test/room/ws',
@@ -264,5 +279,158 @@ describe('createRoomClient', () => {
     sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }] });
     vi.advanceTimersByTime(20000);
     expect(events.disconnected).toBe(0);
+  });
+});
+
+describe('createRoomClient – výzvy', () => {
+  /** Připojený klient s rosterem (Jan=já, Eva=2, Petr=3) – výchozí stav pro testy výzev. */
+  function joined() {
+    const h = harness();
+    h.client.join('Jan');
+    h.sockets[0]!.open();
+    h.sockets[0]!.message({
+      type: 'roster',
+      players: [
+        { id: '1', nick: 'Jan' },
+        { id: '2', nick: 'Eva' },
+        { id: '3', nick: 'Petr' },
+      ],
+    });
+    const sock = h.sockets[0]!;
+    sock.sent.length = 0; // zahoď join, ať asserty vidí jen zprávy výzev
+    return { ...h, sock };
+  }
+
+  it('challenge pošle {type:challenge, targetId} a ohlásí odchozí; druhá výzva je no-op (max-1)', () => {
+    const { sock, events, client } = joined();
+    client.challenge('2');
+    expect(sock.sent).toEqual([JSON.stringify({ type: 'challenge', targetId: '2' })]);
+    expect(events.outgoing.at(-1)).toEqual({ targetId: '2', targetNick: 'Eva' });
+    // dokud čeká odchozí, další výzva se neodešle
+    client.challenge('3');
+    expect(sock.sent).toHaveLength(1);
+  });
+
+  it('challenge před vstupem do místnosti je no-op', () => {
+    const { sockets, events, client } = harness();
+    client.join('Jan');
+    sockets[0]!.open(); // otevřeno, ale roster ještě nedorazil → nejsem „joined"
+    client.challenge('2');
+    expect(sockets[0]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Jan' })]);
+    expect(events.outgoing).toHaveLength(0);
+  });
+
+  it('challenged naplní seznam příchozích (podle id)', () => {
+    const { sock, events } = joined();
+    sock.message({ type: 'challenged', challenge: { id: 'c1', challengerId: '2', challengerNick: 'Eva' } });
+    expect(events.incoming.at(-1)).toEqual([{ id: 'c1', challengerId: '2', challengerNick: 'Eva' }]);
+    sock.message({ type: 'challenged', challenge: { id: 'c2', challengerId: '3', challengerNick: 'Petr' } });
+    expect(events.incoming.at(-1)!.map((c) => c.id)).toEqual(['c1', 'c2']);
+  });
+
+  it('challenged s vadným tvarem se zahodí (žádný callback)', () => {
+    const { sock, events } = joined();
+    sock.message({ type: 'challenged', challenge: { id: 'c1' } }); // chybí challengerId/Nick
+    sock.message({ type: 'challenged' }); // chybí challenge
+    expect(events.incoming).toHaveLength(0);
+  });
+
+  it('accept pošle {type:accept, challengeId} jen pro známou příchozí', () => {
+    const { sock, client } = joined();
+    sock.message({ type: 'challenged', challenge: { id: 'c1', challengerId: '2', challengerNick: 'Eva' } });
+    client.accept('neznámá'); // není v příchozích → nic
+    client.accept('c1');
+    expect(sock.sent).toEqual([JSON.stringify({ type: 'accept', challengeId: 'c1' })]);
+  });
+
+  it('reject pošle {type:reject} a odebere příchozí lokálně (server vyzvanému nic neposílá)', () => {
+    const { sock, events, client } = joined();
+    sock.message({ type: 'challenged', challenge: { id: 'c1', challengerId: '2', challengerNick: 'Eva' } });
+    client.reject('c1');
+    expect(sock.sent).toEqual([JSON.stringify({ type: 'reject', challengeId: 'c1' })]);
+    expect(events.incoming.at(-1)).toEqual([]); // hned pryč
+  });
+
+  it('challenge-accepted spustí přechod se správnou barvou+gameId a nickem z rosteru; vyčistí stav', () => {
+    const { sock, events, client } = joined();
+    client.challenge('2'); // mám odchozí
+    sock.message({ type: 'challenged', challenge: { id: 'c9', challengerId: '3', challengerNick: 'Petr' } });
+    sock.message({ type: 'challenge-accepted', gameId: 'g1', color: 'black', opponentId: '2' });
+    expect(events.accepted.at(-1)).toEqual({ gameId: 'g1', color: 'black', opponentNick: 'Eva' });
+    // odchod do hry → odchozí i příchozí vyčištěny
+    expect(events.outgoing.at(-1)).toBeNull();
+    expect(events.incoming.at(-1)).toEqual([]);
+  });
+
+  it('challenge-accepted s neznámým opponentId dá nick fallback „soupeř"', () => {
+    const { sock, events } = joined();
+    sock.message({ type: 'challenge-accepted', gameId: 'g1', color: 'white', opponentId: 'x' });
+    expect(events.accepted.at(-1)).toEqual({ gameId: 'g1', color: 'white', opponentNick: 'soupeř' });
+  });
+
+  it('challenge-accepted s vadným tvarem se zahodí (žádný přechod)', () => {
+    const { sock, events } = joined();
+    sock.message({ type: 'challenge-accepted', gameId: 'g1', color: 'zelená', opponentId: '2' }); // špatná barva
+    sock.message({ type: 'challenge-accepted', color: 'black', opponentId: '2' }); // chybí gameId
+    expect(events.accepted).toHaveLength(0);
+  });
+
+  it('challenge-rejected vyčistí odchozí a dá neutrální notice', () => {
+    const { sock, events, client } = joined();
+    client.challenge('2');
+    sock.message({ type: 'challenge-rejected', challengedId: '2' });
+    expect(events.outgoing.at(-1)).toBeNull();
+    expect(events.notice.at(-1)).toContain('Eva');
+    // odchozí je pryč → nová výzva zas projde
+    client.challenge('3');
+    expect(events.outgoing.at(-1)).toEqual({ targetId: '3', targetNick: 'Petr' });
+  });
+
+  it('challenge-cancelled na příchozí ji odebere; na odchozí (soupeř odešel) ji zruší', () => {
+    const { sock, events, client } = joined();
+    // příchozí varianta: znám id z `challenged`
+    sock.message({ type: 'challenged', challenge: { id: 'c1', challengerId: '2', challengerNick: 'Eva' } });
+    sock.message({ type: 'challenge-cancelled', challengeId: 'c1' });
+    expect(events.incoming.at(-1)).toEqual([]);
+    // odchozí varianta: id výzvy neznám, ale max-1 → zruší se
+    client.challenge('3');
+    sock.message({ type: 'challenge-cancelled', challengeId: 'neznámé-serverové-id' });
+    expect(events.outgoing.at(-1)).toBeNull();
+    expect(events.notice.at(-1)).toContain('Petr');
+  });
+
+  it('víc příchozích: přijetí jedné vyčistí celý seznam (přechod do hry)', () => {
+    const { sock, events, client } = joined();
+    sock.message({ type: 'challenged', challenge: { id: 'c1', challengerId: '2', challengerNick: 'Eva' } });
+    sock.message({ type: 'challenged', challenge: { id: 'c2', challengerId: '3', challengerNick: 'Petr' } });
+    expect(events.incoming.at(-1)!.map((c) => c.id)).toEqual(['c1', 'c2']);
+    client.accept('c1');
+    // Server přijetí potvrdí `challenge-accepted` (mně, jsem vyzvaný c1). Vedlejší c2
+    // server ruší, ale cancelled posílá Petrovi (protějšku), ne mně → MŮJ seznam čistí
+    // až challenge-accepted (incoming.clear()). Ověř, že po přechodu nezbyla c2.
+    sock.message({ type: 'challenge-accepted', gameId: 'g1', color: 'white', opponentId: '2' });
+    expect(events.incoming.at(-1)).toEqual([]);
+    expect(events.accepted.at(-1)!.opponentNick).toBe('Eva');
+  });
+
+  it('error po odeslané výzvě uvolní odchozí (jinak by max-1 zamkl další výzvy)', () => {
+    const { sock, events, client } = joined();
+    client.challenge('2');
+    expect(events.outgoing.at(-1)).toEqual({ targetId: '2', targetNick: 'Eva' });
+    // server odmítne výzvu přes `error` (busy) – NEposílá challenge-rejected
+    sock.message({ type: 'error', message: 'Vyzvaný hráč už hraje.' });
+    expect(events.outgoing.at(-1)).toBeNull(); // odchozí uvolněná
+    expect(events.error.at(-1)).toBe('Vyzvaný hráč už hraje.');
+    // po uvolnění jde vyzvat znovu (max-1 se neuzamkl)
+    client.challenge('3');
+    expect(events.outgoing.at(-1)).toEqual({ targetId: '3', targetNick: 'Petr' });
+  });
+
+  it('challenge-rejected cizí challengedId nerozhodí mou odchozí (ignoruje se)', () => {
+    const { sock, events, client } = joined();
+    client.challenge('2');
+    const before = events.outgoing.length;
+    sock.message({ type: 'challenge-rejected', challengedId: '999' }); // ne můj cíl
+    expect(events.outgoing).toHaveLength(before); // žádná změna
   });
 });

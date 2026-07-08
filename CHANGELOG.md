@@ -7,7 +7,19 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
-## [0.56.0] - 2026-07-08
+## [0.57.0] - 2026-07-08
+
+### Added
+
+- **Výzva a start partie v místnosti (klient, v3).** V herní místnosti jde nově
+  kliknutím na přezdívku jiného hráče poslat výzvu na partii. Vyzvaný uvidí
+  příchozí výzvu a může ji přijmout, nebo odmítnout; naráz může čekat i víc výzev
+  od různých hráčů. Po přijetí OBA hráči přejdou na herní obrazovku se svou barvou
+  (vyzyvatel hraje černé a začíná, vyzvaný bílé). Klient ošetří i mezní situace:
+  odmítnutí, odchod soupeře během čekání, vyzvání hráče, který už hraje, i dvojitou
+  či křížovou výzvu - vždy s čitelnou hláškou, bez vypadnutí z místnosti. Samotná
+  herní deska pro partii dvou lidí přijde v další fázi (obrazovka je zatím
+  placeholder).
 
 ### Added
 

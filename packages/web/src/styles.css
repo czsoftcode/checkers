@@ -691,6 +691,10 @@ body {
 }
 
 .lobby-roster-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.45rem 0.7rem;
   border-radius: 6px;
   background: #2f2f2f;
@@ -720,4 +724,113 @@ body {
 .lobby-room.hidden,
 .lobby-disconnected.hidden {
   display: none;
+}
+
+/* --- Výzvy v místnosti (fáze 71) -------------------------------------------
+   Tlačítko „Vyzvat" u cizího hráče, seznam příchozích výzev a stav odchozí
+   výzvy. Tlačítka dědí vzhled z `.lobby-card button`. */
+
+.lobby-challenge-btn {
+  flex: none;
+}
+
+/* Odchozí stav a hláška: BEZ vlastního `display`, ať obecné `.hidden`
+   (display:none, stejná specificita, dřívější pravidlo) spolehlivě skryje. */
+.lobby-outgoing {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #cdd;
+}
+
+.lobby-notice {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #d9c98a;
+}
+
+.lobby-challenges {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.lobby-challenge-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  background: #34402f;
+  border: 1px solid #4a5a3a;
+}
+
+.lobby-challenge-label {
+  flex: 1 1 auto;
+}
+
+.lobby-accept-btn,
+.lobby-reject-btn {
+  flex: none;
+}
+
+/* Vyšší specificita (0,2,0), ať zelená přebije obecné `.lobby-card button` (0,1,1). */
+.lobby-challenge-item .lobby-accept-btn {
+  background: #3a5a2f;
+}
+
+/* --- PvP herní obrazovka: placeholder (deska = todo 47) -------------------- */
+
+.game-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.game-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  text-align: center;
+  max-width: 28rem;
+}
+
+.game-title {
+  margin: 0 0 0.3rem;
+}
+
+.game-line {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.game-id {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #9ab;
+}
+
+.game-note {
+  margin: 0.3rem 0 0.6rem;
+  color: #bbb;
+  font-style: italic;
+}
+
+.game-back-btn {
+  padding: 0.55rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #666;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
+}
+
+.game-back-btn:hover {
+  background: #4a4a4a;
 }

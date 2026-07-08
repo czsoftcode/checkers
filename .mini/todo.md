@@ -49,3 +49,4 @@
 - [ ] [V3] AI jako volitelný soupeř v novém UI: zachovat "hrát proti počítači" (dnešní tok člověk vs. engine) i režim Výuka, zapadající do místnosti/lobby toku; ověření stejnou serverovou cestou. Aby pivot na PvP nerozbil existující hodnotu.
 - [ ] [V3] Robustnost WS a úklid: limit velikosti/frekvence zpráv na spojení (analogie engine LineBuffer, todo 25), úklid odpojených spojení a dohraných partií bez zombie stavů; N souběžných partií + hráčů bez zamrznutí (navazuje na hardening todo 22).
 - [ ] [V3/ops] WebSocket přes nginx: reverse proxy (nginx-dama.softcode.cz.conf) musí umět WS upgrade (Upgrade/Connection hlavičky, timeouty); ověřit deploy.sh a produkční provoz. Jinak real-time v produkci tiše nefunguje, i když lokálně ano.
+- [ ] Klient: PvP deska

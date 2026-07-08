@@ -17,7 +17,13 @@
  */
 
 import { createRoomClient } from './room-client.js';
-import type { RoomSocketFactory, RosterEntry } from './room-client.js';
+import type {
+  ChallengeAcceptedInfo,
+  IncomingChallenge,
+  OutgoingChallenge,
+  RoomSocketFactory,
+  RosterEntry,
+} from './room-client.js';
 
 /** Klíč v LocalStorage pro zapamatovanou přezdívku (přežije reload, jako úroveň). */
 const NICK_STORAGE_KEY = 'checkers.roomNick';
@@ -33,6 +39,11 @@ const NICK_MAX_LENGTH = 24;
 export interface LobbyOptions {
   /** Přepnutí na sólo hru proti počítači (dnešní deska). Řídí ho caller (`main.ts`). */
   readonly onPlayVsComputer: () => void;
+  /**
+   * Přijata výzva → přechod do PvP hry se svým gameId a barvou. Řídí ho caller
+   * (`main.ts`), který lobby při přechodu NEzavírá (room WS musí žít – fáze 70).
+   */
+  readonly onGameStart: (info: ChallengeAcceptedInfo) => void;
   /** URL WS místnosti – jen pro testy; jinak se odvodí z `location`. */
   readonly roomUrl?: string;
   /** Náhrada tovární funkce socketu – jen pro testy (fake socket). */
@@ -97,15 +108,28 @@ export function createLobby(options: LobbyOptions): Lobby {
   const message = document.createElement('p');
   message.className = 'lobby-msg hidden';
 
-  // Pohled místnosti (`joined`): nadpis + seznam přítomných.
+  // Pohled místnosti (`joined`): stav výzev + seznam přítomných.
   const room = document.createElement('div');
   room.className = 'lobby-room hidden';
+
+  // Stav MÉ odchozí výzvy (čekám na odpověď) – skrytý, když žádná neběží.
+  const outgoing = document.createElement('p');
+  outgoing.className = 'lobby-outgoing hidden';
+
+  // Neutrální provozní hláška k výzvám (soupeř odmítl / odešel) – ne chyba.
+  const notice = document.createElement('p');
+  notice.className = 'lobby-notice hidden';
+
+  // Příchozí výzvy (může jich čekat víc naráz), každá s Přijmout/Odmítnout.
+  const incomingList = document.createElement('ul');
+  incomingList.className = 'lobby-challenges';
+
   const roomHeading = document.createElement('h2');
   roomHeading.className = 'lobby-room-title';
   roomHeading.textContent = 'Přítomní hráči';
   const rosterList = document.createElement('ul');
   rosterList.className = 'lobby-roster';
-  room.append(roomHeading, rosterList);
+  room.append(outgoing, notice, incomingList, roomHeading, rosterList);
 
   // Pohled odpojení (`disconnected`): hláška + ruční znovupřipojení (žádný auto-reconnect).
   const disconnected = document.createElement('div');
@@ -132,6 +156,14 @@ export function createLobby(options: LobbyOptions): Lobby {
   // odpojení: pád PŘED vstupem = „nepodařilo se připojit" (server dole / timeout),
   // pád PO vstupu = „spojení se přerušilo".
   let joinedOnce = false;
+  // Poslední roster – držíme ho, ať jde překreslit tlačítka „Vyzvat" (jejich
+  // disabled stav) při změně odchozí výzvy, aniž přijde nový roster ze serveru.
+  let currentRoster: RosterEntry[] = [];
+  // `true`, dokud čeká MOJE odchozí výzva – tehdy nejdou vyzývat další (max-1).
+  let outgoingPending = false;
+  // Aktuální pohled – rozhoduje, kam mířit serverovou chybu: PŘED vstupem na formulář
+  // nicku, PO vstupu (`joined`) jen jako hláška (viz `onError`).
+  let currentView: View = 'entry';
 
   const room_client = createRoomClient(
     {
@@ -143,6 +175,18 @@ export function createLobby(options: LobbyOptions): Lobby {
       onRoster: (roster) => {
         renderRoster(roster);
       },
+      onIncomingChallenges: (challenges) => {
+        renderIncoming(challenges);
+      },
+      onOutgoingChallenge: (pending) => {
+        renderOutgoing(pending);
+      },
+      onChallengeAccepted: (info) => {
+        options.onGameStart(info);
+      },
+      onNotice: (text) => {
+        showNotice(text);
+      },
       onNickTaken: (suggestion) => {
         setView('entry');
         nickInput.value = suggestion;
@@ -151,6 +195,14 @@ export function createLobby(options: LobbyOptions): Lobby {
         nickInput.select();
       },
       onError: (text) => {
+        // Server posílá `error` i pro CHYBY VÝZEV (vyzvaný už hraje, dvojitá/křížová
+        // výzva, „výzva už neplatí"). Když už jsem v místnosti, NEvyhazuj na formulář
+        // nicku (re-join by byl no-op → zásek na „Připojuji…") – ukaž jen hlášku a
+        // zůstaň v pohledu místnosti. Formulář je jen pro chyby PŘED vstupem (nick).
+        if (currentView === 'joined') {
+          showNotice(text);
+          return;
+        }
         setView('entry');
         setMessage(text);
         nickInput.focus();
@@ -176,6 +228,7 @@ export function createLobby(options: LobbyOptions): Lobby {
 
   /** Přepne viditelné sekce a stav formuláře podle stavu obrazovky. */
   function setView(view: View): void {
+    currentView = view;
     const showForm = view === 'entry' || view === 'connecting';
     form.classList.toggle('hidden', !showForm);
     room.classList.toggle('hidden', view !== 'joined');
@@ -185,28 +238,94 @@ export function createLobby(options: LobbyOptions): Lobby {
     joinBtn.disabled = connecting;
     if (connecting) {
       setMessage('Připojuji do místnosti…');
+      // Nový pokus o vstup: zahoď stav výzev z předchozího (padlého) spojení –
+      // room-client ho interně taky vyčistil, ale prázdné seznamy sám neposílá.
+      renderIncoming([]);
+      renderOutgoing(null);
+      showNotice('');
     } else if (view === 'joined' || view === 'disconnected') {
       setMessage('');
     }
     // `entry` hlášku nemaže – nese případný důvod (obsazený nick / chyba validace).
   }
 
-  /** Vykreslí seznam přítomných; vlastní záznam zvýrazní a označí „(ty)". */
+  /**
+   * Vykreslí seznam přítomných. Vlastní záznam zvýrazní a označí „(ty)"; u cizích
+   * přidá tlačítko „Vyzvat" (klik → výzva). Tlačítka jsou zamčená, dokud čeká moje
+   * odchozí výzva (max-1) – tehdy nejdřív dořeš tu stávající.
+   */
   function renderRoster(roster: RosterEntry[]): void {
+    currentRoster = roster;
     const items = roster.map((entry) => {
       const li = document.createElement('li');
       li.className = 'lobby-roster-item';
-      li.textContent = entry.nick;
+      const name = document.createElement('span');
+      name.className = 'lobby-roster-name';
+      name.textContent = entry.nick;
+      li.append(name);
       if (entry.isSelf) {
         li.classList.add('is-self');
         const you = document.createElement('span');
         you.className = 'lobby-you';
         you.textContent = ' (ty)';
-        li.append(you);
+        name.append(you);
+      } else {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'lobby-challenge-btn';
+        btn.textContent = 'Vyzvat';
+        btn.disabled = outgoingPending;
+        btn.addEventListener('click', () => {
+          room_client.challenge(entry.id);
+        });
+        li.append(btn);
       }
       return li;
     });
     rosterList.replaceChildren(...items);
+  }
+
+  /** Vykreslí příchozí výzvy; každá má tlačítka Přijmout/Odmítnout na svoje id. */
+  function renderIncoming(challenges: IncomingChallenge[]): void {
+    const items = challenges.map((c) => {
+      const li = document.createElement('li');
+      li.className = 'lobby-challenge-item';
+      const label = document.createElement('span');
+      label.className = 'lobby-challenge-label';
+      label.textContent = `${c.challengerNick} tě vyzývá na partii`;
+      const accept = document.createElement('button');
+      accept.type = 'button';
+      accept.className = 'lobby-accept-btn';
+      accept.textContent = 'Přijmout';
+      accept.addEventListener('click', () => {
+        room_client.accept(c.id);
+      });
+      const reject = document.createElement('button');
+      reject.type = 'button';
+      reject.className = 'lobby-reject-btn';
+      reject.textContent = 'Odmítnout';
+      reject.addEventListener('click', () => {
+        room_client.reject(c.id);
+      });
+      li.append(label, accept, reject);
+      return li;
+    });
+    incomingList.replaceChildren(...items);
+  }
+
+  /** Ukáže/skryje stav odchozí výzvy a přepočítá zámek tlačítek „Vyzvat". */
+  function renderOutgoing(pending: OutgoingChallenge | null): void {
+    outgoingPending = pending !== null;
+    outgoing.textContent = pending === null ? '' : `Čekám na odpověď: ${pending.targetNick}…`;
+    outgoing.classList.toggle('hidden', pending === null);
+    // Překresli roster, ať se u tlačítek „Vyzvat" projeví nový disabled stav.
+    renderRoster(currentRoster);
+  }
+
+  /** Krátká neutrální hláška k výzvám (odmítnutí / odchod soupeře); prázdná ji skryje. */
+  function showNotice(text: string): void {
+    notice.textContent = text;
+    notice.classList.toggle('hidden', text === '');
   }
 
   /** Odešle vstup do místnosti s aktuální přezdívkou (prázdnou odmítne už klient). */

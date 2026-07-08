@@ -1,0 +1,39 @@
+{
+  "id": 71,
+  "title": "Klient: výzva a start hry",
+  "goal": "V místnosti (klient) jde klikem na přezdívku poslat výzvu; vyzvaný uvidí příchozí výzvu a přijme/odmítne ji; klient korektně zpracuje serverové zprávy challenged / challenge-accepted / challenge-rejected / challenge-cancelled (ošetří i zánik výzvy odchodem soupeře a dvojitou/křížovou výzvu) a po přijetí OBA klienti přejdou na herní obrazovku se svým gameId a barvou. Samotná PvP deska a posílání tahů jsou vědomě mimo tento řez (todo 47). Ověřeno unit testem room-klienta s fake WS (vzor fáze 69) + ručním průchodem dvou prohlížečů.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "room-client: protokol výzev (odesílání + příjem + stav)",
+      "status": "done",
+      "detail": "Přidat metody challenge(targetId)/accept(challengeId)/reject(challengeId) (odchozí JSON s poli targetId/challengeId) a handlery pro challenged/challenge-accepted/challenge-rejected/challenge-cancelled s tvarovou obranou (vzor isRoomPlayer). Držet seznam příchozích výzev (Map dle id) a JEDNU odchozí (challengedId). onChallengeAccepted vyřeší opponentId→nick z rosteru (fallback soupeř). Vyčistit odchozí na rejected/cancelled/accepted; z příchozích odebrat dle challengeId na cancelled. Neznámé typy dál ignorovat."
+    },
+    {
+      "title": "Unit testy room-clienta s fake WS",
+      "status": "done",
+      "detail": "Vitest, fake socket (vzor fáze 69). Zuby: správný odchozí JSON; challenged naplní příchozí; challenge-accepted spustí přechod se správnou barvou+gameId; rejected i cancelled vyčistí odchozí; přijetí jedné příchozí + cancelled odebere ostatní; rozbitá/neúplná zpráva nespadne; max-1 odchozí drží."
+    },
+    {
+      "title": "main.ts: zvednout room-client + 3 obrazovky",
+      "status": "done",
+      "detail": "Vlastnictví room-clientu do main.ts, ať přežije přechod lobby↔hra (WS se NEzavře). challenge-accepted namountuje herní obrazovku; Zpět do místnosti = jen přepnutí view nad živým socketem. Sólo cesta room WS dál zavírá (beze změny). Dispose room-clientu jen při reálném odchodu (sólo / teardown)."
+    },
+    {
+      "title": "lobby.ts: UI výzev (klik, příchozí, odchozí)",
+      "status": "done",
+      "detail": "Klik na cizí přezdívku v rosteru → challenge; seznam příchozích výzev s tlačítky přijmout/odmítnout (dle id); stav odchozí čekám na odpověď na <nick> + zákaz vyzvat dalšího, dokud čeká; serverové error hlášky zobrazit. Napojení na room-client handlery."
+    },
+    {
+      "title": "Herní placeholder + CSS výzev (CSP)",
+      "status": "done",
+      "detail": "Placeholder obrazovka Partie začala / hraješ za <barva> / soupeř <nick> + Zpět do místnosti. Styling klikatelné přezdívky, banneru příchozích výzev, odchozího stavu a placeholderu ve styles.css (třídy, žádné inline styly/skripty)."
+    }
+  ],
+  "startedAt": "2026-07-08T16:44:47.867Z",
+  "completedAt": "2026-07-08T17:23:20.285Z",
+  "autoCommit": {
+    "preSha": "9d4bb3e93ea83d8a504af235bb8b63ed7e72cd7c",
+    "subject": "Phase 71: Klient: výzva a start hry"
+  }
+}

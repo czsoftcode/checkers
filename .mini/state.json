@@ -352,6 +352,11 @@
       "id": 70,
       "title": "PvP tah: serverová autorita",
       "status": "done"
+    },
+    {
+      "id": 71,
+      "title": "Klient: výzva a start hry",
+      "status": "done"
     }
   ]
 }

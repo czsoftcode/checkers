@@ -42,6 +42,35 @@ export interface RosterEntry {
 }
 
 /**
+ * Příchozí výzva (drátový tvar `challenged.challenge` ze serveru). `challengerNick`
+ * je jmenovka vyzyvatele, `challengerId` jeho session id, `id` je id výzvy (na něj
+ * míří `accept`/`reject` i `challenge-cancelled`).
+ */
+export interface IncomingChallenge {
+  readonly id: string;
+  readonly challengerId: string;
+  readonly challengerNick: string;
+}
+
+/**
+ * Moje odchozí výzva. Server NEposílá vyzyvateli id jeho výzvy, proto tu id není –
+ * klient drží jen cíl (`targetId` + `targetNick`) a smí mít NEJVÝŠ JEDNU odchozí
+ * naráz. Díky tomu jde jednoznačně vyčistit i `challenge-cancelled`, které nese jen
+ * (pro vyzyvatele neznámé) id výzvy.
+ */
+export interface OutgoingChallenge {
+  readonly targetId: string;
+  readonly targetNick: string;
+}
+
+/** Data pro přechod do hry po přijetí výzvy (barvu i gameId má klient z `challenge-accepted`). */
+export interface ChallengeAcceptedInfo {
+  readonly gameId: string;
+  readonly color: 'black' | 'white';
+  readonly opponentNick: string;
+}
+
+/**
  * Minimální rozhraní WebSocketu, které klient potřebuje. Reálně ho splňuje
  * prohlížečový `WebSocket` (viz {@link defaultSocketFactory}); test dodá fake se
  * stejným tvarem, aby šel klient ověřit bez skutečného spojení.
@@ -71,6 +100,17 @@ export interface RoomClientHandlers {
   readonly onNickTaken?: (suggestion: string) => void;
   readonly onError?: (message: string) => void;
   readonly onDisconnected?: () => void;
+  /** Celý seznam příchozích výzev po každé změně (přibyla/zmizela). Vzor `onRoster`. */
+  readonly onIncomingChallenges?: (challenges: IncomingChallenge[]) => void;
+  /** Stav mé odchozí výzvy: čekající cíl, nebo `null` (žádná / právě vyřízená). */
+  readonly onOutgoingChallenge?: (pending: OutgoingChallenge | null) => void;
+  /** Výzva přijata (mnou i soupeřem) → přejdi do hry se svým gameId a barvou. */
+  readonly onChallengeAccepted?: (info: ChallengeAcceptedInfo) => void;
+  /**
+   * Neutrální provozní hláška k výzvám (soupeř odmítl / odešel). NENÍ to `onError`
+   * (ten v UI vrací do formuláře) – jen informace, kterou UI krátce ukáže.
+   */
+  readonly onNotice?: (message: string) => void;
 }
 
 export interface RoomClientOptions {
@@ -99,6 +139,19 @@ export interface RoomClient {
    * `join{nick}`. Po úspěšném joinu je no-op (server by druhý join odmítl).
    */
   join(nick: string): void;
+  /**
+   * Vyzve hráče `targetId` na partii (`{type:'challenge', targetId}`). No-op, když
+   * ještě nejsi v místnosti nebo už máš odchozí výzvu (drží se NEJVÝŠ jedna – viz
+   * {@link OutgoingChallenge}). Na úspěch ohlásí `onOutgoingChallenge`.
+   */
+  challenge(targetId: string): void;
+  /** Přijme příchozí výzvu `challengeId` (`{type:'accept', challengeId}`). Neznámou ignoruje. */
+  accept(challengeId: string): void;
+  /**
+   * Odmítne příchozí výzvu `challengeId` (`{type:'reject', challengeId}`) a rovnou ji
+   * z lokálního seznamu odebere (server vyzvanému na jeho odmítnutí nic neposílá).
+   */
+  reject(challengeId: string): void;
   dispose(): void;
 }
 
@@ -121,6 +174,19 @@ function isRoomPlayer(value: unknown): value is RoomPlayer {
   }
   const record = value as Record<string, unknown>;
   return typeof record.id === 'string' && typeof record.nick === 'string';
+}
+
+/** Runtime guard tvaru příchozí výzvy (`challenged.challenge`); vadnou zprávu odmítni. */
+function isIncomingChallenge(value: unknown): value is IncomingChallenge {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === 'string' &&
+    typeof record.challengerId === 'string' &&
+    typeof record.challengerNick === 'string'
+  );
 }
 
 /**
@@ -152,6 +218,12 @@ export function createRoomClient(
   // `true` po úspěšném joinu (přišel `roster`). Blokuje další join (server by ho
   // po úspěchu odmítl) a rozliší „spadlo spojení po vstupu" od „nikdy nevstoupil".
   let joined = false;
+  // Příchozí výzvy podle `challengeId` (může jich čekat víc naráz – B i C mě vyzvou,
+  // busy se na serveru nastaví až přijetím). Mažou se na accept/reject/cancelled.
+  const incoming = new Map<string, IncomingChallenge>();
+  // Moje JEDINÁ odchozí výzva (nebo `null`). Max-1 dovolí spárovat i `challenge-cancelled`,
+  // které vyzyvateli nese jen (jemu neznámé) id výzvy – viz {@link OutgoingChallenge}.
+  let outgoing: OutgoingChallenge | null = null;
   // Sloučení `onerror`+`onclose` do JEDNOHO `onDisconnected`: prohlížeč typicky
   // pošle error a hned close, nechceme hlásit odpojení dvakrát. Reset při novém socketu.
   let down = false;
@@ -200,6 +272,9 @@ export function createRoomClient(
     teardownSocket();
     joined = false;
     down = false;
+    // Stav výzev z předchozího (padlého) spojení je neplatný – session id umřelo.
+    incoming.clear();
+    outgoing = null;
     const target = url ?? defaultRoomUrl();
     const sock = factory(target);
     socket = sock;
@@ -312,11 +387,84 @@ export function createRoomClient(
           return;
         }
         clearConnectTimer(); // server odpověděl (chyba) – čekání skončilo
+        // Server multiplexuje i CHYBY VÝZEV přes `error` (busy, dvojitá/křížová,
+        // „výzva už neplatí") a na úspěšnou výzvu vyzyvateli NIC neposílá. Proto na
+        // jakoukoli chybu uvolni optimisticky nastavenou odchozí výzvu – jinak by
+        // odmítnutá výzva `outgoing` zamkla a max-1 by zablokoval všechny další.
+        // (Nekorelovatelné s konkrétní operací – stejný kompromis jako challenge-cancelled.)
+        if (outgoing !== null) {
+          outgoing = null;
+          handlers.onOutgoingChallenge?.(null);
+        }
         handlers.onError?.(msg.message);
         return;
       }
+      case 'challenged': {
+        // Příchozí výzva (jen vyzvanému). Vadný tvar zahoď, ať neproteče undefined.
+        if (!isIncomingChallenge(msg.challenge)) {
+          return;
+        }
+        incoming.set(msg.challenge.id, msg.challenge);
+        handlers.onIncomingChallenges?.([...incoming.values()]);
+        return;
+      }
+      case 'challenge-accepted': {
+        // Přijetí (mnou i soupeřem) → přechod do hry. Ověř tvar PŘED přístupem k polím.
+        if (typeof msg.gameId !== 'string') {
+          return;
+        }
+        if (msg.color !== 'black' && msg.color !== 'white') {
+          return;
+        }
+        if (typeof msg.opponentId !== 'string') {
+          return;
+        }
+        // `opponentId` je session id, ne jmenovka – nick dohledej z rosteru (fallback).
+        const opponentNick = players.get(msg.opponentId)?.nick ?? 'soupeř';
+        // Odcházím z místnosti do hry → veškerý stav výzev je passé. Ostatní MÉ výzvy
+        // server zrušil, ale cancelled poslal protějškům, ne mně → musím vyčistit sám.
+        incoming.clear();
+        outgoing = null;
+        handlers.onIncomingChallenges?.([]);
+        handlers.onOutgoingChallenge?.(null);
+        handlers.onChallengeAccepted?.({ gameId: msg.gameId, color: msg.color, opponentNick });
+        return;
+      }
+      case 'challenge-rejected': {
+        // Můj protějšek odmítl. Nese `challengedId` (cíl) – s max-1 odchozí jednoznačné.
+        if (typeof msg.challengedId !== 'string') {
+          return;
+        }
+        if (outgoing !== null && outgoing.targetId === msg.challengedId) {
+          const nick = outgoing.targetNick;
+          outgoing = null;
+          handlers.onOutgoingChallenge?.(null);
+          handlers.onNotice?.(`${nick} výzvu odmítl.`);
+        }
+        return;
+      }
+      case 'challenge-cancelled': {
+        // Zaniklá výzva. Nese jen `challengeId`. Když ho znám z příchozích (jsem vyzvaný
+        // vedlejší výzvy) → odeber ji. Jinak to je MOJE odchozí (soupeř odešel): id
+        // neznám, ale díky max-1 odchozí ji můžu bezpečně zrušit.
+        if (typeof msg.challengeId !== 'string') {
+          return;
+        }
+        if (incoming.has(msg.challengeId)) {
+          incoming.delete(msg.challengeId);
+          handlers.onIncomingChallenges?.([...incoming.values()]);
+          return;
+        }
+        if (outgoing !== null) {
+          const nick = outgoing.targetNick;
+          outgoing = null;
+          handlers.onOutgoingChallenge?.(null);
+          handlers.onNotice?.(`${nick} odešel z místnosti, výzva zanikla.`);
+        }
+        return;
+      }
       default:
-        return; // neznámý typ (např. zprávy výzev) – ignoruj
+        return; // neznámý typ – ignoruj
     }
   }
 
@@ -337,6 +485,49 @@ export function createRoomClient(
         return; // socket se otevírá – join se pošle na `open` s aktuálním pendingNick
       }
       openSocket(); // žádný / zavřený socket → čerstvé spojení, join na `open`
+    },
+    challenge(targetId: string): void {
+      // Vyzývat smí jen zapsaný hráč otevřeným socketem a jen když nemá odchozí výzvu.
+      if (disposed || !joined || outgoing !== null) {
+        return;
+      }
+      if (socket?.readyState !== WS_OPEN) {
+        return;
+      }
+      // UI nabízí jen přezdívky z rosteru → cíl tam obvykle je; fallback pro jistotu.
+      const targetNick = players.get(targetId)?.nick ?? 'soupeř';
+      socket.send(JSON.stringify({ type: 'challenge', targetId }));
+      outgoing = { targetId, targetNick };
+      handlers.onOutgoingChallenge?.(outgoing);
+    },
+    accept(challengeId: string): void {
+      if (disposed || !joined) {
+        return;
+      }
+      if (socket?.readyState !== WS_OPEN) {
+        return;
+      }
+      if (!incoming.has(challengeId)) {
+        return; // neznámá / už zaniklá výzva – neposílej
+      }
+      // Neodstraňuj lokálně: úspěch přijde jako `challenge-accepted` (vyčistí vše),
+      // zánik jako `challenge-cancelled`/`error`. Optimistické mazání by mohlo lhát.
+      socket.send(JSON.stringify({ type: 'accept', challengeId }));
+    },
+    reject(challengeId: string): void {
+      if (disposed || !joined) {
+        return;
+      }
+      if (socket?.readyState !== WS_OPEN) {
+        return;
+      }
+      if (!incoming.has(challengeId)) {
+        return;
+      }
+      // Na odmítnutí server vyzvanému NIC neposílá → odeber lokálně hned.
+      socket.send(JSON.stringify({ type: 'reject', challengeId }));
+      incoming.delete(challengeId);
+      handlers.onIncomingChallenges?.([...incoming.values()]);
     },
     dispose(): void {
       disposed = true;
