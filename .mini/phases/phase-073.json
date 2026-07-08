@@ -1,0 +1,41 @@
+{
+  "id": 73,
+  "title": "Vzhled PvP herní obrazovky",
+  "goal": "Herní obrazovka partie dvou lidí dostane rozložení jako u hry s AI: ovládání (Zpět do místnosti + místo pro budoucí tlačítka) je nad deskou s TUČNOU přezdívkou soupeře vlevo oddělenou separátorem (bez řádku 'Hraješ za barvu' – barva je jasná z kamenů dole); kdo je na tahu ukazuje REÁLNÝ kámen black.webp/white.webp na boku desky (na změnu tahu se mění jen obrázek kamene, ne indikátor); na pozadí náhodný background_NN.webp; celek se VEJDE do viewportu, takže deska ani tlačítko nepřetékají pod okraj. Vědomě mimo řez: stejná úprava indikátoru u hry s AI (potom), vzdání/remíza (todo 40), odveta.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Přestavba DOM a rozvržení game-screen.ts",
+      "status": "done",
+      "detail": "Root prvek dostane třídu .game (místo .game-screen/.game-card), přidá se <img class=page-bg> s náhodným pozadím (pickBackground(backgroundUrls, Math.random)). Panel .panel s ovládáním NAD deskou: vlevo tučná přezdívka soupeře, .controls-divider, tlačítko Zpět do místnosti. Deska v .board-row, pod ní .status-bar nesoucí už jen výsledek / hlášku o ztrátě spojení / chybu tahu. Zrušit nadpis Partie i řádek Hraješ za … · soupeř …. renderStatus přestane psát Jsi na tahu / Na tahu je soupeř. Bez inline stylů (CSP)."
+    },
+    {
+      "title": "Indikátor na tahu: reálný kámen + fallback",
+      "status": "done",
+      "detail": "V .board-row vedle desky nový indikátor se samotným kamenem (bez prstence). Primárně <img> s black.webp/white.webp, na změnu tahu se mění jen src; při selhání načtení (preloadImages) fallback na prosté CSS kolečko černé/bílé. Viditelný jen za běhu partie (result===ongoing), skrytý před prvním stavem i po konci. Neviditelný aria-label Na tahu: ty/soupeř. Řízeno z renderStatus(PvpStatus)."
+    },
+    {
+      "title": "CSS pro PvP rozvržení a indikátor",
+      "status": "done",
+      "detail": "Styl tučné přezdívky (overflow-wrap/min-width:0, ať se dlouhá zalomí místo přetečení panelu), bare-stone indikátor (velikost přes --square/--piece-scale, fallback kolečko .black/.white, mobilní margin-top), doladění panelu. Odstranit mrtvé třídy .game-screen/.game-card/.game-title/.game-line/.game-status/.game-error/.game-back-btn."
+    },
+    {
+      "title": "Testy game-screen + ověření",
+      "status": "done",
+      "detail": "Aktualizovat test/game-screen (nesahat na zrušený nadpis/třídy; ověřit přezdívku, tlačítko zpět, přepínání indikátoru za běhu/po konci, fallback kamene s injektovaným createImage, aria-label). Spustit typecheck, lint, vitest a build – vše zelené."
+    }
+  ],
+  "startedAt": "2026-07-08T19:19:11.831Z",
+  "resolvedVerify": [
+    "Vejde se celek do viewportu bez scrollu (desktop i mobil)?",
+    "Reálný kámen na boku desky a jeho výměna při změně tahu",
+    "Náhodné pozadí background_NN.webp se ukáže",
+    "Tučná přezdívka soupeře vlevo + oddělovač + tlačítko; dlouhá přezdívka se zalomí",
+    "Fallback kolečka je ČERNÉ/BÍLÉ (ne červené)"
+  ],
+  "completedAt": "2026-07-08T19:46:52.130Z",
+  "autoCommit": {
+    "preSha": "1e84304fb0fb6c976638fe9626cb5d720c781c22",
+    "subject": "Phase 73: Vzhled PvP herní obrazovky"
+  }
+}

@@ -213,7 +213,11 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
   }
 
   function showError(message: string): void {
-    if (disposed) {
+    if (disposed || connectionLost) {
+      // Po ztrátě spojení je deska nevratně zamčená (reconnection = todo 42). Opožděné
+      // odmítnutí tahu z ROOM WS (ten žije dál, drží ho lobby) je tou dobou zastaralé –
+      // NEsmí přepsat trvalou hlášku „Spojení se přerušilo, vrať se do místnosti" ani
+      // odemknout desku. Zahoď ho.
       return;
     }
     // Server tah odmítl (nelegální/mimo pořadí/závod se soupeřem). Deska se nikdy
@@ -222,8 +226,11 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     selection = null;
     pendingMove = false;
     view.setHighlights(renderState());
+    // POŘADÍ: nejdřív srovnej řádek stavu (emitStatus → skořápka při novém stavu
+    // skrývá starou chybu tahu), AŽ POTOM ohlas hlášku. Obráceně by ji následující
+    // emitStatus/render hned skryl a chyba tahu by se nikdy neukázala.
+    emitStatus(); // zpět „na tahu" (ne „soupeř přemýšlí")
     options.onError?.(message);
-    emitStatus(); // srovnej řádek stavu – jsem zase na tahu (ne „soupeř přemýšlí")
   }
 
   function setConnectionLost(): void {

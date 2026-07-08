@@ -362,6 +362,11 @@
       "id": 72,
       "title": "Klient: hratelná PvP deska",
       "status": "done"
+    },
+    {
+      "id": 73,
+      "title": "Vzhled PvP herní obrazovky",
+      "status": "done"
     }
   ]
 }

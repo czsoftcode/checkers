@@ -7,6 +7,26 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.59.0] - 2026-07-08
+
+### Changed
+
+- **PvP herní obrazovka dostala vzhled sladěný s hrou proti počítači.** Ovládání
+  (přezdívka soupeře s popiskem „Soupeř:" a tlačítko „Zpět do místnosti") je nad
+  deskou, na pozadí náhodný obrázek, celek se vejde do okna bez posouvání. Kdo je
+  na tahu ukazuje reálný kámen na boku desky (místo textové hlášky) – při změně
+  tahu se mění jen obrázek kamene. Zmizel nadpis „Partie" i řádek „Hraješ za …"
+  (barva je jasná z vlastních kamenů dole).
+
+### Fixed
+
+- **Hláška o odmítnutém tahu se v PvP nikdy neukázala.** Když server tah odmítl
+  (mimo pořadí / nelegální), hláška se objevila a hned zase zmizela, takže hráč
+  neviděl důvod. Nově zůstane zobrazená.
+- **Po ztrátě spojení mohla PvP hlášku „Spojení se přerušilo, vrať se do
+  místnosti" přepsat opožděná chyba tahu** a nechat desku zamčenou bez vysvětlení.
+  Po ztrátě spojení se zastaralé chyby tahu ignorují a hláška zůstane.
+
 ## [0.58.0] - 2026-07-08
 
 ### Added

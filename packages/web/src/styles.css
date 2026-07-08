@@ -581,8 +581,10 @@ body {
     white-space: nowrap;
   }
 
-  /* Indikátor pod deskou → mezeru přehodíme z levé strany (desktop) na horní. */
-  .turn-indicator {
+  /* Indikátor pod deskou → mezeru přehodíme z levé strany (desktop) na horní.
+     Platí pro AI kolečko (.turn-indicator) i PvP kámen (.pvp-turn). */
+  .turn-indicator,
+  .pvp-turn {
     margin-left: 0;
     margin-top: 0.6rem;
   }
@@ -781,65 +783,91 @@ body {
   background: #3a5a2f;
 }
 
-/* --- PvP herní obrazovka: placeholder (deska = todo 47) -------------------- */
+/* --- PvP herní obrazovka -------------------------------------------------
+   Rozvržení SDÍLÍ třídy se hrou proti počítači (.game / .panel / .controls /
+   .board-row / .status-bar / .page-bg) i globální --board-size – tady jsou jen
+   PvP specifika: přezdívka soupeře vlevo v panelu a indikátor na tahu s reálným
+   kamenem na boku desky. */
 
-.game-screen {
-  min-height: 100vh;
+/* Ovládání PvP: zarovnané VLEVO (přezdívka soupeře vlevo, ne na střed jako u AI). */
+.pvp-controls {
+  justify-content: flex-start;
+}
+
+/* Popisek „Soupeř:" před přezdívkou (běžný řez, ztlumený), ať je jasné, že jméno
+   patří soupeři. Oddělení od přezdívky řeší `gap` na `.controls`. */
+.pvp-opponent-label {
+  color: #bbb;
+}
+
+/* Přezdívka soupeře: tučná. `min-width: 0` + `overflow-wrap` ať se dlouhá přezdívka
+   ZALOMÍ místo aby roztlačila tlačítko nebo přetekla panel (šířky --board-size). */
+.pvp-opponent {
+  font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Indikátor strany na tahu: SAMOTNÝ kámen na boku desky (bez prstence, na rozdíl
+   od AI kolečka). Vpravo od desky (na <768 px se v @media přesune pod desku).
+   Viditelnost řídí game-screen třídou .hidden. */
+.pvp-turn {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  margin-left: 1rem;
+  flex: none; /* nikdy se nezmenšovat pod svou velikost */
 }
 
-.game-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  align-items: center;
-  text-align: center;
-  /* Bez pevného max-width: karta se přizpůsobí šířce desky (ta má vlastní
-     responsivní --board-size), jinak by z úzké karty přetekla. */
-  max-width: 100%;
-}
-
-.game-title {
-  margin: 0 0 0.3rem;
-}
-
-.game-line {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-/* Řádek stavu: kdo je na tahu / výsledek partie. Neutrální, výrazný. */
-.game-status {
-  margin: 0 0 0.4rem;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #cde;
-}
-
-/* Hláška odmítnutého tahu (chyba z room WS). Skrytá, dokud nic nepřijde. */
-.game-error {
-  margin: 0;
-  font-size: 0.95rem;
-  color: #e88;
-}
-
-.game-error.hidden {
+/* Vyšší specificita (2 třídy) než obecné .hidden i .pvp-turn, ať skrytí vyhraje
+   bez ohledu na pořadí pravidel. */
+.pvp-turn.hidden {
   display: none;
 }
 
-.game-back-btn {
-  padding: 0.55rem 1rem;
-  font-size: 1rem;
-  border: 1px solid #666;
-  border-radius: 6px;
-  background: #3a3a3a;
-  color: #eee;
-  cursor: pointer;
+/* Kámen v indikátoru: kruh o něco větší než hrací kámen. Fallback (bez načteného
+   webp) = prosté kolečko ČERNÉ/BÍLÉ podle strany na tahu. POZOR: „bílý" hráč je tu
+   BÍLÝ (ne červený jako webp/deska) – vědomé rozhodnutí fáze 73, ať je fallback
+   jednoznačně bílý. Statické „svícení" (box-shadow), žádná animace. */
+.pvp-turn-stone {
+  width: calc(var(--square) * var(--piece-scale) * 1.6);
+  height: calc(var(--square) * var(--piece-scale) * 1.6);
+  border-radius: 50%;
+  box-sizing: border-box;
+  box-shadow: 0 0 calc(var(--square) * 0.18) rgba(255, 255, 255, 0.7);
 }
 
-.game-back-btn:hover {
-  background: #4a4a4a;
+.pvp-turn-stone.black {
+  background: radial-gradient(circle at 35% 30%, #555, #111);
+  border: 2px solid #000;
+}
+
+.pvp-turn-stone.white {
+  background: radial-gradient(circle at 35% 30%, #fff, #cfcfcf);
+  border: 2px solid #999;
+}
+
+/* Reálný webp kámen: zapíná ho game-screen třídou .pvp-turn--img na indikátoru AŽ
+   po ověřeném načtení black.webp/white.webp (jinak platí CSS kolečko výše). `url(...)`
+   Vite přepíše na hashovanou cestu (žádný inline styl → CSP OK), shodnou s importy
+   `?url` v game-screen.ts. Obrázek nese vlastní vzhled → ruší se gradient i lem. */
+.pvp-turn--img .pvp-turn-stone {
+  border: none;
+  background: center / contain no-repeat;
+}
+
+.pvp-turn--img .pvp-turn-stone.black {
+  background-image: url('./assets/black.webp');
+}
+
+.pvp-turn--img .pvp-turn-stone.white {
+  background-image: url('./assets/white.webp');
+}
+
+/* Chyba odmítnutého tahu ve stavovém pruhu (červená). Skrytá, dokud nic nepřijde
+   (skrytí řeší obecné .hidden). */
+.pvp-error {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #e88;
 }
