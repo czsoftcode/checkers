@@ -377,6 +377,11 @@
       "id": 75,
       "title": "Skok po krocích tažením v PvP",
       "status": "done"
+    },
+    {
+      "id": 76,
+      "title": "Pozadí lobby: obrázek intro.webp",
+      "status": "done"
     }
   ]
 }

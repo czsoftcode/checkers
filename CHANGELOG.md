@@ -7,6 +7,11 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+
+- **Úvodní obrazovka Herní místnosti má obrázkové pozadí (`intro.webp`).** Místo
+  holého pozadí teď lobby vyplňuje celostránkový obrázek přes celou plochu.
+
 ## [0.61.0] - 2026-07-08
 
 ### Added

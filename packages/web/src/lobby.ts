@@ -25,6 +25,11 @@ import type {
   RosterEntry,
 } from './room-client.js';
 
+// Celostránkové pozadí místnosti: hotový (dostatečně tmavý) obrázek `intro.webp`.
+// `?url` → Vite dá při buildu hashovanou URL řetězcem (jako `board-image`); pozadí je
+// FIXNÍ jeden obrázek, ne losované jako u hry (žádná logika z `backgrounds.ts`).
+import introUrl from './assets/intro.webp?url';
+
 /** Klíč v LocalStorage pro zapamatovanou přezdívku (přežije reload, jako úroveň). */
 const NICK_STORAGE_KEY = 'checkers.roomNick';
 
@@ -102,6 +107,16 @@ type View = 'entry' | 'connecting' | 'joined' | 'disconnected';
 export function createLobby(options: LobbyOptions): Lobby {
   const element = document.createElement('div');
   element.className = 'lobby';
+
+  // Pozadí CELÉ stránky: `<img>` na celý viewport POD obsahem (stacking řeší třída
+  // `.page-bg` v styles.css: fixed, inset:0, z-index:-1, object-fit:cover). URL se
+  // nastavuje přes `src` (atribut, ne styl) → CSP se ho netýká. Žádný ztmavovací
+  // overlay – obrázek je dost tmavý a karta místnosti má vlastní tmavé pozadí.
+  const pageBg = document.createElement('img');
+  pageBg.className = 'page-bg';
+  pageBg.alt = '';
+  pageBg.src = introUrl;
+  element.append(pageBg);
 
   const card = document.createElement('div');
   card.className = 'lobby-card';

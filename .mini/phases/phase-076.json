@@ -1,0 +1,32 @@
+{
+  "id": 76,
+  "title": "Pozadí lobby: obrázek intro.webp",
+  "goal": "Úvodní obrazovka Herní místnosti (lobby) dostane intro.webp jako celostránkové pozadí stejným CSP-bezpečným způsobem jako herní deska (skrytý <img class='page-bg'> s URL přes Vite ?url, ne inline styl). Pozadí je fixní (jeden obrázek), ne losované jako u hry – logika z backgrounds.ts se nepřebírá. Obrázek je dostatečně tmavý, takže se ZÁMĚRNĚ nepřidává žádný ztmavovací overlay/závoj; obsah lobby (formulář nicku, seznam přítomných) zůstává beze změny nad ním.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Pozadí lobby: <img class=page-bg> s intro.webp",
+      "status": "done",
+      "detail": "V lobby.ts naimportovat intro.webp přes Vite ?url a vložit jako první dítě kořenového .lobby skrytý <img class=\"page-bg\"> (alt=\"\"), src nastavit atributem (ne inline styl, kvůli CSP). Znovupoužít existující třídu .page-bg (fixed, inset:0, z-index:-1, object-fit:cover) – žádné nové CSS, žádná logika z backgrounds.ts. Výstup: lobby renderuje intro.webp jako celostránkové pozadí."
+    },
+    {
+      "title": "Test: lobby má img.page-bg s nastaveným src",
+      "status": "done",
+      "detail": "V test/lobby.test.ts ověřit, že kořen lobby obsahuje img.page-bg s neprázdným src (intro URL z ?url importu). Test má zuby: bez přidaného <img> selže."
+    },
+    {
+      "title": "Ověření: build + typecheck + lint + testy",
+      "status": "done",
+      "detail": "pnpm --filter @checkers/web build projde (Vite zabundluje intro.webp s hash URL, žádná chyba importu), pnpm -r typecheck, pnpm lint a pnpm --filter @checkers/web test zelené. Čitelnost obsahu nad tmavým obrázkem posoudí člověk okem (verify)."
+    }
+  ],
+  "startedAt": "2026-07-08T22:14:27.802Z",
+  "resolvedVerify": [
+    "Vzhled a čitelnost lobby nad obrázkem intro.webp v prohlížeči"
+  ],
+  "completedAt": "2026-07-08T22:18:02.653Z",
+  "autoCommit": {
+    "preSha": "d6206649c8292213b41f24da7f1efb67882ae8a5",
+    "subject": "Phase 76: Pozadí lobby: obrázek intro.webp"
+  }
+}

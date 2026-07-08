@@ -119,6 +119,15 @@ afterEach(() => {
 });
 
 describe('createLobby', () => {
+  it('má celostránkové pozadí: <img.page-bg> s nastaveným src (intro.webp)', () => {
+    const h = mountLobby();
+    const bg = h.el.querySelector<HTMLImageElement>('img.page-bg');
+    expect(bg).not.toBeNull();
+    const src = bg!.getAttribute('src') ?? '';
+    expect(src.length).toBeGreaterThan(0); // ?url import → neprázdná URL
+    expect(src).toContain('intro'); // je to opravdu intro.webp, ne jiný asset
+  });
+
   it('start ukáže formulář a schová místnost', () => {
     const h = mountLobby();
     expect(h.form.classList.contains('hidden')).toBe(false);
