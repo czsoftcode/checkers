@@ -16,6 +16,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   server: {
     port: 5173,
+    // Naslouchat na všech síťových rozhraních (ne jen localhost), ať jde dev klient
+    // otevřít z jiného zařízení ve stejné síti (mobil ↔ počítač, testování PvP). Vite
+    // pak vypíše i „Network:" URL. POZOR: vystavuje dev server celé LAN – vhodné jen v
+    // důvěryhodné síti; server (Fastify) zůstává na 127.0.0.1, mobil k němu jde přes tuhle proxy.
+    host: true,
     proxy: {
       // `/games` nese REST (POST/GET partie) I WebSocket stavu partie (`/games/:id/ws`,
       // fáze 66/72). `ws: true` zapne upgrade spojení (běžné HTTP requesty proxy dál
