@@ -7,10 +7,34 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.62.0] - 2026-07-09
+
 ### Added
 
 - **Úvodní obrazovka Herní místnosti má obrázkové pozadí (`intro.webp`).** Místo
   holého pozadí teď lobby vyplňuje celostránkový obrázek přes celou plochu.
+- **Vzdání partie v hře dvou lidí (v3).** V PvP partii jde teď kdykoli za běhu
+  kliknout „Vzdát se" (s potvrzením v překryvném okně) – soupeř tím vyhraje. Server
+  je autorita: barvu výhry si dopočte sám, vzdát smí jen účastník rozehrané partie.
+- **Nabídka remízy druhému hráči (v3).** Místo „AI rozhodne" teď remíza míří na
+  živého soupeře: nabídneš remízu a soupeř ji ve svém okně přijme nebo odmítne. Tah
+  visící nabídku ruší (bere se jako odmítnutí). Po přijetí končí partie remízou pro oba.
+- **Výsledek PvP partie jako překryvné okno s volbou Odveta / Konec (v3).** Po konci
+  partie („Vyhrál jsi / Prohrál jsi / Remíza") vyskočí okno, kde si vybereš odvetu, nebo konec.
+- **Odveta se stejným soupeřem (v3).** „Odveta" nabídne soupeři novou partii; ty
+  zůstaneš na obrazovce a čekáš, soupeř dostane dotaz, a po přijetí obě strany rovnou
+  plynule přejdou do nové hry s prohozenými barvami (kdo byl černý, je teď bílý) – bez
+  návratu do místnosti.
+
+### Changed
+
+- **„Konec" po dohrané partii přesune do místnosti OBA hráče a uvolní je pro další
+  hru.** Dřív po dohrané partii oba zůstávali serverem obsazení, dokud neobnovili
+  stránku; teď „Konec" korektně ukončí partii pro oba a vrátí je do místnosti.
+- **Z běžící PvP partie se odchází jen přes „Vzdát se".** Tlačítko „Zpět do místnosti"
+  za běhu partie zmizelo – jen odpojilo pohled, ale hráč zůstal serverem obsazený a
+  blokovaný pro další hru až do obnovení stránky. Při ztrátě spojení se místo něj nabídne
+  nouzové okno pro návrat do místnosti.
 
 ## [0.61.0] - 2026-07-08
 

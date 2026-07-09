@@ -7,10 +7,11 @@
  *  - `pending` – čekající výzvy (`challengeId → Challenge`), dokud vyzvaný
  *    nepřijme / neodmítne, nebo dokud jeden z dvojice neopustí místnost,
  *  - `busy`    – session id hráčů, kteří UŽ hrají (spárovali se). Vyzvat lze jen
- *    volného hráče a jen volný hráč může vyzvat. Busy se v TOMTO řezu ruší JEN
- *    odchodem hráče ({@link ChallengeRegistry.removePlayer}) – konec PvP partie,
- *    který by busy uvolnil po dohrání, je todo 40. Pro dnešní rozsah (partie se
- *    nedá dohrát) je busy-until-disconnect korektní model, ne lež.
+ *    volného hráče a jen volný hráč může vyzvat. Busy se ruší odchodem hráče
+ *    ({@link ChallengeRegistry.removePlayer}) NEBO uvolněním po dohrané partii
+ *    ({@link ChallengeRegistry.release} – fáze 77, „Konec"/„Odveta" ve výsledkovém
+ *    modalu). Bez uvolnění po konci by dvojice zůstala busy až do odpojení a
+ *    nemohla hrát s nikým jiným.
  *
  * Pravidla proti divným stavům (rozhodnutí z diskuse fáze 68 – „plné ošetření"):
  *  - nelze vyzvat sám sebe,
@@ -119,6 +120,17 @@ export class ChallengeRegistry {
   removePlayer(id: string): Challenge[] {
     this.busy.delete(id);
     return this.removeInvolving(new Set([id]));
+  }
+
+  /**
+   * Uvolní hráče z busy stavu (fáze 77) – po DOHRANÉ partii, ať může hrát s někým
+   * jiným. Na rozdíl od {@link removePlayer} NEruší jeho čekající výzvy: po konci
+   * partie může mít čerstvou výzvu na odvetu, kterou nechceme shodit. Idempotentní
+   * (uvolnit neuvolněného = no-op). Autoritu „partie je opravdu u konce" hlídá
+   * volající (app) – registr sám stav partie nezná.
+   */
+  release(id: string): void {
+    this.busy.delete(id);
   }
 
   /** Hraje hráč už partii? Pro testy a obranné kontroly. */

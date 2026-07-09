@@ -382,6 +382,11 @@
       "id": 76,
       "title": "Pozadí lobby: obrázek intro.webp",
       "status": "done"
+    },
+    {
+      "id": 77,
+      "title": "PvP: vzdání a remíza",
+      "status": "done"
     }
   ]
 }

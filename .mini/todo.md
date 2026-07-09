@@ -42,7 +42,7 @@
 - [x] [V3] Přezdívka + model místnosti: vstup do aplikace pod přezdívkou (bez účtu), server drží seznam přítomných v jedné společné místnosti, real-time aktualizace příchodů/odchodů; klientská obrazovka místnosti (kdo je volný / hraje).
 - [x] [V3] Párování výzvou: klik na přezdívku → výzva → přijetí/odmítnutí → vznik partie a přesun obou do hry. Ošetřit hrany: vyzvaný už hraje, odmítnutí, odchod vyzvaného, dvojitá/křížová výzva.
 - [ ] [V3] Víc souběžných partií: server spravuje N nezávislých her, směruje zprávy jen účastníkům, izoluje stavy. Škálování řezu z bodu Real-time transport na N partií.
-- [ ] [V3] PvP remíza a vzdání: nabídka remízy i vzdání míří DRUHÉMU ČLOVĚKU (ne "AI rozhodne"), přijme/odmítne; konec partie → nová hra / návrat do místnosti.
+- [x] [V3] PvP remíza a vzdání: nabídka remízy i vzdání míří DRUHÉMU ČLOVĚKU (ne "AI rozhodne"), přijme/odmítne; konec partie → nová hra / návrat do místnosti.
 - [ ] [V3] Orientace desky v PvP: každý hráč vidí desku ze své strany; zachovat dosavadní volbu barvy a otočení v dvouhráčovém kontextu (kdo je bílý/černý v konkrétní partii).
 - [ ] [V3] Reconnection: partie žije v paměti serveru; hráč po krátkém výpadku klienta naváže do rozehrané partie (session token / identifikace). Soupeři se zobrazí "soupeř odpojen / čekám".
 - [ ] [V3] Timeout nečinnosti / opuštění partie: nečinná nebo opuštěná partie se po timeoutu uvolní; soupeř dostane jasný výsledek (výhra opuštěním), partie neblokuje. Náhrada za chybějící šachové hodiny.

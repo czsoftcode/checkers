@@ -289,7 +289,12 @@ describe('createLobby – výzvy', () => {
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g1', color: 'white', opponentId: '2' });
     expect(h.onGameStart).toHaveBeenCalledTimes(1);
     // Druhý argument je herní most (GameLink) – tvar ověřují testy mostu níž.
-    expect(h.onGameStart.mock.calls[0]![0]).toEqual({ gameId: 'g1', color: 'white', opponentNick: 'Eva' });
+    expect(h.onGameStart.mock.calls[0]![0]).toEqual({
+      gameId: 'g1',
+      color: 'white',
+      opponentId: '2',
+      opponentNick: 'Eva',
+    });
     const link = h.onGameStart.mock.calls[0]![1];
     expect(typeof link.move).toBe('function');
     expect(typeof link.onError).toBe('function');
@@ -304,6 +309,113 @@ describe('createLobby – výzvy', () => {
     const ok = link.move(9, [13, 22]);
     expect(ok).toBe(true);
     expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'move', gameId: 'g7', from: 9, path: [13, 22] })]);
+  });
+
+  it('herní most: resign/offerDraw/acceptDraw/rejectDraw pošlou {type, gameId} po room WS (fáze 77)', () => {
+    const h = joinedLobby();
+    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    h.sockets[0]!.sent.length = 0; // zahoď challenge
+    const link = h.onGameStart.mock.calls[0]![1];
+    expect(link.resign()).toBe(true);
+    expect(link.offerDraw()).toBe(true);
+    expect(link.acceptDraw()).toBe(true);
+    expect(link.rejectDraw()).toBe(true);
+    expect(h.sockets[0]!.sent).toEqual([
+      JSON.stringify({ type: 'resign', gameId: 'g7' }),
+      JSON.stringify({ type: 'draw-offer', gameId: 'g7' }),
+      JSON.stringify({ type: 'draw-accept', gameId: 'g7' }),
+      JSON.stringify({ type: 'draw-reject', gameId: 'g7' }),
+    ]);
+  });
+
+  it('herní most: draw-offered/draw-rejected pro TUTO partii spustí registrované handlery (fáze 77)', () => {
+    const h = joinedLobby();
+    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    const link = h.onGameStart.mock.calls[0]![1];
+    let offered = 0;
+    let rejected = 0;
+    link.onDrawOffered(() => (offered += 1));
+    link.onDrawRejected(() => (rejected += 1));
+
+    h.sockets[0]!.message({ type: 'draw-offered', gameId: 'g7' });
+    h.sockets[0]!.message({ type: 'draw-rejected', gameId: 'g7' });
+    expect(offered).toBe(1);
+    expect(rejected).toBe(1);
+  });
+
+  it('herní most: signál remízy pro JINOU partii se ignoruje (filtr na gameId)', () => {
+    const h = joinedLobby();
+    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    const link = h.onGameStart.mock.calls[0]![1];
+    let offered = 0;
+    link.onDrawOffered(() => (offered += 1));
+    h.sockets[0]!.message({ type: 'draw-offered', gameId: 'jina-partie' });
+    expect(offered).toBe(0);
+  });
+
+  it('herní most: po odregistraci onDrawOffered už signál handler nespustí (fáze 77)', () => {
+    const h = joinedLobby();
+    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    const link = h.onGameStart.mock.calls[0]![1];
+    let offered = 0;
+    const unsub = link.onDrawOffered(() => (offered += 1));
+    unsub();
+    h.sockets[0]!.message({ type: 'draw-offered', gameId: 'g7' });
+    expect(offered).toBe(0);
+  });
+
+  it('herní most: leaveGame (Konec) pošle {type:leave-game, gameId} (fáze 77)', () => {
+    const h = joinedLobby();
+    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    h.sockets[0]!.sent.length = 0;
+    const link = h.onGameStart.mock.calls[0]![1];
+    expect(link.leaveGame()).toBe(true);
+    expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'leave-game', gameId: 'g7' })]);
+  });
+
+  it('herní most: offerRematch/acceptRematch/declineRematch pošlou {type, gameId} (fáze 77)', () => {
+    const h = joinedLobby();
+    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    h.sockets[0]!.sent.length = 0;
+    const link = h.onGameStart.mock.calls[0]![1];
+    expect(link.offerRematch()).toBe(true);
+    expect(link.acceptRematch()).toBe(true);
+    expect(link.declineRematch()).toBe(true);
+    expect(h.sockets[0]!.sent).toEqual([
+      JSON.stringify({ type: 'rematch-offer', gameId: 'g7' }),
+      JSON.stringify({ type: 'rematch-accept', gameId: 'g7' }),
+      JSON.stringify({ type: 'rematch-decline', gameId: 'g7' }),
+    ]);
+  });
+
+  it('herní most: rematch-offered/rematch-declined pro TUTO partii spustí handlery (fáze 77)', () => {
+    const h = joinedLobby();
+    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    const link = h.onGameStart.mock.calls[0]![1];
+    let offered = 0;
+    let declined = 0;
+    let closed = 0;
+    link.onRematchOffered(() => (offered += 1));
+    link.onRematchDeclined(() => (declined += 1));
+    link.onGameClosed(() => (closed += 1));
+    h.sockets[0]!.message({ type: 'rematch-offered', gameId: 'g7' });
+    h.sockets[0]!.message({ type: 'rematch-declined', gameId: 'g7' });
+    h.sockets[0]!.message({ type: 'game-closed', gameId: 'g7' });
+    expect(offered).toBe(1);
+    expect(declined).toBe(1);
+    expect(closed).toBe(1);
+    // Signál pro JINOU partii se ignoruje.
+    h.sockets[0]!.message({ type: 'rematch-offered', gameId: 'jina' });
+    h.sockets[0]!.message({ type: 'game-closed', gameId: 'jina' });
+    expect(offered).toBe(1);
+    expect(closed).toBe(1);
   });
 
   it('herní most: za běhu partie míří chyba z room WS do hry, ne do notice lobby', () => {

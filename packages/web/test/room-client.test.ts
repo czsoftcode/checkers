@@ -74,6 +74,11 @@ function harness(options: { connectTimeoutMs?: number } = {}) {
     outgoing: [] as (OutgoingChallenge | null)[],
     accepted: [] as ChallengeAcceptedInfo[],
     notice: [] as string[],
+    drawOffered: [] as string[],
+    drawRejected: [] as string[],
+    rematchOffered: [] as string[],
+    rematchDeclined: [] as string[],
+    gameClosed: [] as string[],
   };
   const client = createRoomClient(
     {
@@ -88,6 +93,11 @@ function harness(options: { connectTimeoutMs?: number } = {}) {
       onOutgoingChallenge: (p) => events.outgoing.push(p),
       onChallengeAccepted: (i) => events.accepted.push(i),
       onNotice: (m) => events.notice.push(m),
+      onDrawOffered: (g) => events.drawOffered.push(g),
+      onDrawRejected: (g) => events.drawRejected.push(g),
+      onRematchOffered: (g) => events.rematchOffered.push(g),
+      onRematchDeclined: (g) => events.rematchDeclined.push(g),
+      onGameClosed: (g) => events.gameClosed.push(g),
     },
     {
       url: 'ws://test/room/ws',
@@ -356,7 +366,12 @@ describe('createRoomClient – výzvy', () => {
     client.challenge('2'); // mám odchozí
     sock.message({ type: 'challenged', challenge: { id: 'c9', challengerId: '3', challengerNick: 'Petr' } });
     sock.message({ type: 'challenge-accepted', gameId: 'g1', color: 'black', opponentId: '2' });
-    expect(events.accepted.at(-1)).toEqual({ gameId: 'g1', color: 'black', opponentNick: 'Eva' });
+    expect(events.accepted.at(-1)).toEqual({
+      gameId: 'g1',
+      color: 'black',
+      opponentId: '2',
+      opponentNick: 'Eva',
+    });
     // odchod do hry → odchozí i příchozí vyčištěny
     expect(events.outgoing.at(-1)).toBeNull();
     expect(events.incoming.at(-1)).toEqual([]);
@@ -365,7 +380,12 @@ describe('createRoomClient – výzvy', () => {
   it('challenge-accepted s neznámým opponentId dá nick fallback „soupeř"', () => {
     const { sock, events } = joined();
     sock.message({ type: 'challenge-accepted', gameId: 'g1', color: 'white', opponentId: 'x' });
-    expect(events.accepted.at(-1)).toEqual({ gameId: 'g1', color: 'white', opponentNick: 'soupeř' });
+    expect(events.accepted.at(-1)).toEqual({
+      gameId: 'g1',
+      color: 'white',
+      opponentId: 'x',
+      opponentNick: 'soupeř',
+    });
   });
 
   it('challenge-accepted s vadným tvarem se zahodí (žádný přechod)', () => {
@@ -492,5 +512,100 @@ describe('createRoomClient – tah (move)', () => {
     const ok = client.move('g1', 9, [13]);
     expect(ok).toBe(false);
     expect(sock.sent).toEqual([]);
+  });
+});
+
+describe('createRoomClient – vzdání a remíza (fáze 77)', () => {
+  /** Připojený klient (Jan=já) – herní příkaz smí odejít jen po úspěšném joinu. */
+  function joined() {
+    const h = harness();
+    h.client.join('Jan');
+    h.sockets[0]!.open();
+    h.sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }] });
+    const sock = h.sockets[0]!;
+    sock.sent.length = 0; // zahoď join, ať asserty vidí jen herní příkazy
+    return { ...h, sock };
+  }
+
+  it('resign/offerDraw/acceptDraw/rejectDraw/leaveGame po joinu pošlou {type, gameId} a vrátí true', () => {
+    const { sock, client } = joined();
+    expect(client.resign('g1')).toBe(true);
+    expect(client.offerDraw('g1')).toBe(true);
+    expect(client.acceptDraw('g1')).toBe(true);
+    expect(client.rejectDraw('g1')).toBe(true);
+    expect(client.leaveGame('g1')).toBe(true);
+    expect(sock.sent).toEqual([
+      JSON.stringify({ type: 'resign', gameId: 'g1' }),
+      JSON.stringify({ type: 'draw-offer', gameId: 'g1' }),
+      JSON.stringify({ type: 'draw-accept', gameId: 'g1' }),
+      JSON.stringify({ type: 'draw-reject', gameId: 'g1' }),
+      JSON.stringify({ type: 'leave-game', gameId: 'g1' }),
+    ]);
+  });
+
+  it('offerRematch/acceptRematch/declineRematch pošlou {type, gameId} a vrátí true', () => {
+    const { sock, client } = joined();
+    expect(client.offerRematch('g1')).toBe(true);
+    expect(client.acceptRematch('g1')).toBe(true);
+    expect(client.declineRematch('g1')).toBe(true);
+    expect(sock.sent).toEqual([
+      JSON.stringify({ type: 'rematch-offer', gameId: 'g1' }),
+      JSON.stringify({ type: 'rematch-accept', gameId: 'g1' }),
+      JSON.stringify({ type: 'rematch-decline', gameId: 'g1' }),
+    ]);
+  });
+
+  it('příchozí rematch-offered/rematch-declined/game-closed → callbacky s gameId', () => {
+    const { sock, events } = joined();
+    sock.message({ type: 'rematch-offered', gameId: 'g1' });
+    sock.message({ type: 'rematch-declined', gameId: 'g1' });
+    sock.message({ type: 'game-closed', gameId: 'g1' });
+    expect(events.rematchOffered).toEqual(['g1']);
+    expect(events.rematchDeclined).toEqual(['g1']);
+    expect(events.gameClosed).toEqual(['g1']);
+  });
+
+  it('herní příkaz před vstupem do místnosti je no-op a vrátí false', () => {
+    const { sockets, client } = harness();
+    client.join('Jan');
+    sockets[0]!.open(); // otevřeno, ale roster nedorazil → nejsem „joined"
+    expect(client.resign('g1')).toBe(false);
+    expect(client.offerDraw('g1')).toBe(false);
+    expect(sockets[0]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Jan' })]);
+  });
+
+  it('herní příkaz po pádu spojení je no-op a vrátí false', () => {
+    const { sock, client } = joined();
+    sock.fireClose();
+    expect(client.resign('g1')).toBe(false);
+    expect(client.acceptDraw('g1')).toBe(false);
+    expect(sock.sent).toEqual([]);
+  });
+
+  it('herní příkaz po dispose je no-op a vrátí false', () => {
+    const { sock, client } = joined();
+    client.dispose();
+    expect(client.rejectDraw('g1')).toBe(false);
+    expect(sock.sent).toEqual([]);
+  });
+
+  it('příchozí draw-offered → onDrawOffered s gameId', () => {
+    const { sock, events } = joined();
+    sock.message({ type: 'draw-offered', gameId: 'g1' });
+    expect(events.drawOffered).toEqual(['g1']);
+  });
+
+  it('příchozí draw-rejected → onDrawRejected s gameId', () => {
+    const { sock, events } = joined();
+    sock.message({ type: 'draw-rejected', gameId: 'g1' });
+    expect(events.drawRejected).toEqual(['g1']);
+  });
+
+  it('draw-offered/draw-rejected bez gameId (vadný tvar) se tiše ignoruje', () => {
+    const { sock, events } = joined();
+    sock.message({ type: 'draw-offered' }); // chybí gameId
+    sock.message({ type: 'draw-rejected', gameId: 42 }); // špatný typ
+    expect(events.drawOffered).toEqual([]);
+    expect(events.drawRejected).toEqual([]);
   });
 });

@@ -136,6 +136,31 @@ interface EngineStoredGame extends StoredGameBase {
 interface PvpStoredGame extends StoredGameBase {
   mode: 'pvp';
   players: PvpPlayers;
+  /**
+   * Session id hráče, který PRÁVĚ TEĎ nabídl remízu a čeká na odpověď soupeře,
+   * nebo `null`, když žádná nabídka nevisí (fáze 77). Nabídka je stav MIMO
+   * pravidla (pozice se nemění), proto ho drží store, ne `GameState`. Zruší ho:
+   * přijetí (→ `draw`), odmítnutí (→ zpět na `null`), vzdání a KAŽDÝ tah (tah =
+   * implicitní odmítnutí nabídky, jak je v dámě zvykem). Soupeře o nabídce
+   * informuje app signálem po room WS – v DTO partie se nabídka NEVYSTAVUJE
+   * (reconnection do rozehrané nabídky = todo 42).
+   */
+  drawOfferBy: string | null;
+  /**
+   * Session id hráče, který po DOHRANÉ partii nabídl ODVETU a čeká na odpověď
+   * soupeře (fáze 77), nebo `null`. Analogie {@link drawOfferBy}, ale platí až po
+   * konci partie (dokud běží, odveta nedává smysl). Přijetí → server založí NOVOU
+   * partii s prohozenými barvami (viz app); odmítnutí / opuštění → zpět na `null`.
+   */
+  rematchOfferBy: string | null;
+  /**
+   * `true`, jakmile kdokoli z dvojice DOHRANOU partii opustil („Konec"/„Odveta",
+   * fáze 77) a server tím uvolnil oba z busy. Pojistka proti DVOJÍMU uvolnění: druhé
+   * `leave-game` na tutéž partii (opakovaný/podvržený) už busy neuvolní – jinak by
+   * mohlo uvolnit hráče, který mezitím začal NOVOU partii (→ dvojité spárování).
+   * Atomický check-and-set přes {@link GameStore.markPvpLeft} (Node jednovláknový).
+   */
+  left: boolean;
 }
 type StoredGame = EngineStoredGame | PvpStoredGame;
 
@@ -326,6 +351,9 @@ export class GameStore {
       archived: false,
       forcedResult: null,
       players: { black: challengerId, white: challengedId },
+      drawOfferBy: null,
+      rematchOfferBy: null,
+      left: false,
     };
     this.games.set(id, game);
     return this.toRecord(id, game);
@@ -351,6 +379,12 @@ export class GameStore {
     // do historie – do `moves` se tak nikdy nedostane tah, který se neaplikoval).
     game.state = advanceState(game.state, move);
     game.moves.push(move);
+    // Tah = implicitní odmítnutí visící nabídky remízy (fáze 77). Jen PvP partie
+    // nabídku vede; u engine partie pole není. Bez tohoto by po tahu zůstala
+    // stará nabídka „viset" a soupeř by ji mohl přijmout na už změněné pozici.
+    if (game.mode === 'pvp') {
+      game.drawOfferBy = null;
+    }
     return this.toRecord(id, game);
   }
 
@@ -409,6 +443,291 @@ export class GameStore {
     }
     game.forcedResult = 'draw';
     return this.toRecord(id, game);
+  }
+
+  /**
+   * Vzdání v PvP partii (fáze 77). Vzdá se hráč `sessionId` → vyhrává SOUPEŘ.
+   * Autorita: session musí být ÚČASTNÍK partie (`sessionId ∈ players`); barvu
+   * vzdávajícího si server dopočte z `players`, klientovi ji nevěří. Výsledek =
+   * barva soupeře: černý se vzdal → `white-wins`, bílý → `black-wins`. Provede se
+   * JEN když je partie podle efektivního výsledku ještě rozehraná. Vzdání ruší
+   * i případnou visící nabídku remízy (partie končí, nabídka ztrácí smysl).
+   * Node je jednovláknový a mezi kontrolou a zápisem není `await` → atomický
+   * check-and-set. Volání na engine partii je programová chyba volajícího (route
+   * ji sem nepustí) → hlasitý throw, ne tichá špatná větev.
+   *
+   * Vrací nový záznam při úspěchu; `'not-found'` (partie neexistuje),
+   * `'not-participant'` (session není hráč), `'already-over'` (už terminální).
+   */
+  resignPvp(
+    id: string,
+    sessionId: string,
+  ): PvpGameRecord | 'not-found' | 'not-participant' | 'already-over' {
+    const game = this.games.get(id);
+    if (game === undefined) {
+      return 'not-found';
+    }
+    if (game.mode !== 'pvp') {
+      throw new Error(`resignPvp: partie ${id} není PvP (mode=${game.mode})`);
+    }
+    const myColor = this.pvpColorOf(game, sessionId);
+    if (myColor === null) {
+      return 'not-participant';
+    }
+    if (effectiveResult(game) !== 'ongoing') {
+      return 'already-over';
+    }
+    game.forcedResult = myColor === 'black' ? 'white-wins' : 'black-wins';
+    game.drawOfferBy = null;
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Nabídka remízy v PvP partii (fáze 77). Hráč `sessionId` (musí být účastník)
+   * nabídne remízu – uloží se `drawOfferBy = sessionId`. STAV PRAVIDEL SE NEMĚNÍ,
+   * partie běží dál; soupeře o nabídce informuje app signálem po room WS. Provede
+   * se jen u rozehrané partie a jen když ŽÁDNÁ nabídka ještě nevisí (`'offer-exists'`
+   * jinak) – druhá souběžná nabídka je odmítnuta, ať stav nabídky zůstává
+   * jednoznačný (jedna visící nabídka, jeden nabízející). Pozn.: když už nabídku
+   * podal soupeř, tenhle hráč má místo nové nabídky rovnou PŘIJMOUT
+   * ({@link acceptDrawPvp}); dvě křížící se nabídky se vyřeší tak, že druhá dostane
+   * `'offer-exists'` a UI ji navede na přijetí té první.
+   *
+   * Vrací nový záznam při úspěchu; `'not-found'`, `'not-participant'`,
+   * `'already-over'`, nebo `'offer-exists'` (nabídka už visí).
+   */
+  offerDrawPvp(
+    id: string,
+    sessionId: string,
+  ): PvpGameRecord | 'not-found' | 'not-participant' | 'already-over' | 'offer-exists' {
+    const game = this.games.get(id);
+    if (game === undefined) {
+      return 'not-found';
+    }
+    if (game.mode !== 'pvp') {
+      throw new Error(`offerDrawPvp: partie ${id} není PvP (mode=${game.mode})`);
+    }
+    if (this.pvpColorOf(game, sessionId) === null) {
+      return 'not-participant';
+    }
+    if (effectiveResult(game) !== 'ongoing') {
+      return 'already-over';
+    }
+    if (game.drawOfferBy !== null) {
+      return 'offer-exists';
+    }
+    game.drawOfferBy = sessionId;
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Přijetí nabídky remízy v PvP partii (fáze 77). Přijímá hráč `sessionId` –
+   * musí být účastník, musí viset nabídka (`drawOfferBy !== null`) a NESMÍ ji být
+   * on sám (vlastní nabídku nelze přijmout → `'no-offer'`). Na úspěch nastaví
+   * `forcedResult = 'draw'`, nabídku zruší a vrátí terminální záznam (app rozešle
+   * oběma přes game hub). Jen u rozehrané partie; atomický check-and-set.
+   *
+   * Vrací nový záznam; `'not-found'`, `'not-participant'`, `'already-over'`,
+   * nebo `'no-offer'` (nic k přijetí – žádná nabídka, nebo je to nabídka vlastní).
+   */
+  acceptDrawPvp(
+    id: string,
+    sessionId: string,
+  ): PvpGameRecord | 'not-found' | 'not-participant' | 'already-over' | 'no-offer' {
+    const game = this.games.get(id);
+    if (game === undefined) {
+      return 'not-found';
+    }
+    if (game.mode !== 'pvp') {
+      throw new Error(`acceptDrawPvp: partie ${id} není PvP (mode=${game.mode})`);
+    }
+    if (this.pvpColorOf(game, sessionId) === null) {
+      return 'not-participant';
+    }
+    if (effectiveResult(game) !== 'ongoing') {
+      return 'already-over';
+    }
+    if (game.drawOfferBy === null || game.drawOfferBy === sessionId) {
+      return 'no-offer';
+    }
+    game.forcedResult = 'draw';
+    game.drawOfferBy = null;
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Odmítnutí nabídky remízy v PvP partii (fáze 77). Odmítá hráč `sessionId` –
+   * stejné podmínky jako {@link acceptDrawPvp} (účastník, visící nabídka NE od
+   * něj). STAV PRAVIDEL SE NEMĚNÍ, partie běží dál; nabídka se jen zruší
+   * (`drawOfferBy = null`) a app dá nabízejícímu vědět po room WS. Vrací nový
+   * záznam; `'not-found'`, `'not-participant'`, `'already-over'`, nebo `'no-offer'`.
+   */
+  rejectDrawPvp(
+    id: string,
+    sessionId: string,
+  ): PvpGameRecord | 'not-found' | 'not-participant' | 'already-over' | 'no-offer' {
+    const game = this.games.get(id);
+    if (game === undefined) {
+      return 'not-found';
+    }
+    if (game.mode !== 'pvp') {
+      throw new Error(`rejectDrawPvp: partie ${id} není PvP (mode=${game.mode})`);
+    }
+    if (this.pvpColorOf(game, sessionId) === null) {
+      return 'not-participant';
+    }
+    if (effectiveResult(game) !== 'ongoing') {
+      return 'already-over';
+    }
+    if (game.drawOfferBy === null || game.drawOfferBy === sessionId) {
+      return 'no-offer';
+    }
+    game.drawOfferBy = null;
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Označí DOHRANOU PvP partii za opuštěnou (fáze 77). Vrací `true`, JEN když se
+   * příznak právě teď překlopil z false na true; `false` znamená „už opuštěná",
+   * „není PvP" nebo „partie zmizela". Atomický check-and-set (Node jednovláknový,
+   * mezi čtením a zápisem není `await`) – zaručuje, že uvolnění busy proběhne
+   * nejvýš JEDNOU na partii. Autoritu „partie je terminální" a „volající je
+   * účastník" hlídá app PŘED tímto voláním; tady jde jen o pojistku proti dvojímu
+   * uvolnění (viz {@link PvpStoredGame.left}).
+   */
+  markPvpLeft(id: string): boolean {
+    const game = this.games.get(id);
+    if (game?.mode !== 'pvp') {
+      return false; // chybí, nebo to není PvP partie
+    }
+    if (game.left) {
+      return false;
+    }
+    game.left = true;
+    return true;
+  }
+
+  /**
+   * Nabídka ODVETY po dohrané partii (fáze 77). Účastník `sessionId` nabídne odvetu –
+   * uloží se `rematchOfferBy`. Zrcadlí {@link offerDrawPvp}, ale gate je OPAČNÝ: partie
+   * musí být TERMINÁLNÍ (za běhu odveta nedává smysl → `'not-over'`). Druhá nabídka
+   * naráz → `'offer-exists'`. Stav partie se nemění; soupeře uvědomí app signálem.
+   *
+   * Vrací záznam; `'not-found'`, `'not-participant'`, `'not-over'`, `'offer-exists'`.
+   */
+  offerRematchPvp(
+    id: string,
+    sessionId: string,
+  ): PvpGameRecord | 'not-found' | 'not-participant' | 'not-over' | 'gone' | 'offer-exists' {
+    const game = this.games.get(id);
+    if (game === undefined) {
+      return 'not-found';
+    }
+    if (game.mode !== 'pvp') {
+      throw new Error(`offerRematchPvp: partie ${id} není PvP (mode=${game.mode})`);
+    }
+    if (this.pvpColorOf(game, sessionId) === null) {
+      return 'not-participant';
+    }
+    if (effectiveResult(game) === 'ongoing') {
+      return 'not-over';
+    }
+    if (game.left) {
+      return 'gone';
+    }
+    if (game.rematchOfferBy !== null) {
+      return 'offer-exists';
+    }
+    game.rematchOfferBy = sessionId;
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Přijetí nabídky odvety (fáze 77). Přijímá účastník `sessionId` – musí viset
+   * nabídka NE od něj (`'no-offer'` jinak). Na úspěch nabídku zruší a vrátí záznam
+   * DOHRANÉ partie (app z jeho `players` založí novou partii s prohozenými barvami).
+   * Založení nové hry ani prohození barev NEdělá store – to je app (potřebuje o tom
+   * uvědomit oba hráče). Gate: TERMINÁLNÍ partie.
+   *
+   * Vrací záznam; `'not-found'`, `'not-participant'`, `'not-over'`, `'no-offer'`.
+   */
+  acceptRematchPvp(
+    id: string,
+    sessionId: string,
+  ): PvpGameRecord | 'not-found' | 'not-participant' | 'not-over' | 'gone' | 'no-offer' {
+    const game = this.games.get(id);
+    if (game === undefined) {
+      return 'not-found';
+    }
+    if (game.mode !== 'pvp') {
+      throw new Error(`acceptRematchPvp: partie ${id} není PvP (mode=${game.mode})`);
+    }
+    if (this.pvpColorOf(game, sessionId) === null) {
+      return 'not-participant';
+    }
+    if (effectiveResult(game) === 'ongoing') {
+      return 'not-over';
+    }
+    // Jakmile kdokoli partii OPUSTIL (leave-game → busy uvolněno), odveta na ní je
+    // MRTVÁ. Bez tohohle gate by přijetí založilo novou partii, ve které NIKDO není
+    // busy (busy se drží z původního spárování, ale to už bylo uvolněno) → dvojité
+    // spárování. Autorita: server nesmí věřit klientovi, že modal ještě „žije".
+    if (game.left) {
+      return 'gone';
+    }
+    if (game.rematchOfferBy === null || game.rematchOfferBy === sessionId) {
+      return 'no-offer';
+    }
+    game.rematchOfferBy = null;
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Odmítnutí nabídky odvety (fáze 77). Odmítá účastník `sessionId` (stejné podmínky
+   * jako {@link acceptRematchPvp}); nabídka se jen zruší, partie zůstává dohraná. App
+   * dá nabízejícímu vědět signálem. Vrací záznam; `'not-found'`, `'not-participant'`,
+   * `'not-over'`, `'no-offer'`.
+   */
+  declineRematchPvp(
+    id: string,
+    sessionId: string,
+  ): PvpGameRecord | 'not-found' | 'not-participant' | 'not-over' | 'gone' | 'no-offer' {
+    const game = this.games.get(id);
+    if (game === undefined) {
+      return 'not-found';
+    }
+    if (game.mode !== 'pvp') {
+      throw new Error(`declineRematchPvp: partie ${id} není PvP (mode=${game.mode})`);
+    }
+    if (this.pvpColorOf(game, sessionId) === null) {
+      return 'not-participant';
+    }
+    if (effectiveResult(game) === 'ongoing') {
+      return 'not-over';
+    }
+    if (game.left) {
+      return 'gone';
+    }
+    if (game.rematchOfferBy === null || game.rematchOfferBy === sessionId) {
+      return 'no-offer';
+    }
+    game.rematchOfferBy = null;
+    return this.toRecord(id, game);
+  }
+
+  /**
+   * Barva účastníka PvP partie podle session id, nebo `null` když session není
+   * ani jeden z hráčů. Server si barvu VŽDY dopočítává z `players` (ne z klienta) –
+   * jediné místo pravdy o tom, „kdo je v téhle partii kdo".
+   */
+  private pvpColorOf(game: PvpStoredGame, sessionId: string): Color | null {
+    if (game.players.black === sessionId) {
+      return 'black';
+    }
+    if (game.players.white === sessionId) {
+      return 'white';
+    }
+    return null;
   }
 
   /**

@@ -142,7 +142,7 @@ describe('ChallengeRegistry – odchod hráče', () => {
     expect(reg.pendingCount()).toBe(1); // C→D zůstalo
   });
 
-  it('odchod uvolní busy stav (jediné místo, kde se v tomto řezu ruší)', () => {
+  it('odchod uvolní busy stav', () => {
     const reg = new ChallengeRegistry();
     const c = reg.create('A', 'B');
     if (c.status !== 'ok') throw new Error('setup');
@@ -157,5 +157,41 @@ describe('ChallengeRegistry – odchod hráče', () => {
   it('odchod neznámého hráče je no-op (idempotence na close)', () => {
     const reg = new ChallengeRegistry();
     expect(reg.removePlayer('nikdo')).toEqual([]);
+  });
+});
+
+describe('ChallengeRegistry – uvolnění po dohrané partii (release, fáze 77)', () => {
+  it('release uvolní busy hráče (může ho pak vyzvat někdo jiný)', () => {
+    const reg = new ChallengeRegistry();
+    const c = reg.create('A', 'B');
+    if (c.status !== 'ok') throw new Error('setup');
+    reg.accept('B', c.challenge.id); // oba busy
+    reg.release('A');
+    reg.release('B');
+    expect(reg.isBusy('A')).toBe(false);
+    expect(reg.isBusy('B')).toBe(false);
+    // Uvolněné jde zas vyzvat.
+    expect(reg.create('C', 'A').status).toBe('ok');
+  });
+
+  it('release NEruší čekající výzvy hráče (odveta má přežít)', () => {
+    const reg = new ChallengeRegistry();
+    const c = reg.create('A', 'B');
+    if (c.status !== 'ok') throw new Error('setup');
+    reg.accept('B', c.challenge.id); // A,B busy
+    reg.release('A');
+    reg.release('B');
+    // A po uvolnění pošle odvetu B (čerstvá výzva).
+    const rematch = reg.create('A', 'B');
+    expect(rematch.status).toBe('ok');
+    // release B znovu (druhý hráč taky klikne Konec/Odveta) NESMÍ tu výzvu shodit.
+    reg.release('B');
+    expect(reg.pendingCount()).toBe(1);
+  });
+
+  it('release neznámého / neuvolněného hráče je no-op (idempotence)', () => {
+    const reg = new ChallengeRegistry();
+    expect(() => reg.release('nikdo')).not.toThrow();
+    expect(reg.isBusy('nikdo')).toBe(false);
   });
 });

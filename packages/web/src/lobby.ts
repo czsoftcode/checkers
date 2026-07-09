@@ -60,6 +60,48 @@ export interface GameLink {
    * Dokud je registrovaný, chyby z room WS míří sem, ne do (odpojeného) pohledu místnosti.
    */
   onError(handler: (message: string) => void): () => void;
+  /** Vzdá partii (fáze 77). Vrací `true`, když příkaz odešel po room WS. */
+  resign(): boolean;
+  /** Nabídne remízu soupeři (fáze 77). Vrací, zda příkaz odešel. */
+  offerDraw(): boolean;
+  /** Přijme soupeřovu nabídku remízy (fáze 77). Vrací, zda příkaz odešel. */
+  acceptDraw(): boolean;
+  /** Odmítne soupeřovu nabídku remízy (fáze 77). Vrací, zda příkaz odešel. */
+  rejectDraw(): boolean;
+  /**
+   * Zaregistruje handler „soupeř nabídl remízu" na dobu běhu partie (fáze 77). Vrací
+   * odregistraci (herní obrazovka ji zavolá v `dispose`). Lobby signál filtruje na
+   * gameId této partie, takže zbloudilý signál z jiné/staré partie sem nedorazí.
+   */
+  onDrawOffered(handler: () => void): () => void;
+  /** Zaregistruje handler „soupeř odmítl mou nabídku remízy" (fáze 77). Vrací odregistraci. */
+  onDrawRejected(handler: () => void): () => void;
+  /**
+   * Opustí DOHRANOU partii („Konec") – uvolní oba hráče z busy na serveru, ať můžou
+   * hrát s někým jiným (fáze 77). Vrací, zda příkaz odešel. Následně herní obrazovka
+   * přejde do místnosti přes `onBackToRoom`.
+   */
+  leaveGame(): boolean;
+  /**
+   * Nabídne soupeři ODVETU po dohrané partii (fáze 77). Nabízející ZŮSTÁVÁ na herní
+   * obrazovce a čeká; soupeř dostane dotaz. Po přijetí přejdou OBA rovnou do nové
+   * partie (přes `onGameStart`, prohozené barvy) – bez návratu do místnosti. Vrací,
+   * zda příkaz odešel.
+   */
+  offerRematch(): boolean;
+  /** Přijme soupeřovu nabídku odvety (fáze 77). Vrací, zda odešlo (start nové hry přijde přes onGameStart). */
+  acceptRematch(): boolean;
+  /** Odmítne soupeřovu nabídku odvety (fáze 77). Vrací, zda odešlo. */
+  declineRematch(): boolean;
+  /** Zaregistruje handler „soupeř nabídl odvetu" (fáze 77). Vrací odregistraci. Filtrováno na gameId partie. */
+  onRematchOffered(handler: () => void): () => void;
+  /** Zaregistruje handler „soupeř mou odvetu odmítl" (fáze 77). Vrací odregistraci. */
+  onRematchDeclined(handler: () => void): () => void;
+  /**
+   * Zaregistruje handler „soupeř dal Konec – partie skončila pro oba" (fáze 77). Herní
+   * obrazovka se na něj přesune do místnosti. Vrací odregistraci. Filtrováno na gameId.
+   */
+  onGameClosed(handler: () => void): () => void;
 }
 
 export interface LobbyOptions {
@@ -205,6 +247,15 @@ export function createLobby(options: LobbyOptions): Lobby {
   // Když je nastavený, chyby z room WS jdou do hry, ne do (odpojeného) pohledu místnosti.
   // `null` mimo partii → chyby řeší běžná cesta lobby (notice / formulář nicku).
   let activeGameErrorHandler: ((message: string) => void) | null = null;
+  // Signály nabídky remízy za běhu PvP partie (fáze 77). Lobby je routuje herní
+  // obrazovce, ale JEN pro partii, kterou hráč právě hraje (`activeGameId`) – zbloudilý
+  // signál ze staré partie tak nespustí UI nové. `null` mimo partii.
+  let activeGameId: string | null = null;
+  let activeDrawOfferedHandler: (() => void) | null = null;
+  let activeDrawRejectedHandler: (() => void) | null = null;
+  let activeRematchOfferedHandler: (() => void) | null = null;
+  let activeRematchDeclinedHandler: (() => void) | null = null;
+  let activeGameClosedHandler: (() => void) | null = null;
 
   const room_client = createRoomClient(
     {
@@ -223,8 +274,10 @@ export function createLobby(options: LobbyOptions): Lobby {
         renderOutgoing(pending);
       },
       onChallengeAccepted: (info) => {
-        // Most zpět k živému room WS pro herní obrazovku. `move` uzavírá `gameId`
-        // této partie; `onError` směruje chyby tahu do hry, dokud je registrovaný.
+        // Most zpět k živému room WS pro herní obrazovku. `move`/`resign`/remízové
+        // příkazy uzavírají `gameId` této partie; `onError` směruje chyby (odmítnutý
+        // tah i odmítnutý příkaz remízy) do hry, dokud je registrovaný.
+        activeGameId = info.gameId;
         const link: GameLink = {
           move: (from, path) => room_client.move(info.gameId, from, path),
           onError: (handler) => {
@@ -237,8 +290,83 @@ export function createLobby(options: LobbyOptions): Lobby {
               }
             };
           },
+          resign: () => room_client.resign(info.gameId),
+          offerDraw: () => room_client.offerDraw(info.gameId),
+          acceptDraw: () => room_client.acceptDraw(info.gameId),
+          rejectDraw: () => room_client.rejectDraw(info.gameId),
+          onDrawOffered: (handler) => {
+            activeDrawOfferedHandler = handler;
+            return () => {
+              if (activeDrawOfferedHandler === handler) {
+                activeDrawOfferedHandler = null;
+              }
+            };
+          },
+          onDrawRejected: (handler) => {
+            activeDrawRejectedHandler = handler;
+            return () => {
+              if (activeDrawRejectedHandler === handler) {
+                activeDrawRejectedHandler = null;
+              }
+            };
+          },
+          leaveGame: () => room_client.leaveGame(info.gameId),
+          offerRematch: () => room_client.offerRematch(info.gameId),
+          acceptRematch: () => room_client.acceptRematch(info.gameId),
+          declineRematch: () => room_client.declineRematch(info.gameId),
+          onRematchOffered: (handler) => {
+            activeRematchOfferedHandler = handler;
+            return () => {
+              if (activeRematchOfferedHandler === handler) {
+                activeRematchOfferedHandler = null;
+              }
+            };
+          },
+          onRematchDeclined: (handler) => {
+            activeRematchDeclinedHandler = handler;
+            return () => {
+              if (activeRematchDeclinedHandler === handler) {
+                activeRematchDeclinedHandler = null;
+              }
+            };
+          },
+          onGameClosed: (handler) => {
+            activeGameClosedHandler = handler;
+            return () => {
+              if (activeGameClosedHandler === handler) {
+                activeGameClosedHandler = null;
+              }
+            };
+          },
         };
         options.onGameStart(info, link);
+      },
+      onDrawOffered: (gameId) => {
+        // Soupeř nabídl remízu. Routuj JEN když jde o partii, kterou právě hraju
+        // (jinak zbloudilý/opožděný signál ze staré partie) a jen když hra poslouchá.
+        if (gameId === activeGameId) {
+          activeDrawOfferedHandler?.();
+        }
+      },
+      onDrawRejected: (gameId) => {
+        if (gameId === activeGameId) {
+          activeDrawRejectedHandler?.();
+        }
+      },
+      onRematchOffered: (gameId) => {
+        if (gameId === activeGameId) {
+          activeRematchOfferedHandler?.();
+        }
+      },
+      onRematchDeclined: (gameId) => {
+        if (gameId === activeGameId) {
+          activeRematchDeclinedHandler?.();
+        }
+      },
+      onGameClosed: (gameId) => {
+        if (gameId === activeGameId) {
+          activeGameClosedHandler?.();
+        }
       },
       onNotice: (text) => {
         showNotice(text);
@@ -251,8 +379,8 @@ export function createLobby(options: LobbyOptions): Lobby {
         nickInput.select();
       },
       onError: (text) => {
-        // Za běhu PvP partie je chyba z room WS odmítnutý tah (jediná odchozí operace
-        // ve hře je `move` – roster ani výzvy se z herní obrazovky neposílají). Doruč ji
+        // Za běhu PvP partie je chyba z room WS odmítnutá herní operace – tah, vzdání
+        // nebo příkaz remízy (roster ani výzvy se z herní obrazovky neposílají). Doruč ji
         // herní obrazovce; pohled místnosti je mezitím odpojený z DOM, notice by nikdo neviděl.
         if (activeGameErrorHandler !== null) {
           activeGameErrorHandler(text);

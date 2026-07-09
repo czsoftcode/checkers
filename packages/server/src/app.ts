@@ -25,7 +25,7 @@ import { LEVELS, STRENGTH_BY_LEVEL, levelUsesBook } from './levels.js';
 import { OPENING_BOOK, lookupBookMove } from './opening-book.js';
 import type { OpeningBook } from './opening-book.js';
 import { GameStore, effectiveResult, opposite } from './store.js';
-import type { GameRecord } from './store.js';
+import type { GameRecord, PvpGameRecord } from './store.js';
 import type { EngineMover } from './engine-client.js';
 
 /** Tělo POST /games/:id/moves: výchozí pole + cesta dopadů (čísla 1–32). */
@@ -514,6 +514,355 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         broadcast(applied.record);
       };
 
+      // Konec/nabídka remízy v PvP (fáze 77). Stejná autorita jako u tahu: identita
+      // hráče je `me.id` (přiřazená serverem při joinu), NE z klientovy zprávy. Guard
+      // proti engine partii je NUTNÝ PŘED voláním store: PvP metody store na engine
+      // partii hlasitě throwují (obranná assertion proti programové chybě), a ten throw
+      // by tudy shodil handler zprávy – proto sem PvP metodu nepustíme jinak než s
+      // ověřenou PvP partií. Vrací záznam k dalšímu zpracování, nebo `null` (chybu už
+      // poslal příchozímu a socket žije dál).
+      const requirePvpGame = (gameId: unknown): PvpGameRecord | null => {
+        if (typeof gameId !== 'string') {
+          send({ type: 'error', message: 'Chybí id partie.' });
+          return null;
+        }
+        const record = store.get(gameId);
+        if (record === undefined) {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return null;
+        }
+        if (record.mode !== 'pvp') {
+          send({ type: 'error', message: 'Tato partie se v místnosti nehraje.' });
+          return null;
+        }
+        return record;
+      };
+
+      /**
+       * Session id SOUPEŘE v PvP partii vůči `me`. `me` je zaručeně účastník (store
+       * ho tak ověřil, než vrátil záznam), takže je vždy jednou z barev a soupeř je
+       * ta druhá. Slouží k adresné signalizaci nabídky/odmítnutí po room WS.
+       */
+      const opponentIn = (record: PvpGameRecord, myId: string): string =>
+        record.players.black === myId ? record.players.white : record.players.black;
+
+      // Vzdání PvP partie: vyhrává SOUPEŘ (barvu dopočte store z `players`). Na úspěch
+      // se terminální stav rozešle OBĚMA přes game hub (`game-state`), stejnou cestou
+      // jako tah – klient tím pozná konec partie. Signalizace po room WS tu není třeba.
+      const handleResign = (gameId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        const game = requirePvpGame(gameId);
+        if (game === null) {
+          return;
+        }
+        const outcome = store.resignPvp(game.id, me.id);
+        if (outcome === 'not-found') {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return;
+        }
+        if (outcome === 'not-participant') {
+          send({ type: 'error', message: 'Nejsi hráčem této partie.' });
+          return;
+        }
+        if (outcome === 'already-over') {
+          send({ type: 'error', message: 'Partie je u konce.' });
+          return;
+        }
+        broadcast(outcome);
+      };
+
+      // Nabídka remízy: stav partie se NEMĚNÍ (pozice běží dál), jen se soupeři pošle
+      // signál `draw-offered` po room WS. Nabízející čeká na odpověď (accept → konec,
+      // reject → nic). Dvojí nabídka / cizí partie → `error` jen příchozímu.
+      const handleDrawOffer = (gameId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        const game = requirePvpGame(gameId);
+        if (game === null) {
+          return;
+        }
+        const outcome = store.offerDrawPvp(game.id, me.id);
+        if (outcome === 'not-found') {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return;
+        }
+        if (outcome === 'not-participant') {
+          send({ type: 'error', message: 'Nejsi hráčem této partie.' });
+          return;
+        }
+        if (outcome === 'already-over') {
+          send({ type: 'error', message: 'Partie je u konce.' });
+          return;
+        }
+        if (outcome === 'offer-exists') {
+          send({ type: 'error', message: 'Remíza už je nabídnutá.' });
+          return;
+        }
+        presence.sendTo(
+          opponentIn(outcome, me.id),
+          JSON.stringify({ type: 'draw-offered', gameId: outcome.id }),
+        );
+      };
+
+      // Přijetí nabídky remízy: partie končí `draw`. Terminální stav se rozešle OBĚMA
+      // přes game hub (stejně jako vzdání). Bez visící nabídky / vlastní nabídka →
+      // `no-offer` → `error` příchozímu.
+      const handleDrawAccept = (gameId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        const game = requirePvpGame(gameId);
+        if (game === null) {
+          return;
+        }
+        const outcome = store.acceptDrawPvp(game.id, me.id);
+        if (outcome === 'not-found') {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return;
+        }
+        if (outcome === 'not-participant') {
+          send({ type: 'error', message: 'Nejsi hráčem této partie.' });
+          return;
+        }
+        if (outcome === 'already-over') {
+          send({ type: 'error', message: 'Partie je u konce.' });
+          return;
+        }
+        if (outcome === 'no-offer') {
+          send({ type: 'error', message: 'Není co přijmout: remíza není nabídnutá.' });
+          return;
+        }
+        broadcast(outcome);
+      };
+
+      // Odmítnutí nabídky remízy: stav partie se NEMĚNÍ, nabídka se zruší a
+      // NABÍZEJÍCÍMU se pošle `draw-rejected` po room WS. Nabízející = soupeř (odmítnout
+      // smí jen protistrana, cizí/vlastní nabídku store nepustí přes `no-offer`).
+      const handleDrawReject = (gameId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        const game = requirePvpGame(gameId);
+        if (game === null) {
+          return;
+        }
+        const outcome = store.rejectDrawPvp(game.id, me.id);
+        if (outcome === 'not-found') {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return;
+        }
+        if (outcome === 'not-participant') {
+          send({ type: 'error', message: 'Nejsi hráčem této partie.' });
+          return;
+        }
+        if (outcome === 'already-over') {
+          send({ type: 'error', message: 'Partie je u konce.' });
+          return;
+        }
+        if (outcome === 'no-offer') {
+          send({ type: 'error', message: 'Není co odmítnout: remíza není nabídnutá.' });
+          return;
+        }
+        presence.sendTo(
+          opponentIn(outcome, me.id),
+          JSON.stringify({ type: 'draw-rejected', gameId: outcome.id }),
+        );
+      };
+
+      // Opuštění DOHRANÉ partie (fáze 77, „Konec"/„Odveta" ve výsledkovém modalu):
+      // uvolní OBA hráče z busy stavu, ať můžou hrát s někým jiným (nebo spolu odvetu).
+      // Autorita: smí jen ÚČASTNÍK a jen když je partie TERMINÁLNÍ – uvolnit busy u
+      // běžící partie by umožnilo dvojité spárování (třetí hráč vyzve někoho, kdo
+      // pořád hraje). Bez efektu na stav partie ani na čekající výzvy (odveta = čerstvá
+      // výzva, kterou nechceme shodit). Klient si sám přejde do místnosti; sem se nic
+      // neposílá (kromě chyby při zádrhelu).
+      const handleLeaveGame = (gameId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        const game = requirePvpGame(gameId);
+        if (game === null) {
+          return;
+        }
+        const myColor: Color | null =
+          game.players.black === me.id
+            ? 'black'
+            : game.players.white === me.id
+              ? 'white'
+              : null;
+        if (myColor === null) {
+          send({ type: 'error', message: 'Nejsi hráčem této partie.' });
+          return;
+        }
+        if (effectiveResult(game) === 'ongoing') {
+          send({ type: 'error', message: 'Partie ještě běží.' });
+          return;
+        }
+        // Uvolni OBA – ale nejvýš JEDNOU na partii (atomický markPvpLeft). Druhé
+        // `leave-game` na tutéž partii (druhý hráč klikne taky, nebo podvržený
+        // duplikát) je no-op: bez téhle pojistky by mohlo uvolnit hráče, který se
+        // mezitím spároval do NOVÉ partie → dvojité spárování.
+        if (store.markPvpLeft(game.id)) {
+          challenges.release(game.players.black);
+          challenges.release(game.players.white);
+          // „Konec" ukončuje partii pro OBA: dej soupeři vědět, ať se taky přesune do
+          // místnosti (jinak visí na výsledku / dotazu odvety a neví, co se děje).
+          presence.sendTo(
+            opponentIn(game, me.id),
+            JSON.stringify({ type: 'game-closed', gameId: game.id }),
+          );
+        }
+      };
+
+      // Nabídka ODVETY po dohrané partii (fáze 77). Analogie nabídky remízy, ale platí
+      // až po konci. Stav se nemění; soupeři se pošle `rematch-offered` po room WS,
+      // nabízející čeká. Přijetí založí novou partii (viz níže), odmítnutí přijde jako
+      // `rematch-declined`.
+      const handleRematchOffer = (gameId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        const game = requirePvpGame(gameId);
+        if (game === null) {
+          return;
+        }
+        const outcome = store.offerRematchPvp(game.id, me.id);
+        if (outcome === 'not-found') {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return;
+        }
+        if (outcome === 'not-participant') {
+          send({ type: 'error', message: 'Nejsi hráčem této partie.' });
+          return;
+        }
+        if (outcome === 'not-over') {
+          send({ type: 'error', message: 'Partie ještě běží.' });
+          return;
+        }
+        if (outcome === 'gone') {
+          send({ type: 'error', message: 'Odveta už není možná (partie skončila).' });
+          return;
+        }
+        if (outcome === 'offer-exists') {
+          send({ type: 'error', message: 'Odveta už je nabídnutá.' });
+          return;
+        }
+        presence.sendTo(
+          opponentIn(outcome, me.id),
+          JSON.stringify({ type: 'rematch-offered', gameId: outcome.id }),
+        );
+      };
+
+      // Přijetí odvety (fáze 77). Server je autorita nad NOVOU partií: založí ji s
+      // PROHOZENÝMI barvami (kdo byl černý, je teď bílý), STAROU zapečetí proti
+      // `leave-game` (markPvpLeft – ať nikdo neuvolní busy hráčů, co jsou už v nové
+      // partii), a OBA přesune do nové hry stávající zprávou `challenge-accepted`.
+      // Busy oba drží dál z původního spárování → nová partie je nemusí znovu zamykat.
+      const handleRematchAccept = (gameId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        const game = requirePvpGame(gameId);
+        if (game === null) {
+          return;
+        }
+        const outcome = store.acceptRematchPvp(game.id, me.id);
+        if (outcome === 'not-found') {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return;
+        }
+        if (outcome === 'not-participant') {
+          send({ type: 'error', message: 'Nejsi hráčem této partie.' });
+          return;
+        }
+        if (outcome === 'not-over') {
+          send({ type: 'error', message: 'Partie ještě běží.' });
+          return;
+        }
+        if (outcome === 'gone') {
+          send({ type: 'error', message: 'Odveta už není možná (soupeř odešel).' });
+          return;
+        }
+        if (outcome === 'no-offer') {
+          send({ type: 'error', message: 'Není co přijmout: odveta není nabídnutá.' });
+          return;
+        }
+        // Prohoď barvy: nová černá = původní bílý, nová bílá = původní černý.
+        const oldBlack = outcome.players.black;
+        const oldWhite = outcome.players.white;
+        const fresh = store.createPvp(oldWhite, oldBlack);
+        // Zapečeť starou partii: budoucí leave-game(stará) už neuvolní busy (oba jsou
+        // teď v `fresh`). Bez toho by podvržený leave-game na starou partii uvolnil
+        // hráče z běžící nové → dvojité spárování.
+        store.markPvpLeft(outcome.id);
+        presence.sendTo(
+          oldWhite,
+          JSON.stringify({
+            type: 'challenge-accepted',
+            gameId: fresh.id,
+            color: 'black',
+            opponentId: oldBlack,
+          }),
+        );
+        presence.sendTo(
+          oldBlack,
+          JSON.stringify({
+            type: 'challenge-accepted',
+            gameId: fresh.id,
+            color: 'white',
+            opponentId: oldWhite,
+          }),
+        );
+      };
+
+      // Odmítnutí odvety (fáze 77). Nabídka se zruší, nabízejícímu se pošle
+      // `rematch-declined` po room WS (vrátí se na výsledek s hláškou).
+      const handleRematchDecline = (gameId: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        const game = requirePvpGame(gameId);
+        if (game === null) {
+          return;
+        }
+        const outcome = store.declineRematchPvp(game.id, me.id);
+        if (outcome === 'not-found') {
+          send({ type: 'error', message: 'Partie neexistuje.' });
+          return;
+        }
+        if (outcome === 'not-participant') {
+          send({ type: 'error', message: 'Nejsi hráčem této partie.' });
+          return;
+        }
+        if (outcome === 'not-over') {
+          send({ type: 'error', message: 'Partie ještě běží.' });
+          return;
+        }
+        if (outcome === 'gone') {
+          send({ type: 'error', message: 'Odveta už není možná (partie skončila).' });
+          return;
+        }
+        if (outcome === 'no-offer') {
+          send({ type: 'error', message: 'Není co odmítnout: odveta není nabídnutá.' });
+          return;
+        }
+        presence.sendTo(
+          opponentIn(outcome, me.id),
+          JSON.stringify({ type: 'rematch-declined', gameId: outcome.id }),
+        );
+      };
+
       socket.on('message', (raw: Buffer) => {
         let parsed: unknown;
         try {
@@ -554,6 +903,30 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
             return;
           case 'move':
             handleMove(msg.gameId, msg.from, msg.path);
+            return;
+          case 'resign':
+            handleResign(msg.gameId);
+            return;
+          case 'draw-offer':
+            handleDrawOffer(msg.gameId);
+            return;
+          case 'draw-accept':
+            handleDrawAccept(msg.gameId);
+            return;
+          case 'draw-reject':
+            handleDrawReject(msg.gameId);
+            return;
+          case 'leave-game':
+            handleLeaveGame(msg.gameId);
+            return;
+          case 'rematch-offer':
+            handleRematchOffer(msg.gameId);
+            return;
+          case 'rematch-accept':
+            handleRematchAccept(msg.gameId);
+            return;
+          case 'rematch-decline':
+            handleRematchDecline(msg.gameId);
             return;
           default:
             send({ type: 'error', message: 'Neznámý typ zprávy.' });

@@ -1,0 +1,48 @@
+{
+  "id": 77,
+  "title": "PvP: vzdání a remíza",
+  "goal": "V PvP partii jde vzdát i nabídnout remízu druhému člověku: server jako jediná autorita ověří účastníka, u remízy vede stav nabídky (nabídnout/přijmout/odmítnout) a po přijetí či vzdání ukončí partii správným výsledkem, který přes WebSocket doručí oběma hráčům; po konci partie se lze vrátit do místnosti nebo začít novou hru.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Store: PvP vzdání a stav nabídky remízy",
+      "status": "done",
+      "detail": "GameStore dostane PvP-vědomé metody resignPvp, offerDrawPvp, acceptDrawPvp, rejectDrawPvp a stav drawOfferBy (session|null) na PvP záznamu. Každá ověří účastníka (session ∈ players) a že partie běží; vrací diskriminovaný výsledek (not-found / not-participant / already-over / ok). Tah i vzdání zruší čekající nabídku. Unit testy pokrývají i neúčastníka, dvojí nabídku a partii u konce."
+    },
+    {
+      "title": "Room WS: zprávy resign / draw-offer / accept / reject",
+      "status": "done",
+      "detail": "Nové typy zpráv na room WS napojené na store; identita hráče výhradně z me.id (ne z payloadu). Vzdání a přijatá remíza rozešlou nový stav přes game hub oběma; nabídka a odmítnutí signalizují jen soupeři přes room WS (draw-offered / draw-rejected). Integrační testy včetně unhappy path (cizí partie, opakovaná nabídka, partie u konce)."
+    },
+    {
+      "title": "Room-client: odeslání a příjem remízových zpráv",
+      "status": "done",
+      "detail": "room-client.ts dostane odesílací metody (resign, offerDraw, acceptDraw, rejectDraw) a obsluhu příchozích draw-offered / draw-rejected, typované jako stávající výzvové zprávy. Test na (de)serializaci a routing zpráv."
+    },
+    {
+      "title": "PvP UI: tlačítka vzdát/remíza + příchozí nabídka",
+      "status": "done",
+      "detail": "Herní obrazovka PvP dostane tlačítka Vzdát se a Nabídnout remízu (aktivní jen když partie běží) a při příchozí nabídce ukáže soupeři výzvu přijmout/odmítnout. Blokace ve špatném stavu ověřena testem."
+    },
+    {
+      "title": "Konec PvP partie: výsledek + návrat/nová hra",
+      "status": "done",
+      "detail": "Po terminálním stavu (výhra/prohra/remíza) obrazovka ukáže výsledek a nabídne návrat do místnosti, případně novou výzvu; využije stávající vzhled výsledku, pokud jde."
+    },
+    {
+      "title": "Ověření: build + typecheck + lint + testy",
+      "status": "done",
+      "detail": "Celý balík zelený."
+    }
+  ],
+  "startedAt": "2026-07-09T05:08:28.036Z",
+  "resolvedVerify": [
+    "Ruční e2e dvou hráčů: vzdání a remíza v reálném prohlížeči",
+    "Vzhled modalů vzdání/remízy (i na mobilu)"
+  ],
+  "completedAt": "2026-07-09T08:10:54.628Z",
+  "autoCommit": {
+    "preSha": "6b1b0943ebd5f26d618326e91b36ff2d7ce82826",
+    "subject": "Phase 77: PvP: vzdání a remíza"
+  }
+}

@@ -67,6 +67,8 @@ export interface OutgoingChallenge {
 export interface ChallengeAcceptedInfo {
   readonly gameId: string;
   readonly color: 'black' | 'white';
+  /** Session id soupeře – potřebné pro odvetu (nová výzva témuž hráči po konci partie, fáze 77). */
+  readonly opponentId: string;
   readonly opponentNick: string;
 }
 
@@ -111,6 +113,32 @@ export interface RoomClientHandlers {
    * (ten v UI vrací do formuláře) – jen informace, kterou UI krátce ukáže.
    */
   readonly onNotice?: (message: string) => void;
+  /**
+   * Soupeř v partii `gameId` nabídl remízu (fáze 77). UI hry na to ukáže výzvu
+   * přijmout/odmítnout. Nese `gameId`, ať se dá ověřit, že jde o partii, kterou
+   * hráč právě hraje (jiné se ignorují – ochrana proti zbloudilému signálu).
+   */
+  readonly onDrawOffered?: (gameId: string) => void;
+  /**
+   * Soupeř odmítl MOU nabídku remízy v partii `gameId` (fáze 77). UI hry to krátce
+   * oznámí; partie běží dál.
+   */
+  readonly onDrawRejected?: (gameId: string) => void;
+  /**
+   * Soupeř po dohrané partii `gameId` nabídl ODVETU (fáze 77). UI hry ukáže dotaz
+   * přijmout/odmítnout. Přijetí spustí novou partii přes `onChallengeAccepted`.
+   */
+  readonly onRematchOffered?: (gameId: string) => void;
+  /**
+   * Soupeř MOU nabídku odvety v partii `gameId` odmítl (fáze 77). UI hry to oznámí a
+   * vrátí nabízejícího na výsledek.
+   */
+  readonly onRematchDeclined?: (gameId: string) => void;
+  /**
+   * Soupeř dal „Konec" – partie `gameId` skončila pro oba (fáze 77). UI hry se má taky
+   * přesunout do místnosti.
+   */
+  readonly onGameClosed?: (gameId: string) => void;
 }
 
 export interface RoomClientOptions {
@@ -165,6 +193,31 @@ export interface RoomClient {
    * že tah neodešel, a nezamkne se do čekání na stav, který nikdy nedorazí.
    */
   move(gameId: string, from: number, path: readonly number[]): boolean;
+  /**
+   * Vzdá partii `gameId` po ROOM WS (`{type:'resign', gameId}`) – vyhrává soupeř
+   * (fáze 77). Stejná cesta jako {@link move}: server bere identitu z tohoto
+   * spojení. Vrací `true`, když příkaz odešel; `false` mimo otevřené spojení /
+   * před joinem / po dispose. Server je autorita a neúčastníka/skončenou partii odmítne.
+   */
+  resign(gameId: string): boolean;
+  /** Nabídne remízu soupeři v partii `gameId` (`{type:'draw-offer', gameId}`). Vrací, zda odešlo. */
+  offerDraw(gameId: string): boolean;
+  /** Přijme soupeřovu nabídku remízy v partii `gameId` (`{type:'draw-accept', gameId}`). Vrací, zda odešlo. */
+  acceptDraw(gameId: string): boolean;
+  /** Odmítne soupeřovu nabídku remízy v partii `gameId` (`{type:'draw-reject', gameId}`). Vrací, zda odešlo. */
+  rejectDraw(gameId: string): boolean;
+  /**
+   * Opustí DOHRANOU partii `gameId` (`{type:'leave-game', gameId}`) – uvolní oba hráče
+   * z busy stavu na serveru, ať můžou hrát dál (fáze 77, „Konec"/„Odveta"). Vrací, zda
+   * odešlo. Server uvolní jen terminální partii (autorita).
+   */
+  leaveGame(gameId: string): boolean;
+  /** Nabídne soupeři ODVETU po dohrané partii `gameId` (`{type:'rematch-offer', gameId}`). Vrací, zda odešlo. */
+  offerRematch(gameId: string): boolean;
+  /** Přijme soupeřovu nabídku odvety (`{type:'rematch-accept', gameId}`). Vrací, zda odešlo. */
+  acceptRematch(gameId: string): boolean;
+  /** Odmítne soupeřovu nabídku odvety (`{type:'rematch-decline', gameId}`). Vrací, zda odešlo. */
+  declineRematch(gameId: string): boolean;
   dispose(): void;
 }
 
@@ -325,6 +378,35 @@ export function createRoomClient(
     }, connectTimeoutMs);
   }
 
+  /**
+   * Pošle jednoduchý herní příkaz `{type, gameId}` po room WS (vzdání/remíza,
+   * fáze 77). Stejný guard jako {@link RoomClient.move}: jen zapsaný hráč otevřeným
+   * spojením. Vrací `true`, když příkaz odešel, `false` když se zahodil (zavřený
+   * socket / před joinem / po dispose) – volající (UI hry) tím pozná, že se nic
+   * nestalo. Server je stejně autorita a chybný příkaz odmítne (`error`).
+   */
+  function sendGameCommand(
+    type:
+      | 'resign'
+      | 'draw-offer'
+      | 'draw-accept'
+      | 'draw-reject'
+      | 'leave-game'
+      | 'rematch-offer'
+      | 'rematch-accept'
+      | 'rematch-decline',
+    gameId: string,
+  ): boolean {
+    if (disposed || !joined) {
+      return false;
+    }
+    if (socket?.readyState !== WS_OPEN) {
+      return false;
+    }
+    socket.send(JSON.stringify({ type, gameId }));
+    return true;
+  }
+
   /** Pád spojení (error/close/timeout) → jednou `onDisconnected`. */
   function handleDown(): void {
     clearConnectTimer(); // spojení je pryč – čekání na odpověď už nedává smysl
@@ -440,7 +522,12 @@ export function createRoomClient(
         outgoing = null;
         handlers.onIncomingChallenges?.([]);
         handlers.onOutgoingChallenge?.(null);
-        handlers.onChallengeAccepted?.({ gameId: msg.gameId, color: msg.color, opponentNick });
+        handlers.onChallengeAccepted?.({
+          gameId: msg.gameId,
+          color: msg.color,
+          opponentId: msg.opponentId,
+          opponentNick,
+        });
         return;
       }
       case 'challenge-rejected': {
@@ -474,6 +561,43 @@ export function createRoomClient(
           handlers.onOutgoingChallenge?.(null);
           handlers.onNotice?.(`${nick} odešel z místnosti, výzva zanikla.`);
         }
+        return;
+      }
+      case 'draw-offered': {
+        // Soupeř nabídl remízu (fáze 77). Nese `gameId` – ověř tvar PŘED předáním.
+        // Kterou partii se signál týká, rozhoduje UI hry (jinou než rozehranou ignoruje).
+        if (typeof msg.gameId !== 'string') {
+          return;
+        }
+        handlers.onDrawOffered?.(msg.gameId);
+        return;
+      }
+      case 'draw-rejected': {
+        if (typeof msg.gameId !== 'string') {
+          return;
+        }
+        handlers.onDrawRejected?.(msg.gameId);
+        return;
+      }
+      case 'rematch-offered': {
+        if (typeof msg.gameId !== 'string') {
+          return;
+        }
+        handlers.onRematchOffered?.(msg.gameId);
+        return;
+      }
+      case 'rematch-declined': {
+        if (typeof msg.gameId !== 'string') {
+          return;
+        }
+        handlers.onRematchDeclined?.(msg.gameId);
+        return;
+      }
+      case 'game-closed': {
+        if (typeof msg.gameId !== 'string') {
+          return;
+        }
+        handlers.onGameClosed?.(msg.gameId);
         return;
       }
       default:
@@ -554,6 +678,30 @@ export function createRoomClient(
       }
       socket.send(JSON.stringify({ type: 'move', gameId, from, path: [...path] }));
       return true;
+    },
+    resign(gameId: string): boolean {
+      return sendGameCommand('resign', gameId);
+    },
+    offerDraw(gameId: string): boolean {
+      return sendGameCommand('draw-offer', gameId);
+    },
+    acceptDraw(gameId: string): boolean {
+      return sendGameCommand('draw-accept', gameId);
+    },
+    rejectDraw(gameId: string): boolean {
+      return sendGameCommand('draw-reject', gameId);
+    },
+    leaveGame(gameId: string): boolean {
+      return sendGameCommand('leave-game', gameId);
+    },
+    offerRematch(gameId: string): boolean {
+      return sendGameCommand('rematch-offer', gameId);
+    },
+    acceptRematch(gameId: string): boolean {
+      return sendGameCommand('rematch-accept', gameId);
+    },
+    declineRematch(gameId: string): boolean {
+      return sendGameCommand('rematch-decline', gameId);
     },
     dispose(): void {
       disposed = true;

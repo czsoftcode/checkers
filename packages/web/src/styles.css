@@ -871,3 +871,47 @@ body {
   font-size: 0.95rem;
   color: #e88;
 }
+
+/* Neutrální poznámka k remíze ve stavovém pruhu (nabídl jsi / soupeř odmítl).
+   Ne chyba (jiná barva než .pvp-error), jen informace. */
+.pvp-notice {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #cdd;
+}
+
+/* Dotazy vzdání i příchozí nabídky remízy jdou do MODALU (fáze 77) – znovupoužívá
+   `.modal-overlay`/`.modal-dialog` (viz výše, sdíleno s výsledkovým modalem u AI).
+   Řádek akčních tlačítek pod zprávou. Tlačítka berou vzhled z `.modal-dialog button`. */
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+/* „Ano, vzdát se" varovně červené (jako u AI `.btn-confirm-yes`), ať se neproklikne. */
+.modal-dialog .btn-resign-yes {
+  background: #7a2b2b;
+  border-color: #a33;
+}
+
+/* „Přijmout remízu" zeleně odlišené (kladná akce). */
+.modal-dialog .btn-draw-accept {
+  background: #2b6a3a;
+  border-color: #3a8;
+}
+
+/* „Odveta" (nová partie se stejným soupeřem) modře zvýrazněná = primární kladná akce. */
+.modal-dialog .btn-rematch {
+  background: #2b4d7a;
+  border-color: #3a7;
+}
+
+/* Poznámka uvnitř modalu (např. „Soupeř odvetu odmítl.") – nad tlačítky, ztlumená. */
+.modal-notice {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #cdd;
+}

@@ -43,6 +43,11 @@ export type {
   ChallengeAcceptedMessage,
   ChallengeRejectedMessage,
   ChallengeCancelledMessage,
+  DrawOfferedMessage,
+  DrawRejectedMessage,
+  RematchOfferedMessage,
+  RematchDeclinedMessage,
+  GameClosedMessage,
 } from './presence.js';
 export { ERROR_CODES, sendError } from './errors.js';
 export type { ErrorCode, ErrorEnvelope } from './errors.js';

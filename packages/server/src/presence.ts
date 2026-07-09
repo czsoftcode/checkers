@@ -120,6 +120,50 @@ export interface ChallengeCancelledMessage {
   readonly type: 'challenge-cancelled';
   readonly challengeId: string;
 }
+
+/**
+ * Signály nabídky remízy v PvP partii (fáze 77) – tečou po TÉMŽE room WS jako
+ * presence a výzvy (oba hráči místnost drží po celou partii). Samotný STAV
+ * partie (přijatá remíza, vzdání) jde jinou cestou – přes game hub `/games/:id/ws`
+ * jako `game-state`; sem patří JEN signalizace nabídky, která stav pravidel nemění.
+ *  - `draw-offered`  – JEN soupeři nabízejícího: „soupeř nabízí remízu" (+ `gameId`),
+ *  - `draw-rejected` – JEN nabízejícímu: „soupeř tvou nabídku odmítl" (+ `gameId`).
+ * Přijetí nabídky se sem NEPOSÍLÁ – projeví se terminálním `game-state` (draw) oběma.
+ */
+export interface DrawOfferedMessage {
+  readonly type: 'draw-offered';
+  readonly gameId: string;
+}
+export interface DrawRejectedMessage {
+  readonly type: 'draw-rejected';
+  readonly gameId: string;
+}
+
+/**
+ * Signály ODVETY po dohrané partii (fáze 77) – po room WS, analogicky k nabídce
+ * remízy. Samotné ZAČÁTEK nové partie po přijetí odvety se sem NEPOSÍLÁ – jde
+ * stávající cestou `challenge-accepted` (obě strany rovnou přejdou do nové hry).
+ *  - `rematch-offered`  – JEN soupeři nabízejícího: „soupeř chce odvetu" (+ `gameId`),
+ *  - `rematch-declined` – JEN nabízejícímu: „soupeř odvetu odmítl / partii ukončil".
+ */
+export interface RematchOfferedMessage {
+  readonly type: 'rematch-offered';
+  readonly gameId: string;
+}
+export interface RematchDeclinedMessage {
+  readonly type: 'rematch-declined';
+  readonly gameId: string;
+}
+
+/**
+ * Partie `gameId` je pro OBA u konce – druhý hráč dal „Konec" (fáze 77). Příjemce se
+ * má taky přesunout do místnosti, ať nezůstane viset na výsledku a neví, co se děje.
+ * Posílá se soupeři odcházejícího hráče při `leave-game`.
+ */
+export interface GameClosedMessage {
+  readonly type: 'game-closed';
+  readonly gameId: string;
+}
 export type RoomServerMessage =
   | RosterMessage
   | JoinedMessage
@@ -129,7 +173,12 @@ export type RoomServerMessage =
   | ChallengedMessage
   | ChallengeAcceptedMessage
   | ChallengeRejectedMessage
-  | ChallengeCancelledMessage;
+  | ChallengeCancelledMessage
+  | DrawOfferedMessage
+  | DrawRejectedMessage
+  | RematchOfferedMessage
+  | RematchDeclinedMessage
+  | GameClosedMessage;
 
 /** readyState otevřeného WebSocketu. `WebSocket.OPEN === 1` dle WHATWG i ws. */
 const WS_OPEN = 1;

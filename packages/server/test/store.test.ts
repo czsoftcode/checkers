@@ -225,12 +225,237 @@ describe('GameStore – PvP partie (createPvp, fáze 68)', () => {
     expect(a.id).not.toBe(b.id);
   });
 
-  it('resign na PvP partii hlasitě throwuje (route ji odmítne dřív, todo 40)', () => {
+  it('resign/acceptDraw (engine cesta) na PvP partii hlasitě throwuje', () => {
     const store = new GameStore();
     const { id } = store.createPvp('A', 'B');
-    // Assertion v store: PvP vzdání není v tomto řezu; nesmí tiše projít jako
-    // engine cesta. Zub: kdyby guard zmizel, opposite(undefined) by dal nesmysl.
+    // Engine cesty vzdání/remízy nesmí tiše obsloužit PvP partii; PvP má vlastní
+    // metody (resignPvp/…). Zub: kdyby guard zmizel, opposite(undefined) by dal nesmysl.
     expect(() => store.resign(id)).toThrow(/PvP/);
     expect(() => store.acceptDraw(id)).toThrow(/PvP/);
+  });
+});
+
+describe('GameStore – PvP vzdání (resignPvp, fáze 77)', () => {
+  it('neexistující partie → not-found', () => {
+    const store = new GameStore();
+    expect(store.resignPvp('neni', 'A')).toBe('not-found');
+  });
+
+  it('session mimo hráče → not-participant (stav se nemění)', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    expect(store.resignPvp(id, 'cizi')).toBe('not-participant');
+    const rec = store.get(id);
+    expect(rec && effectiveResult(rec)).toBe('ongoing');
+  });
+
+  it('vzdá se černý (vyzyvatel) → vyhrává bílý', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    const rec = store.resignPvp(id, 'A');
+    if (rec === 'not-found' || rec === 'not-participant' || rec === 'already-over') {
+      throw new Error(`čekal jsem záznam, dostal ${rec}`);
+    }
+    expect(rec.forcedResult).toBe('white-wins');
+    expect(effectiveResult(rec)).toBe('white-wins');
+  });
+
+  it('vzdá se bílý (vyzvaný) → vyhrává černý (barva se bere z players, ne natvrdo)', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    const rec = store.resignPvp(id, 'B');
+    if (typeof rec === 'string') {
+      throw new Error(`čekal jsem záznam, dostal ${rec}`);
+    }
+    expect(rec.forcedResult).toBe('black-wins');
+  });
+
+  it('vzdát už skončenou partii nejde → already-over', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    store.resignPvp(id, 'A');
+    expect(store.resignPvp(id, 'B')).toBe('already-over');
+  });
+
+  it('resignPvp na engine partii hlasitě throwuje', () => {
+    const store = new GameStore();
+    const { id } = store.create();
+    expect(() => store.resignPvp(id, 'A')).toThrow(/není PvP/);
+  });
+});
+
+describe('GameStore – PvP nabídka remízy (offer/accept/reject, fáze 77)', () => {
+  it('offerDrawPvp: neexistující/cizí/skončená → not-found/not-participant/already-over', () => {
+    const store = new GameStore();
+    expect(store.offerDrawPvp('neni', 'A')).toBe('not-found');
+    const { id } = store.createPvp('A', 'B');
+    expect(store.offerDrawPvp(id, 'cizi')).toBe('not-participant');
+    store.resignPvp(id, 'A');
+    expect(store.offerDrawPvp(id, 'B')).toBe('already-over');
+  });
+
+  it('nabídka nemění stav partie (běží dál)', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    const rec = store.offerDrawPvp(id, 'A');
+    if (typeof rec === 'string') {
+      throw new Error(`čekal jsem záznam, dostal ${rec}`);
+    }
+    expect(rec.forcedResult).toBeNull();
+    expect(effectiveResult(rec)).toBe('ongoing');
+  });
+
+  it('dvojí nabídka (i od druhého hráče) → offer-exists', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    expect(typeof store.offerDrawPvp(id, 'A')).not.toBe('string');
+    expect(store.offerDrawPvp(id, 'A')).toBe('offer-exists');
+    expect(store.offerDrawPvp(id, 'B')).toBe('offer-exists');
+  });
+
+  it('soupeř přijme nabídku → draw; nabídka zmizí', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    store.offerDrawPvp(id, 'A');
+    const rec = store.acceptDrawPvp(id, 'B');
+    if (typeof rec === 'string') {
+      throw new Error(`čekal jsem záznam, dostal ${rec}`);
+    }
+    expect(effectiveResult(rec)).toBe('draw');
+    // Druhé přijetí už není co (partie skončila).
+    expect(store.acceptDrawPvp(id, 'B')).toBe('already-over');
+  });
+
+  it('vlastní nabídku nelze přijmout ani odmítnout → no-offer', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    store.offerDrawPvp(id, 'A');
+    expect(store.acceptDrawPvp(id, 'A')).toBe('no-offer');
+    expect(store.rejectDrawPvp(id, 'A')).toBe('no-offer');
+  });
+
+  it('přijmout/odmítnout bez visící nabídky → no-offer', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    expect(store.acceptDrawPvp(id, 'B')).toBe('no-offer');
+    expect(store.rejectDrawPvp(id, 'B')).toBe('no-offer');
+  });
+
+  it('soupeř odmítne nabídku → partie běží, nabídka zmizí (nelze pak přijmout)', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    store.offerDrawPvp(id, 'A');
+    const rec = store.rejectDrawPvp(id, 'B');
+    if (typeof rec === 'string') {
+      throw new Error(`čekal jsem záznam, dostal ${rec}`);
+    }
+    expect(effectiveResult(rec)).toBe('ongoing');
+    expect(store.acceptDrawPvp(id, 'B')).toBe('no-offer');
+    // Po odmítnutí lze nabídnout znovu.
+    expect(typeof store.offerDrawPvp(id, 'A')).not.toBe('string');
+  });
+
+  it('tah zruší visící nabídku (implicitní odmítnutí)', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    store.offerDrawPvp(id, 'A');
+    playFirstLegal(store, id); // černý (A) táhne → nabídka padá
+    expect(store.acceptDrawPvp(id, 'B')).toBe('no-offer');
+  });
+
+  it('vzdání zruší visící nabídku', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    store.offerDrawPvp(id, 'A');
+    store.resignPvp(id, 'A'); // A se vzdá → white-wins, nabídka padá spolu s koncem
+    // Partie skončila → accept vrací already-over (ne draw).
+    expect(store.acceptDrawPvp(id, 'B')).toBe('already-over');
+  });
+
+  it('accept/reject/offer na engine partii hlasitě throwují', () => {
+    const store = new GameStore();
+    const { id } = store.create();
+    expect(() => store.offerDrawPvp(id, 'A')).toThrow(/není PvP/);
+    expect(() => store.acceptDrawPvp(id, 'A')).toThrow(/není PvP/);
+    expect(() => store.rejectDrawPvp(id, 'A')).toThrow(/není PvP/);
+  });
+});
+
+describe('GameStore – opuštění dohrané partie (markPvpLeft, fáze 77)', () => {
+  it('markPvpLeft poprvé vrátí true, podruhé false (uvolnění nejvýš jednou)', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    expect(store.markPvpLeft(id)).toBe(true);
+    expect(store.markPvpLeft(id)).toBe(false);
+  });
+
+  it('markPvpLeft na neexistující/engine partii vrátí false (bez throwu)', () => {
+    const store = new GameStore();
+    expect(store.markPvpLeft('neni')).toBe(false);
+    const { id } = store.create(); // engine partie
+    expect(store.markPvpLeft(id)).toBe(false);
+  });
+});
+
+describe('GameStore – nabídka odvety (rematch, fáze 77)', () => {
+  /** Dovede PvP partii do terminálního stavu (A se vzdá → vyhraje B). */
+  function endedPvp(): { store: GameStore; id: string } {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    store.resignPvp(id, 'A'); // A se vzdá → terminální
+    return { store, id };
+  }
+
+  it('offerRematchPvp na BĚŽÍCÍ partii → not-over (odveta až po konci)', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    expect(store.offerRematchPvp(id, 'A')).toBe('not-over');
+  });
+
+  it('nabídka po konci projde; druhá naráz → offer-exists; neúčastník → not-participant', () => {
+    const { store, id } = endedPvp();
+    expect(typeof store.offerRematchPvp(id, 'A')).not.toBe('string');
+    expect(store.offerRematchPvp(id, 'A')).toBe('offer-exists');
+    expect(store.offerRematchPvp('neni', 'A')).toBe('not-found');
+    const fresh = endedPvp();
+    expect(fresh.store.offerRematchPvp(fresh.id, 'cizi')).toBe('not-participant');
+  });
+
+  it('soupeř přijme odvetu → záznam; vlastní / chybějící nabídku nelze přijmout → no-offer', () => {
+    const { store, id } = endedPvp();
+    store.offerRematchPvp(id, 'A');
+    expect(store.acceptRematchPvp(id, 'A')).toBe('no-offer'); // vlastní nabídka
+    const rec = store.acceptRematchPvp(id, 'B');
+    if (typeof rec === 'string') {
+      throw new Error(`čekal jsem záznam, dostal ${rec}`);
+    }
+    expect(rec.players).toEqual({ black: 'A', white: 'B' }); // vrací STAROU partii (app z ní odvodí novou)
+    // Po přijetí nabídka zmizela.
+    expect(store.acceptRematchPvp(id, 'B')).toBe('no-offer');
+  });
+
+  it('odmítnutí zruší nabídku (pak nelze přijmout)', () => {
+    const { store, id } = endedPvp();
+    store.offerRematchPvp(id, 'A');
+    expect(typeof store.declineRematchPvp(id, 'B')).not.toBe('string');
+    expect(store.acceptRematchPvp(id, 'B')).toBe('no-offer');
+  });
+
+  it('rematch metody na engine partii hlasitě throwují', () => {
+    const store = new GameStore();
+    const { id } = store.create();
+    expect(() => store.offerRematchPvp(id, 'A')).toThrow(/není PvP/);
+    expect(() => store.acceptRematchPvp(id, 'A')).toThrow(/není PvP/);
+    expect(() => store.declineRematchPvp(id, 'A')).toThrow(/není PvP/);
+  });
+
+  it('po opuštění partie (markPvpLeft) je odveta MRTVÁ → offer/accept/decline vrací gone', () => {
+    const { store, id } = endedPvp();
+    store.offerRematchPvp(id, 'A'); // visící nabídka
+    store.markPvpLeft(id); // někdo dal Konec
+    // I s visící nabídkou už nejde nic: partie je opuštěná (jinak dvojité spárování).
+    expect(store.acceptRematchPvp(id, 'B')).toBe('gone');
+    expect(store.declineRematchPvp(id, 'B')).toBe('gone');
+    expect(store.offerRematchPvp(id, 'B')).toBe('gone');
   });
 });
