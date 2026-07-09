@@ -7,6 +7,15 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.66.0] - 2026-07-09
+
+### Added
+
+- **Herní místnost umí anglicky.** Vstupní obrazovka (přezdívka, seznam přítomných,
+  výzvy, hlášky připojení) se zobrazí česky, nebo anglicky – podle jazyka nastaveného
+  v prohlížeči. Když prohlížeč hlásí jiný jazyk než češtinu, použije se angličtina.
+  Zatím je přeložená jen tato úvodní obrazovka; zbytek hry přijde v dalších krocích.
+
 ## [0.65.0] - 2026-07-09
 
 ### Fixed

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { setLocale } from '../src/i18n.js';
 import { createLobby } from '../src/lobby.js';
 import type { GameLink } from '../src/lobby.js';
 import type { ChallengeAcceptedInfo, RoomWebSocket } from '../src/room-client.js';
@@ -107,6 +108,10 @@ function submit(form: HTMLFormElement): void {
 
 beforeEach(() => {
   localStorage.clear();
+  // Tyto testy ověřují CHOVÁNÍ místnosti a tvrdí na české texty. Jazyk je modulový
+  // jedináček a jsdom hlásí `en-US`, takže bez připnutí by `t()` vracelo angličtinu
+  // a asserty by spadly. Připni cs; jazykovou detekci ověřuje lobby-i18n.test.ts.
+  setLocale('cs');
 });
 afterEach(() => {
   for (const l of activeLobbies) {

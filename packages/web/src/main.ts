@@ -16,6 +16,7 @@
  */
 
 import { APP_TITLE } from './index.js';
+import { initLocale } from './i18n.js';
 import { createAppShell } from './app-shell.js';
 import { createLobby } from './lobby.js';
 import { createGameScreen } from './game-screen.js';
@@ -26,6 +27,12 @@ import './analytics.js';
 import './styles.css';
 
 document.title = APP_TITLE;
+
+// Jazyk UI podle prohlížeče (cs/en, fallback en). Nastavíme ho JEŠTĚ PŘED prvním
+// vykreslením obrazovky, ať `t()` v lobby čte správný slovník, a přepíšeme jím
+// statické `lang="cs"` z index.html – `<html lang>` má hlásit reálný jazyk stránky
+// (přístupnost, čtečky). `initLocale()` vrací detekovaný jazyk = hodnotu atributu.
+document.documentElement.lang = initLocale();
 
 const rootEl = document.querySelector('#app');
 if (!(rootEl instanceof HTMLElement)) {

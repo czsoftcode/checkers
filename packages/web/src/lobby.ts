@@ -14,8 +14,15 @@
  * validace vrací do `entry` s hláškou – socket server drží, stačí poslat znovu.
  *
  * Žádné inline styly ani skripty (CSP) – vzhled je ve `styles.css`.
+ *
+ * Lokalizace (fáze 81): řetězce, které skládá KLIENT, jdou přes `t()` (cs/en dle
+ * prohlížeče). Hlášky, které server posílá jako hotový text (`onNotice`, `onError`),
+ * se NElokalizují – klient je nemá z čeho přeložit a server je autorita; zůstávají
+ * v jazyce serveru (dnes česky). Náhradní přezdívka z `onNickTaken` je taky serverové
+ * DATO – lokalizuje se jen věta, do které ji klient vsadí (`lobby.nickTaken`).
  */
 
+import { t } from './i18n.js';
 import { createRoomClient } from './room-client.js';
 import type {
   ChallengeAcceptedInfo,
@@ -178,7 +185,7 @@ export function createLobby(options: LobbyOptions): Lobby {
 
   const heading = document.createElement('h1');
   heading.className = 'lobby-title';
-  heading.textContent = 'Herní místnost';
+  heading.textContent = t('lobby.title');
 
   // Formulář přezdívky (`entry`/`connecting`). Submit = vstup do místnosti.
   const form = document.createElement('form');
@@ -186,14 +193,14 @@ export function createLobby(options: LobbyOptions): Lobby {
   const nickInput = document.createElement('input');
   nickInput.type = 'text';
   nickInput.className = 'lobby-nick';
-  nickInput.setAttribute('aria-label', 'Přezdívka');
-  nickInput.placeholder = 'Tvoje přezdívka';
+  nickInput.setAttribute('aria-label', t('lobby.nickAria'));
+  nickInput.placeholder = t('lobby.nickPlaceholder');
   nickInput.maxLength = NICK_MAX_LENGTH;
   nickInput.value = loadSavedNick();
   const joinBtn = document.createElement('button');
   joinBtn.type = 'submit';
   joinBtn.className = 'lobby-join-btn';
-  joinBtn.textContent = 'Vstoupit do místnosti';
+  joinBtn.textContent = t('lobby.joinBtn');
   form.append(nickInput, joinBtn);
 
   // Hláška: stav připojování, obsazená přezdívka (návrh), chyba validace ze serveru.
@@ -218,7 +225,7 @@ export function createLobby(options: LobbyOptions): Lobby {
 
   const roomHeading = document.createElement('h2');
   roomHeading.className = 'lobby-room-title';
-  roomHeading.textContent = 'Přítomní hráči';
+  roomHeading.textContent = t('lobby.rosterTitle');
   const rosterList = document.createElement('ul');
   rosterList.className = 'lobby-roster';
   room.append(outgoing, notice, incomingList, roomHeading, rosterList);
@@ -230,14 +237,14 @@ export function createLobby(options: LobbyOptions): Lobby {
   const reconnectBtn = document.createElement('button');
   reconnectBtn.type = 'button';
   reconnectBtn.className = 'lobby-reconnect-btn';
-  reconnectBtn.textContent = 'Připojit znovu';
+  reconnectBtn.textContent = t('lobby.reconnectBtn');
   disconnected.append(disconnectedMsg, reconnectBtn);
 
   // Sólo cesta (proti počítači) – nezávislá na místnosti, bez přezdívky.
   const soloBtn = document.createElement('button');
   soloBtn.type = 'button';
   soloBtn.className = 'lobby-solo-btn';
-  soloBtn.textContent = 'Hrát proti počítači';
+  soloBtn.textContent = t('lobby.soloBtn');
 
   card.append(heading, form, message, room, disconnected, soloBtn);
   element.append(card);
@@ -387,7 +394,9 @@ export function createLobby(options: LobbyOptions): Lobby {
       onNickTaken: (suggestion) => {
         setView('entry');
         nickInput.value = suggestion;
-        setMessage(`Přezdívka je obsazená. Zkus třeba „${suggestion}".`);
+        // Náhradní přezdívku (`suggestion`) posílá server jako DATA; klient jen
+        // skládá okolní hlášku – ta se lokalizuje, `suggestion` se dosadí doslova.
+        setMessage(t('lobby.nickTaken', { suggestion }));
         nickInput.focus();
         nickInput.select();
       },
@@ -413,8 +422,8 @@ export function createLobby(options: LobbyOptions): Lobby {
       },
       onDisconnected: () => {
         disconnectedMsg.textContent = joinedOnce
-          ? 'Spojení s místností se přerušilo.'
-          : 'K místnosti se nepodařilo připojit (server neodpovídá).';
+          ? t('lobby.disconnectedAfter')
+          : t('lobby.disconnectedBefore');
         setView('disconnected');
       },
     },
@@ -441,7 +450,7 @@ export function createLobby(options: LobbyOptions): Lobby {
     nickInput.disabled = connecting;
     joinBtn.disabled = connecting;
     if (connecting) {
-      setMessage('Připojuji do místnosti…');
+      setMessage(t('lobby.connecting'));
       // Nový pokus o vstup: zahoď stav výzev z předchozího (padlého) spojení –
       // room-client ho interně taky vyčistil, ale prázdné seznamy sám neposílá.
       renderIncoming([]);
@@ -471,13 +480,13 @@ export function createLobby(options: LobbyOptions): Lobby {
         li.classList.add('is-self');
         const you = document.createElement('span');
         you.className = 'lobby-you';
-        you.textContent = ' (ty)';
+        you.textContent = t('lobby.you');
         name.append(you);
       } else {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'lobby-challenge-btn';
-        btn.textContent = 'Vyzvat';
+        btn.textContent = t('lobby.challengeBtn');
         btn.disabled = outgoingPending;
         btn.addEventListener('click', () => {
           room_client.challenge(entry.id);
@@ -496,18 +505,18 @@ export function createLobby(options: LobbyOptions): Lobby {
       li.className = 'lobby-challenge-item';
       const label = document.createElement('span');
       label.className = 'lobby-challenge-label';
-      label.textContent = `${c.challengerNick} tě vyzývá na partii`;
+      label.textContent = t('lobby.challengeFrom', { nick: c.challengerNick });
       const accept = document.createElement('button');
       accept.type = 'button';
       accept.className = 'lobby-accept-btn';
-      accept.textContent = 'Přijmout';
+      accept.textContent = t('lobby.acceptBtn');
       accept.addEventListener('click', () => {
         room_client.accept(c.id);
       });
       const reject = document.createElement('button');
       reject.type = 'button';
       reject.className = 'lobby-reject-btn';
-      reject.textContent = 'Odmítnout';
+      reject.textContent = t('lobby.rejectBtn');
       reject.addEventListener('click', () => {
         room_client.reject(c.id);
       });
@@ -520,7 +529,7 @@ export function createLobby(options: LobbyOptions): Lobby {
   /** Ukáže/skryje stav odchozí výzvy a přepočítá zámek tlačítek „Vyzvat". */
   function renderOutgoing(pending: OutgoingChallenge | null): void {
     outgoingPending = pending !== null;
-    outgoing.textContent = pending === null ? '' : `Čekám na odpověď: ${pending.targetNick}…`;
+    outgoing.textContent = pending === null ? '' : t('lobby.waitingFor', { nick: pending.targetNick });
     outgoing.classList.toggle('hidden', pending === null);
     // Překresli roster, ať se u tlačítek „Vyzvat" projeví nový disabled stav.
     renderRoster(currentRoster);
@@ -537,7 +546,7 @@ export function createLobby(options: LobbyOptions): Lobby {
     const nick = nickInput.value.trim();
     if (nick === '') {
       setView('entry');
-      setMessage('Zadej přezdívku.');
+      setMessage(t('lobby.enterNick'));
       nickInput.focus();
       return;
     }

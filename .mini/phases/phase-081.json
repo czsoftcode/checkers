@@ -1,0 +1,48 @@
+{
+  "id": 81,
+  "title": "i18n jádro + lobby (cs/en)",
+  "goal": "Postavit lokalizační jádro (detekce jazyka z navigator.languages → cs/en s fallbackem en, funkce t() + slovníky cs/en, dynamické nastavení <html lang>) a přeložit jím vstupní obrazovku lobby jako první ověřený svislý průřez.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "i18n jádro: detekce jazyka + t()",
+      "status": "done",
+      "detail": "Nový i18n.ts: detectLocale(navigator.languages) vybere první podporovaný (prefix cs/en), fallback en; t(key, params?) s interpolací {name}; aktivní locale drží modul; slovníky jako typovaný objekt cs/en. Unit testy: cs-CZ→cs, en-US→en, de→en, prázdné→en, pořadí v languages, interpolace dosadí param."
+    },
+    {
+      "title": "Bootstrap locale + <html lang>",
+      "status": "done",
+      "detail": "Při startu (main.ts) zjistit locale a nastavit document.documentElement.lang (přepíše statické lang=cs z index.html). Ověřitelné: po bootstrapu je documentElement.lang = detekovaná hodnota."
+    },
+    {
+      "title": "Klíče lobby: cs + en překlady",
+      "status": "done",
+      "detail": "Do slovníků doplnit všechny KLIENTEM psané řetězce lobby v cs i en (interpolace přes params). Serverem dodané hlášky (onNotice/onError/návrh nicku z onNickTaken) ZŮSTÁVAJÍ serverové (dnes česky) – vědomá hranice fáze, zdokumentovat v kódu."
+    },
+    {
+      "title": "Migrace lobby.ts na t()",
+      "status": "done",
+      "detail": "Nahradit natvrdo psané klientské řetězce v lobby.ts voláními t(...); beze změny chování a struktury DOM, mění se jen zdroj textu. Verifikace: klientský český literál nezůstane (grep), build+typecheck projde."
+    },
+    {
+      "title": "Testy lobby se zuby (cs/en/fallback)",
+      "status": "done",
+      "detail": "jsdom test: navigator.languages=['cs'] → lobby česky, ['en'] → anglicky, ['de'] → anglicky (fallback). Cílí reálný createLobby, ne mock. Dočasné rozbití mapování → test padne."
+    },
+    {
+      "title": "Ověření: build + typecheck + lint + testy + ruční průchod",
+      "status": "done",
+      "detail": "Zelené build, typecheck, lint, vitest; ruční průchod v prohlížeči s přepnutým jazykem (cs vs en) + kontrola <html lang>."
+    }
+  ],
+  "startedAt": "2026-07-09T11:38:05.463Z",
+  "resolvedVerify": [
+    "Vizuální průchod lobby v cs i en prohlížeči",
+    "<html lang> se reálně přepíná v prohlížeči"
+  ],
+  "completedAt": "2026-07-09T12:13:23.929Z",
+  "autoCommit": {
+    "preSha": "152d4faa7d297ae55eeb3a6641f7af0b079da658",
+    "subject": "Phase 81: i18n jádro + lobby (cs/en)"
+  }
+}

@@ -402,6 +402,11 @@
       "id": 80,
       "title": "Mobil AIvP: klik nezahodit pollem",
       "status": "done"
+    },
+    {
+      "id": 81,
+      "title": "i18n jádro + lobby (cs/en)",
+      "status": "done"
     }
   ]
 }
