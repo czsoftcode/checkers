@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Americká dáma</title>
+    <!-- Favicon leží v public/, odkud ho Vite při buildu zkopíruje do dist/ (root
+         domény). Absolutní /favicon.ico sedí na produkční base=/ i na dev. Prohlížeč
+         /favicon.ico žádá i bez tohoto odkazu, explicitní link je ale robustní. -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <!-- Privacy-friendly analytics by Plausible. Jen externí async skript;
          inicializace (window.plausible + init) je v src/analytics.ts, aby
          nebyl potřeba inline blok (CSP). -->

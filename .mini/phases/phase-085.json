@@ -1,0 +1,37 @@
+{
+  "id": 85,
+  "title": "Favicon.ico funguje i v produkci",
+  "goal": "Zprovoznit favicon.ico v produkci: soubor je přesunutý do packages/web/public/ (Vite ho z public/ kopíruje do dist/ při buildu), doplnit explicitní <link rel=icon> do <head> index.html a ověřit, že vite build vyprodukuje dist/favicon.ico a produkční cesta (nginx root .../dist, try_files) vrací ikonu, ne SPA fallback index.html. Dev nesmí přestat fungovat. Mimo řez: další formáty ikon (PNG, apple-touch-icon, SVG).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Explicitní <link rel=icon> v index.html",
+      "status": "done",
+      "detail": "Do <head> v packages/web/index.html přidat <link rel=\"icon\" href=\"/favicon.ico\" sizes=\"any\">. Absolutní /favicon.ico sedí na produkční build base=/ i na dev. Prohlížeč sice /favicon.ico žádá i bez odkazu, explicitní link je robustní a přežije SPA fallback."
+    },
+    {
+      "title": "Build kopíruje favicon do dist",
+      "status": "done",
+      "detail": "Spustit vite build (i s --base=/ jako deploy) a potvrdit, že vznikne packages/web/dist/favicon.ico a je bajtově shodný s public/favicon.ico. Tím padá kořenová příčina (dnes dist favicon nemá → nginx try_files vrací index.html)."
+    },
+    {
+      "title": "Zub proti regresi (test)",
+      "status": "done",
+      "detail": "Malý vitest test: (a) soubor packages/web/public/favicon.ico existuje, (b) index.html obsahuje <link rel=\"icon\"> mířící na favicon.ico. Chrání přesně před tou chybou, co se opravuje (favicon zmizí z buildu / odkaz se smaže). Test má zuby: přesun souboru zpět do kořene nebo smazání odkazu shodí."
+    },
+    {
+      "title": "Ověření dev + produkční cesty",
+      "status": "done",
+      "detail": "Dev: GET /favicon.ico vrací ikonu (Content-Type image/x-icon), ne HTML. Produkce (logicky z konfigurace): nginx root=.../dist + try_files $uri … najde dist/favicon.ico dřív než /index.html fallback. build + typecheck + lint + testy zelené. Do reportu poznámka o agresivní cache favicon v prohlížeči (po deployi tvrdý refresh) + položka pro lidské ověření reálné produkce po nasazení."
+    }
+  ],
+  "startedAt": "2026-07-09T15:50:10.658Z",
+  "resolvedVerify": [
+    "Favicon na reálné produkci po deployi"
+  ],
+  "completedAt": "2026-07-09T15:56:49.534Z",
+  "autoCommit": {
+    "preSha": "4b9dd0931a178ff859ea846a94b88bfc7fc815ad",
+    "subject": "Phase 85: Favicon.ico funguje i v produkci"
+  }
+}

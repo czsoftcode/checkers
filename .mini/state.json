@@ -422,6 +422,11 @@
       "id": 84,
       "title": "Ruční přepínač jazyka v lobby",
       "status": "done"
+    },
+    {
+      "id": 85,
+      "title": "Favicon.ico funguje i v produkci",
+      "status": "done"
     }
   ]
 }

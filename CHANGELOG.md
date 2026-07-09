@@ -7,6 +7,14 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Favicon (ikona v záložce prohlížeče) funguje i v produkci.** Soubor se přesunul
+  do složky `public/`, odkud ho build zkopíruje na kořen webu; dřív ležel mimo ni,
+  takže se do produkčního buildu vůbec nedostal a v nasazené verzi ikona chyběla
+  (na vývojovém serveru fungovala). Poznámka: prohlížeče favicony silně cachují –
+  po nasazení může být potřeba tvrdý refresh (Ctrl+F5).
+
 ## [0.69.0] - 2026-07-09
 
 ### Added
