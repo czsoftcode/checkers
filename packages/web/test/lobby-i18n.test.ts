@@ -46,6 +46,7 @@ function mountEntry() {
   const lobby = createLobby({
     onPlayVsComputer: () => undefined,
     onGameStart: () => undefined,
+    onLocaleChange: () => undefined,
     roomUrl: 'ws://test/room/ws',
     socketFactory: () => new InertSocket(),
   });

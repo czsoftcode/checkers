@@ -17,8 +17,28 @@
  * zůstávají v jazyce serveru – klient je nemá z čeho přeložit a server je autorita.
  */
 
+import { APP_TITLE } from './index.js';
+
 /** Podporované jazyky UI. Rozšíření = přidat klíč do obou slovníků níž. */
 export type Locale = 'cs' | 'en';
+
+/**
+ * JEDINÝ zdroj pravdy o podporovaných jazycích: pořadí = pořadí v přepínači jazyka.
+ * `label` je ENDONYM (jazyk zapsaný sám v sobě), aby ho uživatel našel bez ohledu na
+ * aktuální jazyk UI. Přidání jazyka = přidat sem položku a doplnit oba slovníky níž
+ * (typová kontrola `en satisfies` pak vynutí kompletní sadu klíčů). Detekce prohlížeče
+ * i validace uložené volby čtou podporované jazyky odsud přes {@link isLocale}, ne z
+ * natvrdo psaného seznamu.
+ */
+export const LOCALES: readonly { readonly locale: Locale; readonly label: string }[] = [
+  { locale: 'cs', label: 'Čeština' },
+  { locale: 'en', label: 'English' },
+];
+
+/** Je `value` podporovaný jazyk? Guard odvozený z {@link LOCALES} (ne natvrdo cs/en). */
+export function isLocale(value: string): value is Locale {
+  return LOCALES.some((entry) => entry.locale === value);
+}
 
 /** Jazyk, na který se spadne, když prohlížeč nehlásí žádný podporovaný (dle vize). */
 const FALLBACK: Locale = 'en';
@@ -32,7 +52,7 @@ const FALLBACK: Locale = 'en';
 export function detectLocale(languages: readonly string[]): Locale {
   for (const lang of languages) {
     const prefix = lang.toLowerCase().split('-')[0] ?? '';
-    if (prefix === 'cs' || prefix === 'en') {
+    if (isLocale(prefix)) {
       return prefix;
     }
   }
@@ -81,11 +101,57 @@ export function getLocale(): Locale {
   return currentLocale ?? initLocale();
 }
 
+/** Klíč LocalStorage pro RUČNĚ zvolený jazyk (přednost před detekcí prohlížeče). */
+const LOCALE_STORAGE_KEY = 'checkers.locale';
+
+/**
+ * Načte ručně uloženou volbu jazyka z LocalStorage. Vrací `null`, když nic uloženo
+ * není, hodnota je neznámá/poškozená ({@link isLocale} ji odmítne), nebo úložiště
+ * není dostupné (privátní režim) – volající pak spadne na detekci prohlížeče. Slepě
+ * nedůvěřuje obsahu úložiště (uživatel/rozšíření tam může vrazit cokoli).
+ */
+export function loadStoredLocale(): Locale | null {
+  try {
+    const raw = localStorage.getItem(LOCALE_STORAGE_KEY);
+    return raw !== null && isLocale(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Uloží ručně zvolený jazyk. Selhání zápisu (kvóta/privátní režim) je neškodné → spolknout. */
+export function saveLocale(locale: Locale): void {
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // Nejde uložit → volba se příště nepředvyplní, appka běží dál v detekovaném jazyce.
+  }
+}
+
+/**
+ * Rozhodne STARTOVNÍ jazyk podle priorit: ručně uložená volba (LocalStorage) →
+ * detekce prohlížeče → {@link FALLBACK}. Výsledek nastaví jako aktivní a vrátí ho
+ * (volá `main.ts` při startu; hodnota jde i do `<html lang>`). Náhrada za holé
+ * {@link initLocale}, které by uloženou volbu ignorovalo.
+ */
+export function resolveInitialLocale(): Locale {
+  const stored = loadStoredLocale();
+  if (stored !== null) {
+    setLocale(stored);
+    return stored;
+  }
+  return initLocale();
+}
+
 /**
  * Český slovník je ZDROJ pravdy o sadě klíčů – anglický se na něj přibíjí přes
  * `satisfies` (chybějící klíč = chyba typu). Klíče jsou ploché `oblast.název`.
  */
 const cs = {
+  // Titulek stránky (`document.title`, záložka prohlížeče). Český název je zdroj
+  // pravdy `APP_TITLE`, ať neexistuje ve dvou kopiích.
+  'app.title': APP_TITLE,
+
   'lobby.title': 'Herní místnost',
   'lobby.nickAria': 'Přezdívka',
   'lobby.nickPlaceholder': 'Tvoje přezdívka',
@@ -104,6 +170,7 @@ const cs = {
   'lobby.disconnectedAfter': 'Spojení s místností se přerušilo.',
   'lobby.disconnectedBefore': 'K místnosti se nepodařilo připojit (server neodpovídá).',
   'lobby.nickTaken': 'Přezdívka je obsazená. Zkus třeba „{suggestion}".',
+  'lobby.langAria': 'Jazyk',
 
   // Herní obrazovka PvP (fáze 82): stavový pruh, panel, modaly (vzdání, remíza,
   // odveta, ztráta spojení), aria-popisky a výsledek/důvod konce z pohledu hráče.
@@ -188,6 +255,8 @@ const cs = {
 export type MessageKey = keyof typeof cs;
 
 const en = {
+  'app.title': 'American Checkers',
+
   'lobby.title': 'Game room',
   'lobby.nickAria': 'Nickname',
   'lobby.nickPlaceholder': 'Your nickname',
@@ -206,6 +275,7 @@ const en = {
   'lobby.disconnectedAfter': 'The connection to the room was lost.',
   'lobby.disconnectedBefore': 'Could not connect to the room (server not responding).',
   'lobby.nickTaken': 'That nickname is taken. Try “{suggestion}”.',
+  'lobby.langAria': 'Language',
 
   'game.connecting': 'Connecting to the game…',
   'game.opponentLabel': 'Opponent:',

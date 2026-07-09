@@ -73,6 +73,15 @@ describe('t – překlad a interpolace', () => {
   });
 });
 
+describe('app.title – titulek stránky', () => {
+  it('má odlišný překlad v obou jazycích', () => {
+    setLocale('cs');
+    expect(t('app.title')).toBe('Americká dáma');
+    setLocale('en');
+    expect(t('app.title')).toBe('American Checkers');
+  });
+});
+
 describe('setLocale / getLocale', () => {
   it('setLocale přepíše aktivní jazyk čtený přes getLocale', () => {
     setLocale('en');

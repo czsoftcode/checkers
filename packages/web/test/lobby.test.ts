@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setLocale } from '../src/i18n.js';
+import { getLocale, setLocale } from '../src/i18n.js';
 import { createLobby } from '../src/lobby.js';
 import type { GameLink } from '../src/lobby.js';
 import type { ChallengeAcceptedInfo, RoomWebSocket } from '../src/room-client.js';
@@ -43,9 +43,11 @@ function mountLobby() {
   const sockets: FakeSocket[] = [];
   const onPlayVsComputer = vi.fn();
   const onGameStart = vi.fn<(info: ChallengeAcceptedInfo, link: GameLink) => void>();
+  const onLocaleChange = vi.fn();
   const lobby = createLobby({
     onPlayVsComputer,
     onGameStart,
+    onLocaleChange,
     roomUrl: 'ws://test/room/ws',
     socketFactory: (url) => {
       const s = new FakeSocket(url);
@@ -67,8 +69,10 @@ function mountLobby() {
     sockets,
     onPlayVsComputer,
     onGameStart,
+    onLocaleChange,
     lobby,
     el,
+    lang: q<HTMLSelectElement>('.lobby-lang'),
     form: q<HTMLFormElement>('.lobby-join'),
     nick: q<HTMLInputElement>('.lobby-nick'),
     room: q<HTMLElement>('.lobby-room'),
@@ -277,6 +281,52 @@ describe('createLobby', () => {
     submit(h.form);
     h.lobby.dispose();
     expect(h.sockets[0]!.closed).toBe(true);
+  });
+});
+
+describe('createLobby – přepínač jazyka (fáze 84)', () => {
+  it('vykreslí <select> s možnostmi z LOCALES a předvybere aktivní jazyk', () => {
+    // beforeEach připnul jazyk na cs → aktivní volba musí být cs.
+    const h = mountLobby();
+    const options = Array.from(h.lang.options);
+    expect(options.map((o) => o.value)).toEqual(['cs', 'en']); // hodnoty = Locale kódy
+    expect(options.map((o) => o.textContent)).toEqual(['Čeština', 'English']); // endonymy
+    expect(h.lang.value).toBe(getLocale());
+    expect(h.lang.value).toBe('cs');
+    expect(h.lang.classList.contains('hidden')).toBe(false); // entry view → viditelný
+  });
+
+  it('změna jazyka uloží volbu do LocalStorage a vyžádá překreslení', () => {
+    const h = mountLobby();
+    h.lang.value = 'en';
+    h.lang.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(localStorage.getItem('checkers.locale')).toBe('en'); // persist
+    expect(h.onLocaleChange).toHaveBeenCalledTimes(1); // rebuild přes caller
+    expect(getLocale()).toBe('en'); // aktivní jazyk přepnut
+  });
+
+  it('přepnutí jazyka uchová i rozepsanou (neodeslanou) přezdívku', () => {
+    // Rebuild přes onLocaleChange staví lobby znovu; rozepsaný nick se musí uložit,
+    // ať ho po překreslení předvyplní loadSavedNick. Zub proti smazání saveNick z handleru.
+    const h = mountLobby();
+    h.nick.value = 'Rozepsany';
+    h.lang.value = 'en';
+    h.lang.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(localStorage.getItem('checkers.roomNick')).toBe('Rozepsany');
+  });
+
+  it('výběr stejného jazyka nepřekresluje ani nezapisuje (žádná zbytečná práce)', () => {
+    const h = mountLobby();
+    h.lang.value = 'cs'; // stejný jako aktivní
+    h.lang.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(h.onLocaleChange).not.toHaveBeenCalled();
+    expect(localStorage.getItem('checkers.locale')).toBeNull();
+  });
+
+  it('mimo entry (po vstupu do místnosti) je přepínač skrytý – rebuild by zabil WS', () => {
+    const h = joinedLobby(); // dožene do `joined` view
+    expect(h.room.classList.contains('hidden')).toBe(false); // opravdu v místnosti
+    expect(h.lang.classList.contains('hidden')).toBe(true);
   });
 });
 

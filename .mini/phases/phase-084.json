@@ -1,0 +1,48 @@
+{
+  "id": 84,
+  "title": "Ruční přepínač jazyka v lobby",
+  "goal": "Do lobby vedle nadpisu Herní místnost přidat přepínač jazyka generovaný ze seznamu podporovaných jazyků (jeden zdroj pravdy {locale,label} v i18n.ts, forma <select>); volba se uloží do LocalStorage a má při startu přednost před detekcí prohlížeče (pořadí LocalStorage → prohlížeč → fallback en). Po přepnutí se lobby překreslí. Přidání dalšího jazyka v budoucnu = jen doplnit slovník + jednu položku do seznamu. Zubaté testy: precedence LocalStorage nad prohlížečem, uložení volby, poškozená/neznámá hodnota v LocalStorage spadne na detekci. Mimo řez: živé překreslení rozehrané hry a AI/PvP obrazovky (drží se omezení fází 81-83).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Zdroj pravdy o jazycích v i18n.ts",
+      "status": "done",
+      "detail": "Přidat LOCALES (pole {locale,label}, dnes cs/en) + odvozený guard isLocale(x): x is Locale. detectLocale přepsat, aby podporované jazyky bral z tohoto seznamu (přes isLocale), ne z natvrdo psaného cs||en. Chování cs/en beze změny — stávající i18n.test.ts zůstává zelený."
+    },
+    {
+      "title": "LocalStorage vrstva jazyka v i18n.ts",
+      "status": "done",
+      "detail": "LOCALE_STORAGE_KEY='checkers.locale', loadStoredLocale() (čte+validuje přes isLocale; poškozená/neznámá/chybějící → null; try/catch jako loadSavedNick), saveLocale(locale) (zápis, selhání spolknout). Resolver resolveInitialLocale() s pořadím LocalStorage → detekce prohlížeče → fallback en, nastaví výsledek jako aktivní jazyk."
+    },
+    {
+      "title": "main.ts použije resolver při startu",
+      "status": "done",
+      "detail": "Nahradit document.documentElement.lang = initLocale() za resolveInitialLocale(), aby uložená volba přebila prohlížeč a <html lang> hlásil reálně použitý jazyk."
+    },
+    {
+      "title": "Přepínač <select> v hlavičce lobby",
+      "status": "done",
+      "detail": "Vedle nadpisu Herní místnost <select> generovaný smyčkou přes LOCALES (aktuální jazyk předvybraný, aria-label z nového klíče lobby.langAria). change → saveLocale + setLocale + překreslení lobby přes callback onLocaleChange do main.ts (znovupostaví čerstvé lobby stejnou cestou jako start). Přepínač akční jen v entry view (mimo něj skrytý/zamčený), aby rebuild nezavřel živý room WS. Žádné inline styly/skripty (CSP)."
+    },
+    {
+      "title": "Zubaté testy i18n",
+      "status": "done",
+      "detail": "Precedence (uložené cs přebije prohlížeč hlásící en i naopak), poškozená/neznámá uložená hodnota spadne na detekci prohlížeče, saveLocale skutečně zapíše. Test má zuby: dočasné obrácení pořadí precedence shodí test."
+    },
+    {
+      "title": "Ověření",
+      "status": "done",
+      "detail": "build + typecheck + lint + testy zelené; ruční průchod — přepnutí jazyka v lobby okamžitě změní texty a po reloadu zůstane."
+    }
+  ],
+  "startedAt": "2026-07-09T13:34:38.166Z",
+  "resolvedVerify": [
+    "Vizuál a umístění přepínače v reálném prohlížeči",
+    "Přepnutí opravdu překreslí lobby i titulek a přežije reload"
+  ],
+  "completedAt": "2026-07-09T15:39:59.760Z",
+  "autoCommit": {
+    "preSha": "e32228a414dc897592dfbbe01dbde8e6e0c48c32",
+    "subject": "Phase 84: Ruční přepínač jazyka v lobby"
+  }
+}

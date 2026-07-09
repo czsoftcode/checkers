@@ -22,7 +22,7 @@
  * DATO – lokalizuje se jen věta, do které ji klient vsadí (`lobby.nickTaken`).
  */
 
-import { t } from './i18n.js';
+import { t, LOCALES, isLocale, getLocale, setLocale, saveLocale } from './i18n.js';
 import { createRoomClient } from './room-client.js';
 import type {
   ChallengeAcceptedInfo,
@@ -123,6 +123,14 @@ export interface LobbyOptions {
    * `link` je most zpět k živému room WS (odeslání tahu + příjem chyb tahu).
    */
   readonly onGameStart: (info: ChallengeAcceptedInfo, link: GameLink) => void;
+  /**
+   * Uživatel přepnul jazyk v hlavičce (fáze 84). Volá se PO uložení volby do
+   * LocalStorage a nastavení aktivního jazyka; caller (`main.ts`) na to znovupostaví
+   * čerstvé lobby, ať se `t()` řetězce přeloží. Lobby přepínač zpřístupní jen v
+   * `entry` view (uživatel ještě není v místnosti) – tam je rebuild neškodný, i kdyby
+   * po `nick-taken`/`error` zůstal room WS otevřený (`dispose` ho čistě uklidí).
+   */
+  readonly onLocaleChange: () => void;
   /** URL WS místnosti – jen pro testy; jinak se odvodí z `location`. */
   readonly roomUrl?: string;
   /** Náhrada tovární funkce socketu – jen pro testy (fake socket). */
@@ -183,9 +191,52 @@ export function createLobby(options: LobbyOptions): Lobby {
   const card = document.createElement('div');
   card.className = 'lobby-card';
 
+  // Hlavička: nadpis místnosti + ruční přepínač jazyka (fáze 84) vedle sebe.
+  const header = document.createElement('div');
+  header.className = 'lobby-header';
+
   const heading = document.createElement('h1');
   heading.className = 'lobby-title';
   heading.textContent = t('lobby.title');
+
+  // Přepínač jazyka: `<select>` generovaný z LOCALES (jediný zdroj pravdy) – přidání
+  // jazyka nevyžaduje zásah sem. Aktuální jazyk je předvybraný, popisky jsou ENDONYMY
+  // (jazyk sám v sobě). Změna: ulož volbu do LocalStorage, přepni aktivní jazyk a nech
+  // caller znovupostavit lobby (`onLocaleChange`), ať se `t()` řetězce přeloží.
+  //
+  // Přepínač je zpřístupněný JEN v `entry` view (mimo něj ho `setView` skrývá): v
+  // `entry` uživatel JEŠTĚ NENÍ v místnosti (žádný roster ani partie k ztrátě), takže
+  // rebuild je neškodný – i kdyby po `nick-taken`/`error` zůstal room WS otevřený,
+  // `dispose()` ho čistě zavře a nový se otevře líně až při dalším `join()`. V
+  // `joined`/`disconnected` by naopak rebuild hráče vyhodil z rozjeté místnosti.
+  const langSelect = document.createElement('select');
+  langSelect.className = 'lobby-lang';
+  langSelect.setAttribute('aria-label', t('lobby.langAria'));
+  const activeLocale = getLocale();
+  for (const { locale, label } of LOCALES) {
+    const option = document.createElement('option');
+    option.value = locale;
+    option.textContent = label;
+    option.selected = locale === activeLocale;
+    langSelect.append(option);
+  }
+  langSelect.addEventListener('change', () => {
+    const chosen = langSelect.value;
+    // Hodnoty `<option>` pocházejí z LOCALES; guard je pojistka proti cizímu zásahu do
+    // DOM a zároveň zúží `string` na `Locale` pro `saveLocale`/`setLocale`.
+    if (!isLocale(chosen) || chosen === getLocale()) {
+      return;
+    }
+    // Rebuild postaví čerstvé lobby a přezdívku vezme z `loadSavedNick()`. Ulož proto
+    // i ROZEPSANOU (neodeslanou) přezdívku, ať ji přepnutí jazyka nesmázne – jinak by
+    // se pole po rebuildu vrátilo jen na poslední ODESLANou hodnotu (fáze 84).
+    saveNick(nickInput.value.trim());
+    saveLocale(chosen);
+    setLocale(chosen);
+    options.onLocaleChange();
+  });
+
+  header.append(heading, langSelect);
 
   // Formulář přezdívky (`entry`/`connecting`). Submit = vstup do místnosti.
   const form = document.createElement('form');
@@ -246,7 +297,7 @@ export function createLobby(options: LobbyOptions): Lobby {
   soloBtn.className = 'lobby-solo-btn';
   soloBtn.textContent = t('lobby.soloBtn');
 
-  card.append(heading, form, message, room, disconnected, soloBtn);
+  card.append(header, form, message, room, disconnected, soloBtn);
   element.append(card);
 
   // Přezdívka posledního úspěšného/pokusného vstupu – pro „Připojit znovu".
@@ -446,6 +497,9 @@ export function createLobby(options: LobbyOptions): Lobby {
     form.classList.toggle('hidden', !showForm);
     room.classList.toggle('hidden', view !== 'joined');
     disconnected.classList.toggle('hidden', view !== 'disconnected');
+    // Přepínač jazyka jen v `entry`: mimo něj (connecting/joined/disconnected) žije
+    // room WS a jeho rebuild přes `onLocaleChange` by spojení zavřel (fáze 84).
+    langSelect.classList.toggle('hidden', view !== 'entry');
     const connecting = view === 'connecting';
     nickInput.disabled = connecting;
     joinBtn.disabled = connecting;

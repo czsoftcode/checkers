@@ -417,6 +417,11 @@
       "id": 83,
       "title": "i18n: AI obrazovka (hra vs. počítač)",
       "status": "done"
+    },
+    {
+      "id": 84,
+      "title": "Ruční přepínač jazyka v lobby",
+      "status": "done"
     }
   ]
 }

@@ -15,8 +15,7 @@
  * `transientDispose`); lobby je „trvalé" v rámci multiplayer toku (`disposeLobby`).
  */
 
-import { APP_TITLE } from './index.js';
-import { initLocale } from './i18n.js';
+import { resolveInitialLocale, t } from './i18n.js';
 import { createAppShell } from './app-shell.js';
 import { createLobby } from './lobby.js';
 import { createGameScreen } from './game-screen.js';
@@ -26,13 +25,12 @@ import type { ChallengeAcceptedInfo } from './room-client.js';
 import './analytics.js';
 import './styles.css';
 
-document.title = APP_TITLE;
-
-// Jazyk UI podle prohlížeče (cs/en, fallback en). Nastavíme ho JEŠTĚ PŘED prvním
-// vykreslením obrazovky, ať `t()` v lobby čte správný slovník, a přepíšeme jím
-// statické `lang="cs"` z index.html – `<html lang>` má hlásit reálný jazyk stránky
-// (přístupnost, čtečky). `initLocale()` vrací detekovaný jazyk = hodnotu atributu.
-document.documentElement.lang = initLocale();
+// Jazyk UI: ručně uložená volba (LocalStorage) → detekce prohlížeče → fallback en
+// (fáze 84). Nastavíme ho JEŠTĚ PŘED prvním vykreslením obrazovky, ať `t()` v lobby
+// čte správný slovník, a přepíšeme jím statické `lang="cs"` z index.html – `<html lang>`
+// má hlásit reálný jazyk stránky (přístupnost, čtečky). `resolveInitialLocale()` vrací
+// reálně použitý jazyk = hodnotu atributu.
+document.documentElement.lang = resolveInitialLocale();
 
 const rootEl = document.querySelector('#app');
 if (!(rootEl instanceof HTMLElement)) {
@@ -64,9 +62,20 @@ function disposeLobby(): void {
 
 /** Namontuje ČERSTVÉ lobby (start appky / návrat ze sóla). Zavře cokoli předchozího. */
 function showLobby(): void {
+  // Titulek stránky v aktuálním jazyce (fáze 84). Sem to patří, protože `showLobby`
+  // je i cíl `onLocaleChange` – po přepnutí jazyka se tak přepíše i záložka prohlížeče,
+  // ne jen texty v lobby. Běží i při startu (volání na konci modulu) a návratu ze sóla.
+  document.title = t('app.title');
   clearTransient();
   disposeLobby(); // návrat ze sóla: staré lobby (pokud by bylo) zavřít
-  const mounted = createLobby({ onPlayVsComputer: showSolo, onGameStart: showGame });
+  const mounted = createLobby({
+    onPlayVsComputer: showSolo,
+    onGameStart: showGame,
+    // Přepnutí jazyka (fáze 84): jazyk je už uložený + nastavený, znovupostav čerstvé
+    // lobby, ať se `t()` řetězce přeloží. Bezpečné jen z `entry` view (bez živého WS),
+    // proto lobby přepínač mimo `entry` skrývá.
+    onLocaleChange: showLobby,
+  });
   lobby = mounted;
   root.replaceChildren(mounted.element);
 }

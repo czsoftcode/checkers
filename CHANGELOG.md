@@ -7,6 +7,19 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.69.0] - 2026-07-09
+
+### Added
+
+- **Ruční přepínač jazyka v herní místnosti.** Vedle nadpisu „Herní místnost / Game
+  room“ přibyl přepínač jazyka (čeština / angličtina). Zvolený jazyk se uloží a
+  drží i po obnovení stránky; při dalším spuštění má tvoje ruční volba přednost před
+  jazykem prohlížeče. Přepínač je dostupný ve vstupní obrazovce (než vstoupíš do
+  místnosti) – jazyk se tak volí na začátku a promítne se do celé hry, kterou pak
+  založíš. Přepínač je připravený na budoucí přidání dalších jazyků.
+- **Titulek stránky (záložka prohlížeče) respektuje jazyk** – „Americká dáma“ /
+  „American Checkers“ podle zvoleného jazyka; přepnutí přepíše i titulek.
+
 ## [0.68.0] - 2026-07-09
 
 ### Added

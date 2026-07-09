@@ -628,10 +628,32 @@ body {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
 }
 
+/* Hlavička místnosti: nadpis u levého okraje, přepínač jazyka u pravého (fáze 84).
+   Oba jsou v TOKU (flex space-between), ne absolutně – na úzkém mobilu se pak
+   nepřekrývají, jen se od sebe odtlačí a přepínač si drží šířku (flex-shrink: 0). */
+.lobby-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2rem;
+}
+
 .lobby-title {
   margin: 0;
   font-size: 1.5rem;
-  text-align: center;
+  text-align: left;
+}
+
+.lobby-lang {
+  flex-shrink: 0;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.85rem;
+  border: 1px solid #666;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
 }
 
 .lobby-join {
