@@ -7,6 +7,14 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.64.0] - 2026-07-09
+
+### Changed
+
+- **Pozadí herní místnosti se na mobilu (na výšku) přizpůsobí.** Při orientaci na
+  výšku se místo `intro.webp` ukáže `intro_mobile.webp`; na šířku zůstává původní
+  obrázek. Rozhoduje orientace displeje, ne šířka okna, a přepne se živě při otočení.
+
 ## [0.63.0] - 2026-07-09
 
 ### Added
