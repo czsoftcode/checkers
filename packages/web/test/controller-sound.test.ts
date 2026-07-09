@@ -46,6 +46,29 @@ const countOf = (play: ReturnType<typeof vi.fn>, event: SoundEvent): number =>
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Stav, kdy je na tahu ENGINE (bílý) – reálně sem klient dojde AŽ po svém tahu.
+ * Teprve odsud poll doručí tah/konec enginu (fáze 80: během tahu ČLOVĚKA se
+ * nepolluje, takže start ze „člověk na tahu" by poll vůbec nespustil). Deska výchozí.
+ */
+function engineToMove(): Position {
+  return { board: initialPosition().board, turn: 'white' };
+}
+
+/**
+ * Pozice po tahu BÍLÉHO (engine) 21→17. Poll v reálné hře hlásí jen tahy ENGINU
+ * (tah člověka jde přes `postMove`), takže animovaný tah MUSÍ být bílý – jinak ho
+ * `diffMove` (klíčuje podle `prev.turn`) zahodí. `turn` schválně necháváme bílé, aby
+ * další polly nebyly přeskočené guardem fáze 80 (skip jen na tahu ČLOVĚKA = černý).
+ * Zvukové testy stojí na přechodu výsledku a načasování, ne na barvě snímku.
+ */
+function afterEngineMove(): Position {
+  const board = initialPosition().board.slice();
+  board[21 - 1] = null; // bílý muž odejde z pole 21
+  board[17 - 1] = { color: 'white', kind: 'man' }; // dopadne na prázdné pole 17
+  return { board, turn: 'white' };
+}
+
 /** Pozice po tahu 9→13 (na tahu bílý). */
 function afterOpening(): Position {
   const start = initialPosition();
@@ -125,9 +148,8 @@ function mount(client: ServerClient, initial: GameDto, player: SoundPlayer, poll
 describe('zvuk konce partie', () => {
   it('výhra člověka (black-wins) přehraje fanfáru, jednou', async () => {
     const { player, play } = fakePlayer();
-    const start = initialPosition();
     // Poll à malý interval dorovná stav na black-wins.
-    mount(pollingClient(gameDto(afterOpening(), 'black-wins')), gameDto(start), player, 5);
+    mount(pollingClient(gameDto(afterEngineMove(), 'black-wins')), gameDto(engineToMove()), player, 5);
 
     // Zvuk konce je zpožděný ~500 ms za dokončením animace tahu (v jsdom bez
     // WAAPI jde tah přes instant → resolve hned, pak prodleva END_SOUND_DELAY_MS).
@@ -143,9 +165,8 @@ describe('zvuk konce partie', () => {
   it('zvuk konce ČEKÁ na dokončení animace vítězného tahu (ne na jeho začátek)', async () => {
     const anim = mockControllableAnimation();
     const { player, play } = fakePlayer();
-    const start = initialPosition();
     // Poll dorazí s vítězným tahem 9→13 (black-wins) → deska ho animuje.
-    mount(pollingClient(gameDto(afterOpening(), 'black-wins')), gameDto(start), player, 5);
+    mount(pollingClient(gameDto(afterEngineMove(), 'black-wins')), gameDto(engineToMove()), player, 5);
 
     await delay(50);
     // Animace vítězného tahu BĚŽÍ (finished nevyřešené) → fanfára ještě NEzazněla.
@@ -163,8 +184,7 @@ describe('zvuk konce partie', () => {
     // vrátit promise BĚŽÍCÍ animace, ne hned vyřešený, jinak zvuk zazní do pohybu.
     const anim = mockControllableAnimation();
     const { player, play } = fakePlayer();
-    const start = initialPosition();
-    mount(sequencedClient(afterOpening(), ['ongoing', 'black-wins']), gameDto(start), player, 5);
+    mount(sequencedClient(afterEngineMove(), ['ongoing', 'black-wins']), gameDto(engineToMove()), player, 5);
 
     // Oba snímky dorazily, animace pořád běží (finished nevyřešené).
     await delay(600);
@@ -177,8 +197,7 @@ describe('zvuk konce partie', () => {
 
   it('prohra člověka (white-wins) přehraje zvuk prohry', async () => {
     const { player, play } = fakePlayer();
-    const start = initialPosition();
-    mount(pollingClient(gameDto(afterOpening(), 'white-wins')), gameDto(start), player, 5);
+    mount(pollingClient(gameDto(afterEngineMove(), 'white-wins')), gameDto(engineToMove()), player, 5);
 
     await delay(600);
     expect(countOf(play, 'loss')).toBe(1);
@@ -187,9 +206,8 @@ describe('zvuk konce partie', () => {
 
   it('remíza přehraje zvuk remízy, jednou', async () => {
     const { player, play } = fakePlayer();
-    const start = initialPosition();
     // Poll à malý interval dorovná stav na draw.
-    mount(pollingClient(gameDto(afterOpening(), 'draw')), gameDto(start), player, 5);
+    mount(pollingClient(gameDto(afterEngineMove(), 'draw')), gameDto(engineToMove()), player, 5);
 
     await delay(600); // zvuk remízy přijde až po prodlevě za dokončením tahu
     expect(countOf(play, 'draw')).toBe(1);

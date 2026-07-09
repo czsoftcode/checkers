@@ -185,9 +185,26 @@ export class ServerError extends Error {
  * HTTP implementace klienta nad `fetch`. `fetchImpl` lze injektovat (testy),
  * jinak se bere globální `fetch` prohlížeče.
  */
+/**
+ * Strop čekání na PASIVNÍ čtení (poll stavu, nápověda Výuky). Tyhle requesty jsou
+ * zahoditelné (další tik je zopakuje) a hlavně na nich CONTROLLER ČEKÁ, než pustí
+ * akční request (odeslání tahu / vzdání / remíza) – drain `while (busy) await inflight`.
+ * Bez stropu by zaseknuté spojení na mobilu (rádio drop, žádná odpověď ani chyba)
+ * drželo `fetch` viset až do prohlížečového timeoutu (desítky sekund) a s ním i ten
+ * drain → deska zamčená. AbortController proto pasivní request po tomhle čase utne;
+ * `fetch` vyhodí AbortError → `ServerError(0)` → volající ho spolkne a drain se pustí.
+ * Akční requesty strop NEMAJÍ: nesmí se utnout rozehraný tah (nejednoznačné, zda
+ * server stihl aplikovat); ty řeší běžná chybová cesta + resync.
+ */
+const PASSIVE_REQUEST_TIMEOUT_MS = 10_000;
+
 export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient {
-  /** Fetch + jednotné ošetření síťové chyby a ne-2xx odpovědi. Vrací syrovou Response. */
-  async function send(method: 'GET' | 'POST', url: string, body?: unknown): Promise<Response> {
+  /**
+   * Fetch + jednotné ošetření síťové chyby a ne-2xx odpovědi. Vrací syrovou Response.
+   * `timeoutMs` (jen pasivní čtení) request po uplynutí utne přes AbortController –
+   * viz {@link PASSIVE_REQUEST_TIMEOUT_MS}; abort spadne stejnou cestou jako síťová chyba.
+   */
+  async function send(method: 'GET' | 'POST', url: string, body?: unknown, timeoutMs?: number): Promise<Response> {
     // Init se skládá podmíněně: s exactOptionalPropertyTypes nesmí headers/body
     // dostat undefined, takže se u GET (bez těla) vůbec nenastaví.
     const init: RequestInit =
@@ -195,13 +212,27 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
         ? { method }
         : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
 
+    // Volitelný strop: po `timeoutMs` request přerušíme (abort → catch níž → ServerError(0)).
+    const controller = timeoutMs === undefined ? null : new AbortController();
+    const timer = controller === null ? null : setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+    if (controller !== null) {
+      init.signal = controller.signal;
+    }
+
     let response: Response;
     try {
       response = await fetchImpl(url, init);
     } catch (cause) {
-      // Spojení vůbec nedoběhlo (server neběží, výpadek sítě). Nezaměňovat s 4xx/5xx
-      // odpovědí – ta má status. Přebalíme na ServerError(0), ať to volající pozná.
+      // Spojení vůbec nedoběhlo (server neběží, výpadek sítě) NEBO jsme ho utnuli
+      // timeoutem (AbortError). Nezaměňovat s 4xx/5xx odpovědí – ta má status.
+      // Přebalíme na ServerError(0), ať to volající pozná (a drain se odblokuje).
       throw new ServerError(0, undefined, `Síťová chyba při ${method} ${url}: ${describe(cause)}`);
+    } finally {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
     }
 
     if (!response.ok) {
@@ -215,9 +246,9 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
     return response;
   }
 
-  /** Pošle požadavek a odpověď přečte jako `GameDto`. */
-  async function request(method: 'GET' | 'POST', url: string, body?: unknown): Promise<GameDto> {
-    return parseGameDto(await send(method, url, body), method, url);
+  /** Pošle požadavek a odpověď přečte jako `GameDto`. `timeoutMs` jen pro pasivní čtení. */
+  async function request(method: 'GET' | 'POST', url: string, body?: unknown, timeoutMs?: number): Promise<GameDto> {
+    return parseGameDto(await send(method, url, body, timeoutMs), method, url);
   }
 
   return {
@@ -231,7 +262,7 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
         '/games',
         ballotIndex === undefined ? { level, humanColor } : { level, humanColor, ballotIndex },
       ),
-    getGame: (id) => request('GET', `/games/${encodeURIComponent(id)}`),
+    getGame: (id) => request('GET', `/games/${encodeURIComponent(id)}`, undefined, PASSIVE_REQUEST_TIMEOUT_MS),
     postMove: (id, from, path) =>
       request('POST', `/games/${encodeURIComponent(id)}/moves`, { from, path: [...path] }),
     resign: (id) => request('POST', `/games/${encodeURIComponent(id)}/resign`),
@@ -241,7 +272,7 @@ export function createHttpClient(fetchImpl: typeof fetch = fetch): ServerClient 
     },
     getHint: async (id) => {
       const url = `/games/${encodeURIComponent(id)}/hint`;
-      return parseHint(await send('GET', url), url);
+      return parseHint(await send('GET', url, undefined, PASSIVE_REQUEST_TIMEOUT_MS), url);
     },
   };
 }

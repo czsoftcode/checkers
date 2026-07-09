@@ -431,4 +431,43 @@ describe('createHttpClient', () => {
     const error = await hintOf(client)('g1').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ServerError);
   });
+
+  // Fáze 80: pasivní čtení (poll/nápověda) MÁ strop (AbortController). Na nich čeká
+  // controller drain před odesláním tahu – bez stropu by zaseknuté spojení zamklo desku.
+  it('getGame předá fetchi signal a při zaseknutí ho timeout utne na ServerError(0)', async () => {
+    vi.useFakeTimers();
+    try {
+      // Fetch, který se sám nikdy nevyřeší – doběhne JEN když ho někdo abortuje.
+      const hangingFetch = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted', 'AbortError'));
+          });
+        });
+      }) as unknown as typeof fetch;
+      const client = createHttpClient(hangingFetch);
+
+      const settled = client.getGame('g1').catch((e: unknown) => e);
+      // ZUB: pasivnímu čtení se předává signal (bez něj by ho timeout neutnul).
+      const init = (hangingFetch as unknown as { mock: { calls: [unknown, RequestInit][] } }).mock.calls[0]![1];
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+
+      await vi.advanceTimersByTimeAsync(10_000); // překroč PASSIVE_REQUEST_TIMEOUT_MS
+      const error = await settled;
+      expect(error).toBeInstanceOf(ServerError);
+      expect((error as ServerError).status).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('postMove (akční request) NEdostane signal – rozehraný tah se nesmí utnout timeoutem', async () => {
+    const fetchMock = okFetch(sampleDto);
+    const client = createHttpClient(fetchMock);
+
+    await client.postMove('g1', 9, [13]);
+
+    const init = (fetchMock as unknown as { mock: { calls: [unknown, RequestInit][] } }).mock.calls[0]![1];
+    expect(init.signal).toBeUndefined();
+  });
 });

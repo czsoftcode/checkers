@@ -17,10 +17,13 @@ import type {
   DrawOfferOutcome,
   GameStatus,
 } from './controller.js';
+import { preloadImages } from './image-preload.js';
 import { GAME_LEVELS } from './server-client.js';
 import type { GameDto, GameLevel, ServerClient } from './server-client.js';
 import { createSoundPlayer } from './sound.js';
 import type { SoundPlayer } from './sound.js';
+import blackStoneUrl from './assets/black.webp?url';
+import whiteStoneUrl from './assets/white.webp?url';
 
 /**
  * České popisky úrovní pro UI (interní hodnoty zůstávají anglické na drátě).
@@ -138,6 +141,13 @@ export interface AppShellOptions {
    * uprostřed partie (sólo proti počítači nemá druhého hráče, o kterého by šlo).
    */
   readonly onExit?: () => void;
+  /**
+   * Továrna na `Image` pro ověřené načtení webp kamene v indikátoru strany na tahu
+   * (stejný princip jako deska). `null` = ověření přeskočit (prostředí bez `Image`),
+   * `undefined` → výchozí `() => new Image()`. Injektuje se v testu (jsdom `onload`
+   * nevyvolá → fallback drží). Mimo test se nezadává.
+   */
+  readonly createStoneImage?: (() => HTMLImageElement) | null;
 }
 
 /** Ovládaná aplikace. `dispose` uklidí i běžící controller (polling). */
@@ -262,10 +272,16 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const boardSlot = document.createElement('div');
   boardSlot.className = 'board-slot';
 
-  // Indikátor strany na tahu: kruh v barvě tmavého pole desky se svítícím kamenem
-  // barvy toho, kdo je na tahu (černý = člověk, bílý = počítač). Vzhled kamene sdílí
-  // třídy `.piece.black/.white` s deskou (jeden zdroj vzhledu). Sourozenec desky
-  // v `.board-row`: na desktopu (flex row) je vpravo od desky, na <768 (flex column)
+  // `true` po dispose(): kdyby se appka disposla během běžícího createGame, nesmí se
+  // pak založit „zombie" controller s vlastním pollingem; async ověření webp kamene
+  // (níž) po dispose taky nic nepřepíná.
+  let disposed = false;
+
+  // Indikátor strany na tahu: SAMOTNÝ kámen na boku desky (bez prstence, stejně jako
+  // v PvP – fáze 80) v barvě toho, kdo je na tahu (černý = člověk, bílý = počítač).
+  // Vzhled kamene sdílí třídy `.piece.black/.white` s deskou (jeden zdroj vzhledu) a
+  // po ověřeném načtení i webp obrázek (`.turn-indicator--img`). Sourozenec desky v
+  // `.board-row`: na desktopu (flex row) je vpravo od desky, na <768 (flex column)
   // pod ní. Řídí se výhradně z `render()` podle GameStatus – žádné vlastní volání
   // serveru. Startuje skrytý (`hidden`), zobrazí se až s prvním stavem partie.
   const turnIndicator = document.createElement('div');
@@ -273,6 +289,20 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const turnPiece = document.createElement('div');
   turnPiece.className = 'piece';
   turnIndicator.append(turnPiece);
+
+  // Webp kámen indikátoru AŽ po ověřeném načtení obou obrázků (jako deska i PvP
+  // indikátor): jistota, že se `url(...)` v CSS opravdu vykreslí, jinak zůstat na CSS
+  // gradientu. V jsdom se `onload`/`onerror` nevyvolá → promise visí → fallback drží
+  // (test si `createStoneImage` injektuje). `null` (prostředí bez `Image`) přeskočí.
+  const createStoneImage =
+    options.createStoneImage ?? (typeof Image === 'function' ? (): HTMLImageElement => new Image() : null);
+  if (createStoneImage !== null) {
+    void preloadImages([blackStoneUrl, whiteStoneUrl], createStoneImage).then((ok) => {
+      if (ok && !disposed) {
+        turnIndicator.classList.add('turn-indicator--img');
+      }
+    });
+  }
 
   // Řádek desky: deska + indikátor strany na tahu vedle sebe. Panel je nad tímto
   // řádkem (v toku, ne fixed), aby na žádné šířce nezasahoval do desky. `.game` je
@@ -351,9 +381,6 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // `true`, dokud čeká verdikt enginu na nabídku remízy (zámek proti dvojkliku +
   // zamčení tlačítka po dobu rozhodování).
   let offering = false;
-  // `true` po dispose(): kdyby se appka disposla během běžícího createGame,
-  // nesmí se pak založit „zombie" controller s vlastním pollingem.
-  let disposed = false;
   // Právě zobrazené pozadí – přesně ta hodnota vrácená z `pickBackground` (jedna
   // z `backgroundUrls`), NE `pageBg.src`, který prohlížeč překlopí na absolutní
   // URL a řetězcové porovnání by pak selhalo. Předává se do `pickBackground` jako

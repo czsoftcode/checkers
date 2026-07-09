@@ -584,6 +584,10 @@ describe('defenzivní cesty', () => {
 
   it('engineStatus=error z pollingu jen zaloguje a desku nezasekne', async () => {
     const start = initialPosition();
+    // Poll běží jen na tahu ENGINE (fáze 80: během tahu člověka se nepolluje).
+    // Startuj tedy ze stavu „na tahu bílý" (engine); poll pak vrátí engineStatus=error
+    // a stav zpět na tah člověka (černý), odkud jde vybírat.
+    const engineToMove: Position = { ...start, turn: 'white' };
     const client: ServerClient = {
       createGame: () => Promise.resolve(gameDto(start)),
       getGame: () => Promise.resolve(gameDto(start, 'error')),
@@ -593,7 +597,7 @@ describe('defenzivní cesty', () => {
     };
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const board = mount(start, { client, pollIntervalMs: 5 });
+    const board = mount(engineToMove, { client, pollIntervalMs: 5 });
     await delay(30); // proběhl poll s engineStatus=error
 
     expect(errorSpy).toHaveBeenCalled(); // chyba se zalogovala

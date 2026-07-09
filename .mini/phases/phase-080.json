@@ -1,0 +1,44 @@
+{
+  "id": 80,
+  "title": "Mobil AIvP: klik nezahodit pollem",
+  "goal": "Tap na vlastní kámen v režimu proti počítači se nezahodí kvůli běžícímu pozadovému pollu (busy), takže výběr a tah funguje na mobilu stejně spolehlivě jako v PvP.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Poll přeskočit, když je na tahu člověk",
+      "status": "done",
+      "detail": "Rozšířit guard v poll() o position.turn === humanColor (v AIvP se během tahu člověka nemá co pollovat). Ověřit, že se poll rozjede hned po tahu člověka (turn→engine), aby detekce tahu enginu i časování aiMovePauseMs zůstaly."
+    },
+    {
+      "title": "Odlišit pasivní čtení od akčního requestu",
+      "status": "done",
+      "detail": "runRequest dostane příznak passive; poll a maybeRequestHint ho volají jako pasivní. Guard v handleClick změnit z busy na busy && !passiveInflight (blokuj jen běžící AKČNÍ request), position.turn !== humanColor zůstává. Tap na výběr/zrušení projde i během ~1 s načítání nápovědy."
+    },
+    {
+      "title": "Serializovat odeslání tahu za pasivní dotaz",
+      "status": "done",
+      "detail": "V cestě advance→submitMove před postMove vyprázdnit běžící pasivní dotaz (while (busy) await inflight, vzor jako resign/offerDraw) + guard na disposed. Zabrání dvěma souběžným HTTP requestům a rozbití busy účetnictví."
+    },
+    {
+      "title": "Testy se zuby",
+      "status": "done",
+      "detail": "Nový test přes reálnou cestu handleClick (ne mock): během běžícího /hint tap na vlastní kámen kámen vybere; rozbití fixu → tap se ztratí → test padne. Plus test, že poll během tahu člověka neběží a po tahu se rozjede. Existující testy thinking/polling/nápověda zelené."
+    },
+    {
+      "title": "Ověření: build + typecheck + lint + testy + ruční průchod",
+      "status": "done",
+      "detail": "Celý balík zelený. Ruční ověření (mobil/emulace): v běžné hře proti počítači i ve Výuce jde vybrat kámen na první tap; tah enginu a časování pauzy fungují dál."
+    }
+  ],
+  "startedAt": "2026-07-09T10:21:45.486Z",
+  "resolvedVerify": [
+    "Reálný mobil: výběr kamene na první tap v AIvP",
+    "Reálný mobil: totéž v režimu Výuka (nápověda)",
+    "Tah AI a časování pauzy fungují dál"
+  ],
+  "completedAt": "2026-07-09T11:23:15.259Z",
+  "autoCommit": {
+    "preSha": "4682597663e8f085cc8f8fe80ef06903dc0f346b",
+    "subject": "Phase 80: Mobil AIvP: klik nezahodit pollem"
+  }
+}

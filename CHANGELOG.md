@@ -7,6 +7,23 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.65.0] - 2026-07-09
+
+### Fixed
+
+- **Na mobilu už ve hře proti počítači nepadá klepnutí na kámen.** Dřív každý
+  pravidelný dotaz na server (a načítání nápovědy ve Výuce) na okamžik „zamkl"
+  desku a na pomalejší mobilní síti se s tím tvoje ťuknutí často míjelo. Nově výběr
+  kamene tyhle dotazy na pozadí neblokují, takže hra proti počítači reaguje na první
+  tap stejně spolehlivě jako hra dvou lidí. Zaseknuté spojení navíc už desku
+  neuvězní natrvalo – dotazy na pozadí mají časový strop.
+
+### Changed
+
+- **Indikátor „kdo je na tahu" ve hře proti počítači vypadá stejně jako ve hře dvou
+  lidí.** Místo kamene v tmavém kroužku se teď vedle desky (na mobilu pod ní) ukazuje
+  samotný kámen strany na tahu.
+
 ## [0.64.0] - 2026-07-09
 
 ### Changed

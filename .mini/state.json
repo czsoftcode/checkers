@@ -397,6 +397,11 @@
       "id": 79,
       "title": "Pozadí lobby na výšku (mobil)",
       "status": "done"
+    },
+    {
+      "id": 80,
+      "title": "Mobil AIvP: klik nezahodit pollem",
+      "status": "done"
     }
   ]
 }

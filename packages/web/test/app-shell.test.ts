@@ -16,6 +16,26 @@ import type { SoundPlayer } from '../src/sound.js';
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Fake `Image`, který u zadaných URL vyvolá onerror, jinak onload (ověření webp kamene). */
+function fakeImageFactory(failUrls: ReadonlySet<string> = new Set()): () => HTMLImageElement {
+  return () => {
+    const img = {
+      onload: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+      set src(value: string) {
+        void Promise.resolve().then(() => {
+          if (failUrls.has(value)) {
+            this.onerror?.();
+          } else {
+            this.onload?.();
+          }
+        });
+      },
+    };
+    return img as unknown as HTMLImageElement;
+  };
+}
+
 beforeEach(() => {
   // Úroveň se pamatuje v LocalStorage → čistý start, ať se volba neprolije mezi testy.
   localStorage.clear();
@@ -877,6 +897,40 @@ describe('app-shell – indikátor strany na tahu', () => {
     change(q(shell.element, '.level-select'));
     await tick();
     expect(ind.classList.contains('hidden')).toBe(true);
+  });
+
+  it('při ověřeném načtení obou kamenů zapne webp indikátoru (.turn-indicator--img)', async () => {
+    const { factory } = fakeFactory();
+    const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
+      createController: factory,
+      createStoneImage: fakeImageFactory(),
+    });
+    document.body.append(shell.element);
+    await tick();
+    await tick(); // dej prostor preloadImages (microtask onload → then)
+    expect(q(shell.element, '.turn-indicator').classList.contains('turn-indicator--img')).toBe(true);
+  });
+
+  it('když se kámen nenačte, zůstane CSS fallback (žádné .turn-indicator--img)', async () => {
+    // Bílý kámen selže → fallback drží (webp jen když se načtou OBA).
+    const { factory } = fakeFactory();
+    const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
+      createController: factory,
+      createStoneImage: (): HTMLImageElement => {
+        const img = {
+          onload: null as (() => void) | null,
+          onerror: null as (() => void) | null,
+          set src(_value: string) {
+            void Promise.resolve().then(() => this.onerror?.());
+          },
+        };
+        return img as unknown as HTMLImageElement;
+      },
+    });
+    document.body.append(shell.element);
+    await tick();
+    await tick();
+    expect(q(shell.element, '.turn-indicator').classList.contains('turn-indicator--img')).toBe(false);
   });
 });
 

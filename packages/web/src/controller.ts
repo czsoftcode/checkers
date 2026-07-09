@@ -184,8 +184,19 @@ export function createBoardController(
   // Promise právě běžícího requestu (jinak už splněná). `resign()` na ni počká,
   // aby vzdání nikdy nekolidovalo s rozběhnutým tahem/pollem (rozhodnutí 1a).
   let inflight: Promise<void> = Promise.resolve();
+  // `true`, když běžící request je jen PASIVNÍ čtení (poll stavu / nápověda Výuky) –
+  // nemění stav partie na serveru a jde zahodit. Takový request NESMÍ zamknout vstup
+  // (výběr kamene je čistě klientská akce), proto ho `handleClick` ignoruje. Akční
+  // requesty (POST tahu / vzdání / remíza) `passiveInflight` nechají `false`, a ty
+  // vstup zamykají dál. Drží se konzistentně s `busy` (nastaví/shodí `runRequest`).
+  let passiveInflight = false;
   // Zámek proti dvojímu odeslání vzdání (dvojklik / opakované potvrzení).
   let resigning = false;
+  // `true` od okamžiku, kdy je tah člověka POTVRZEN k odeslání, dokud request
+  // nedoběhne – VČETNĚ čekání, až se vyprázdní běžící pasivní dotaz (nápověda).
+  // Drží vstup zamčený i v tom okně, kdy `busy` ještě patří pasivnímu dotazu
+  // (a `handleClick` by ho jinak pustil), aby druhý tap nevlezl doprostřed odesílání.
+  let submitting = false;
   // Zámek proti dvojí nabídce remízy (dvojklik / než dorazí verdikt enginu).
   let offering = false;
   // Poslední výsledek viděný ze serveru – aby vzdání zbytečně nešlo do skončené partie.
@@ -258,10 +269,15 @@ export function createBoardController(
   }
 
   function handleClick(square: Square | null): void {
-    // Když běží request nebo není na tahu člověk (engine přemýšlí), klik zahodíme.
-    // Bez kontroly barvy by šlo vybrat bílý kámen (selectableAt jen porovnává
-    // cell.color === turn), zahrát za engine a dostat 409.
-    if (busy || position.turn !== humanColor) {
+    // Blokuj jen běžící AKČNÍ request (tah/vzdání/remíza) – ten nesmí klik přepsat.
+    // PASIVNÍ čtení (poll / nápověda Výuky) vstup NEzamyká: výběr kamene je čistě
+    // klientský stav, žádný server request až do odeslání tahu, a na mobilu drží
+    // pasivní dotaz `busy` tak dlouho (síťový RTT), že by jinak spolkl tap. Odeslání
+    // tahu (`submitMove`) si běžící pasivní dotaz vyprázdní samo, ať nekolidují.
+    // Kontrola barvy zůstává: bez ní by šlo vybrat bílý kámen (selectableAt jen
+    // porovnává cell.color === turn), zahrát za engine a dostat 409. `submitting`
+    // drží zámek i v okně, kdy odesílaný tah čeká na vyprázdnění pasivního dotazu.
+    if (submitting || (busy && !passiveInflight) || position.turn !== humanColor) {
       return;
     }
 
@@ -313,15 +329,19 @@ export function createBoardController(
   /**
    * Spustí `op` jako JEDINÝ běžící request: nastaví `busy` a uloží promise do
    * `inflight`, ať na ni `resign()` může počkat (1a). `op` si řeší vlastní chyby
-   * – runRequest jen garantuje, že se `busy` po dokončení uvolní.
+   * – runRequest jen garantuje, že se `busy` po dokončení uvolní. `passive=true`
+   * značí pouhé čtení (poll / nápověda), které nezamyká vstup (viz `passiveInflight`);
+   * akční requesty (tah / vzdání / remíza) ho nechají `false`.
    */
-  function runRequest(op: () => Promise<void>): Promise<void> {
+  function runRequest(op: () => Promise<void>, passive = false): Promise<void> {
     busy = true;
+    passiveInflight = passive;
     inflight = (async () => {
       try {
         await op();
       } finally {
         busy = false;
+        passiveInflight = false;
       }
     })();
     return inflight;
@@ -340,6 +360,7 @@ export function createBoardController(
    * z GET (kámen se vrátí na výchozí pole, sebrané se obnoví).
    */
   function submitMove(from: Square, path: readonly Square[], animate: boolean): void {
+    submitting = true; // zamkni vstup HNED (i po dobu čekání na pasivní dotaz níže)
     settleNext = !animate;
     selection = null;
     // Člověk potáhl → nápověda dosloužila: zhasni ji hned (ne až dorazí stav ze
@@ -348,16 +369,43 @@ export function createBoardController(
     hintMove = null;
     hintRequested = false;
     view.setHighlights(currentRenderState()); // zhasni zvýraznění; kamenů se nedotýkej
-    void runRequest(async () => {
+    void (async () => {
       try {
-        applyServerState(await client.postMove(gameId, from, path));
-      } catch (error) {
-        console.error('Server tah nepřijal, synchronizuji stav ze serveru:', error);
-        settleNext = false;
-        await resync();
-        renderStatic();
+        // Odeslání tahu je AKČNÍ request – nesmí běžet souběžně s pasivním dotazem
+        // (nápověda / doběhávající poll). Kdyby `runRequest` přepsal `inflight`
+        // uprostřed pasivního requestu, jeho `finally` by shodilo `busy` ještě za
+        // běhu tahu a rozbilo single-flight. Počkej, až pasivní dotaz doběhne
+        // (stejný vzor jako `resign`/`offerDraw`).
+        while (busy) {
+          await inflight;
+        }
+        if (disposed) {
+          return; // „Nová hra" během čekání – stav vyměněné partie neodesílej
+        }
+        // Doběhlá nápověda mohla během čekání znovu rozsvítit radu (její post-await
+        // guard vidí selection===null) – zhasni ji, ať tah odchází s čistou deskou.
+        hintMove = null;
+        view.setHighlights(currentRenderState());
+        // INVARIANT: mezi opuštěním `while (busy)` a tímto `runRequest` NESMÍ přijít
+        // `await` (setHighlights je synchronní). Jinak by se sem mezi microtaskami
+        // vklínil jiný akční request (druhý submitMove / resign), oba by viděly
+        // `busy===false` a spustily dva souběžné HTTP → rozbité single-flight. Drain
+        // + tato synchronní mezera drží „na řadě jsme my"; `submitting` navíc blokuje
+        // `handleClick`, takže druhý tah se ani nenaklikne.
+        await runRequest(async () => {
+          try {
+            applyServerState(await client.postMove(gameId, from, path));
+          } catch (error) {
+            console.error('Server tah nepřijal, synchronizuji stav ze serveru:', error);
+            settleNext = false;
+            await resync();
+            renderStatic();
+          }
+        });
+      } finally {
+        submitting = false;
       }
-    });
+    })();
   }
 
   /**
@@ -365,11 +413,13 @@ export function createBoardController(
    * když už request běží (odesílá se tah / vzdání / běží jiný poll), tik se přeskočí.
    */
   async function poll(): Promise<void> {
-    if (busy || dragging || introPlaying) {
-      // Jiný request běží (single-flight), člověk má kámen „v ruce" (tažení), nebo
-      // běží úvodní animace ballotu – ve všech případech by překreslení sáhlo na
-      // rozanimovanou/přesouvanou desku. Tik zahodíme (tah enginu dorazí dalším
-      // pollem po doběhnutí intra).
+    if (busy || dragging || introPlaying || position.turn === humanColor) {
+      // Přeskoč tik, když: jiný request běží (single-flight), člověk má kámen „v ruce"
+      // (tažení), běží úvodní animace ballotu, NEBO je na tahu ČLOVĚK. V AIvP se během
+      // tahu člověka na serveru nic nemění (engine táhne až po něm, remíza/vzdání jdou
+      // vlastním requestem), takže poll by jen zbytečně držel `busy` po dobu síťového
+      // RTT a na mobilu spolknul tap na kámen. Jakmile člověk potáhne, `applyServerState`
+      // přepne stav na tah enginu a další tik už poll pustí – tah enginu tím dorazí.
       return;
     }
     await runRequest(async () => {
@@ -404,7 +454,7 @@ export function createBoardController(
       } catch (error) {
         console.error('Dotaz na stav partie selhal:', error);
       }
-    });
+    }, true);
   }
 
   /**
@@ -446,7 +496,7 @@ export function createBoardController(
       } catch (error) {
         console.error('Nápovědu se nepodařilo načíst, hraje se bez ní:', error);
       }
-    });
+    }, true);
   }
 
   /**
