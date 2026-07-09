@@ -28,7 +28,10 @@ import type {
 // Celostránkové pozadí místnosti: hotový (dostatečně tmavý) obrázek `intro.webp`.
 // `?url` → Vite dá při buildu hashovanou URL řetězcem (jako `board-image`); pozadí je
 // FIXNÍ jeden obrázek, ne losované jako u hry (žádná logika z `backgrounds.ts`).
+// Na výšku (mobil / portrait) se použije `intro_mobile.webp` – výběr řídí prohlížeč
+// přes `<picture>`/`<source media>` podle ORIENTACE, ne šířky (viz níže).
 import introUrl from './assets/intro.webp?url';
+import introMobileUrl from './assets/intro_mobile.webp?url';
 
 /** Klíč v LocalStorage pro zapamatovanou přezdívku (přežije reload, jako úroveň). */
 const NICK_STORAGE_KEY = 'checkers.roomNick';
@@ -152,13 +155,23 @@ export function createLobby(options: LobbyOptions): Lobby {
 
   // Pozadí CELÉ stránky: `<img>` na celý viewport POD obsahem (stacking řeší třída
   // `.page-bg` v styles.css: fixed, inset:0, z-index:-1, object-fit:cover). URL se
-  // nastavuje přes `src` (atribut, ne styl) → CSP se ho netýká. Žádný ztmavovací
-  // overlay – obrázek je dost tmavý a karta místnosti má vlastní tmavé pozadí.
+  // nastavuje přes `src`/`srcset` (atributy, ne styl) → CSP se jich netýká. Žádný
+  // ztmavovací overlay – obrázek je dost tmavý a karta místnosti má vlastní tmavé pozadí.
+  //
+  // `<picture>` vybírá variantu podle ORIENTACE (ne šířky): na výšku `intro_mobile.webp`,
+  // jinak fallback `<img>` s `intro.webp`. Rozhoduje prohlížeč přes `<source media>`,
+  // takže se přepne živě i při otočení telefonu – bez JS, `matchMedia` ani listenerů.
+  // `<source>` MUSÍ být před `<img>`, jinak ho prohlížeč ignoruje.
+  const picture = document.createElement('picture');
+  const mobileSource = document.createElement('source');
+  mobileSource.media = '(orientation: portrait)';
+  mobileSource.srcset = introMobileUrl;
   const pageBg = document.createElement('img');
   pageBg.className = 'page-bg';
   pageBg.alt = '';
   pageBg.src = introUrl;
-  element.append(pageBg);
+  picture.append(mobileSource, pageBg);
+  element.append(picture);
 
   const card = document.createElement('div');
   card.className = 'lobby-card';

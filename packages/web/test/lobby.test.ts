@@ -126,6 +126,32 @@ describe('createLobby', () => {
     const src = bg!.getAttribute('src') ?? '';
     expect(src.length).toBeGreaterThan(0); // ?url import → neprázdná URL
     expect(src).toContain('intro'); // je to opravdu intro.webp, ne jiný asset
+    // Fallback <img> je landscape varianta – NESMÍ to být mobilní obrázek (jinak by
+    // se na šířku ukazovalo mobilní pozadí).
+    expect(src).not.toContain('mobile');
+  });
+
+  it('pozadí je <picture> a na výšku (portrait) vybírá intro_mobile.webp', () => {
+    const h = mountLobby();
+    // <img.page-bg> žije uvnitř <picture> (fallback), ne přímo pod .lobby.
+    const picture = h.el.querySelector('picture');
+    expect(picture).not.toBeNull();
+    const bg = picture!.querySelector<HTMLImageElement>('img.page-bg');
+    expect(bg).not.toBeNull();
+
+    const source = picture!.querySelector('source');
+    expect(source).not.toBeNull();
+    // Výběr řídí ORIENTACE, ne šířka – zub proti záměně za max-width breakpoint.
+    expect(source!.getAttribute('media')).toBe('(orientation: portrait)');
+    const srcset = source!.getAttribute('srcset') ?? '';
+    expect(srcset).toContain('intro_mobile'); // portrait varianta míří na mobilní asset
+
+    // Pořadí v <picture>: <source> MUSÍ být před <img>, jinak ho prohlížeč ignoruje.
+    const kids = Array.from(picture!.children);
+    expect(kids.indexOf(source!)).toBeLessThan(kids.indexOf(bg!));
+
+    // jsdom z <picture> reálně nevybírá – tenhle test hlídá jen STRUKTURU (source/media/
+    // asset/pořadí). Skutečný výběr obrázku podle orientace ověří člověk v prohlížeči.
   });
 
   it('start ukáže formulář a schová místnost', () => {

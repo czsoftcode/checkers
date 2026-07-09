@@ -392,6 +392,11 @@
       "id": 78,
       "title": "PvP: důvod konce partie",
       "status": "done"
+    },
+    {
+      "id": 79,
+      "title": "Pozadí lobby na výšku (mobil)",
+      "status": "done"
     }
   ]
 }
