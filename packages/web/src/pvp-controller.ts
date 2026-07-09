@@ -45,8 +45,31 @@ import { createBoardView } from './board-view.js';
 import type { DropOutcome, RenderState } from './board-view.js';
 import { capturedOnHop, capturesForPrefix, nextTargets, resolveChainTo, resolveMove, selectableAt } from './selection.js';
 import { createSoundPlayer } from './sound.js';
-import type { SoundPlayer } from './sound.js';
-import type { PvpGameDto } from './server-client.js';
+import type { SoundEvent, SoundPlayer } from './sound.js';
+import { isEndReason } from './server-client.js';
+import type { EndReason, PvpGameDto } from './server-client.js';
+
+/**
+ * Prodleva mezi dokončením animace posledního tahu a zvukem konce partie (fáze 78),
+ * ať fanfára/prohra/remíza nespadne na poslední dopad kamene. Shodná s enginovou
+ * hrou (`controller.ts`), aby konec zněl v obou režimech stejně.
+ */
+const END_SOUND_DELAY_MS = 500;
+
+/**
+ * Zvuk konce partie z pohledu hráče `myColor` (fáze 78). `Record<Exclude<…>>` je
+ * exhaustivní: kdyby do `GameResult` přibyla další terminální hodnota, kompilace se
+ * hlasitě rozbije tady, ne že by se pro ni tiše zahrál zvuk remízy. Volá se JEN pro
+ * terminální výsledek (`applyState` hlídá přechod z `ongoing`).
+ */
+function soundForResult(result: Exclude<GameResult, 'ongoing'>, myColor: Color): SoundEvent {
+  const byResult: Record<Exclude<GameResult, 'ongoing'>, SoundEvent> = {
+    'black-wins': myColor === 'black' ? 'win' : 'loss',
+    'white-wins': myColor === 'white' ? 'win' : 'loss',
+    draw: 'draw',
+  };
+  return byResult[result];
+}
 
 /** Rozpracovaný tah: výchozí pole + naklikané mezidopady (bez výchozího). */
 interface Selection {
@@ -61,6 +84,12 @@ export interface PvpStatus {
   readonly turn: Color;
   /** Jsem na tahu já (partie běží a `turn` je moje barva)? Skořápka podle toho píše výzvu k tahu. */
   readonly myTurn: boolean;
+  /**
+   * Důvod konce partie (fáze 78), nebo `null` dokud běží / když ho stav nenese.
+   * Už NORMALIZOVANÝ na hranici (`applyState`): neznámou/chybějící hodnotu drží
+   * jako `null`, takže skořápka jen volí text a nemusí nic dovalidovávat.
+   */
+  readonly reason: EndReason | null;
 }
 
 export interface PvpControllerOptions {
@@ -107,6 +136,9 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
   // je pozice `null` → deska je prázdná a klik nic nedělá (žádná pozice k výběru).
   let position: Position | null = null;
   let result: GameResult = 'ongoing';
+  // Důvod konce partie z posledního stavu serveru (fáze 78). Normalizovaný: jen
+  // platný `EndReason`, jinak `null` (běží / stav ho nenese / neznámá hodnota).
+  let reason: EndReason | null = null;
   let selection: Selection | null = null;
   // `true` mezi odesláním tahu a příchodem potvrzeného stavu ze serveru. Po tu dobu
   // je vstup zamčený (žádný další tah), deska se NEhýbe optimisticky.
@@ -124,6 +156,14 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
   // (kámen zůstal na výchozím poli → server ho animuje jako jeden pohyb).
   let settleNext = false;
   let disposed = false;
+  // Naplánovaný (ale ještě neodehraný) zvuk konce partie (fáze 78). Drží se, ať se dá
+  // zrušit při dispose / dalším stavu – jinak by fanfára zazněla po odchodu z obrazovky.
+  let endSoundTimer: ReturnType<typeof setTimeout> | null = null;
+  // `true`, jakmile jsme viděli REÁLNĚ běžící stav (fáze 78). Zvuk konce se hraje jen
+  // po přechodu z běžící partie, ne když je úplně PRVNÍ přijatý stav rovnou terminální
+  // (načtení/reconnect do už dohrané partie – todo 42). Počáteční `result='ongoing'` je
+  // jen výchozí hodnota PŘED prvním stavem, ne důkaz, že partie běžela.
+  let sawOngoing = false;
 
   const view = createBoardView(handleClick, player, { canDrag, onDragStart, onDrop }, options.myColor);
 
@@ -425,6 +465,7 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
       result,
       turn: position === null ? options.myColor : position.turn,
       myTurn: canInput(),
+      reason,
     });
   }
 
@@ -432,23 +473,62 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     if (disposed) {
       return; // push dorazil až po odchodu z obrazovky – zahozenou desku nepřepisuj
     }
+    const prevResult = result;
     position = dto.position;
     result = dto.result;
+    // Důvod konce (fáze 78): normalizuj na hranici – neznámé/chybějící `reason`
+    // (starší server, rozbitý stav) drž jako `null`, skořápka pak spadne na text
+    // bez důvodu místo aby zobrazila nesmysl.
+    reason = isEndReason(dto.reason) ? dto.reason : null;
     // Autoritativní stav dorazil → zruš rozdělaný výběr a odemkni vstup.
     selection = null;
     pendingMove = false;
     const settle = settleNext;
     settleNext = false;
+    // `rendered` = kdy doběhne animace tohoto stavu; koncový zvuk se zavěsí až za ni.
+    let rendered: Promise<void>;
     if (settle) {
       // Tah byl dokončen TAŽENÍM – kámen už je rukou na cíli. Jen USAĎ (settle),
       // ať se pohyb nepřehraje podruhé jako sklouznutí (a dorovnej případné sebrané).
       view.settle(renderState());
+      rendered = Promise.resolve(); // settle neanimuje → nic k čekání
     } else {
       // Rozdíl proti minulé pozici `view.update` zanimuje (tah můj klikaný i soupeřův)
       // jako jeden pohyb; první stav (prev===null) se jen staticky vykreslí.
-      void view.update(renderState());
+      rendered = view.update(renderState());
+    }
+    // Zvuk konce partie (fáze 78) při přechodu ongoing → terminální, z pohledu MÉ barvy:
+    // výhra fanfára, prohra zvuk prohry, remíza zvuk remízy. Až po dokončení animace
+    // posledního tahu, ať nepřekryje jeho dopad. Konec může přijít i soupeřovým tahem.
+    // `sawOngoing` brání zvuku při vstupu do UŽ dohrané partie (první stav terminální).
+    if (sawOngoing && prevResult === 'ongoing' && result !== 'ongoing') {
+      scheduleEndSound(rendered, result, soundForResult(result, options.myColor));
+    }
+    if (result === 'ongoing') {
+      sawOngoing = true;
     }
     emitStatus();
+  }
+
+  /**
+   * Přehraje zvuk konce partie AŽ po dokončení animace posledního tahu (`rendered`)
+   * a ještě po prodlevě {@link END_SOUND_DELAY_MS}. Nezahraje, pokud se controller
+   * mezitím disposnul (odchod z obrazovky) nebo se výsledek změnil (obrana proti
+   * zastaralému naplánovanému zvuku). Dvojče enginové `scheduleEndSound`.
+   */
+  function scheduleEndSound(rendered: Promise<void>, forResult: GameResult, event: SoundEvent): void {
+    void rendered.then(() => {
+      if (disposed || result !== forResult) {
+        return;
+      }
+      endSoundTimer = setTimeout(() => {
+        endSoundTimer = null;
+        if (disposed || result !== forResult) {
+          return;
+        }
+        player.play(event);
+      }, END_SOUND_DELAY_MS);
+    });
   }
 
   function showError(message: string): void {
@@ -497,6 +577,10 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     setConnectionLost,
     dispose(): void {
       disposed = true;
+      if (endSoundTimer !== null) {
+        clearTimeout(endSoundTimer); // zahoď naplánovaný zvuk konce (odchod z obrazovky)
+        endSoundTimer = null;
+      }
       view.dispose();
     },
   };

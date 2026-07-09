@@ -29,9 +29,13 @@ class FakeSocket implements GameWebSocket {
   }
 }
 
-/** Validní PvP stav: výchozí pozice s daným hráčem na tahu a výsledkem. */
-function pvpGame(turn: 'black' | 'white' = 'black', result: GameResult = 'ongoing'): PvpGameDto {
-  return { mode: 'pvp', id: 'g1', position: { ...initialPosition(), turn }, result, legalMoves: [] };
+/** Validní PvP stav: výchozí pozice s daným hráčem na tahu, výsledkem a důvodem konce. */
+function pvpGame(
+  turn: 'black' | 'white' = 'black',
+  result: GameResult = 'ongoing',
+  reason: PvpGameDto['reason'] = null,
+): PvpGameDto {
+  return { mode: 'pvp', id: 'g1', position: { ...initialPosition(), turn }, result, legalMoves: [], reason };
 }
 
 /**
@@ -614,6 +618,64 @@ describe('createGameScreen – výsledkový modal Odveta/Konec (fáze 77)', () =
     expect(modalText(m)).toBe('Prohrál jsi.'); // pořád výsledek, ne „spojení přerušeno"
     // Stavový řádek nese výsledek, ne hlášku o spojení.
     expect(m.element.querySelector('.status')!.textContent).toBe('Prohrál jsi.');
+  });
+});
+
+describe('createGameScreen – důvod konce v textu výsledku (fáze 78)', () => {
+  /** Text v modalu i ve stavovém řádku (mají být shodné). */
+  function endText(m: Mounted): { modal: string | null; status: string | null } {
+    return {
+      modal: modalText(m),
+      status: m.element.querySelector('.status')!.textContent,
+    };
+  }
+
+  it('soupeř se vzdal → výherce vidí důvod (ne holé „Vyhrál jsi!")', () => {
+    const m = mount({ color: 'black' }); // hraju černé, černý vyhrál = soupeř (bílý) se vzdal
+    m.socket.message({ type: 'game-state', game: pvpGame('black', 'black-wins', 'resign') });
+    expect(endText(m)).toEqual({ modal: 'Soupeř se vzdal – vyhrál jsi!', status: 'Soupeř se vzdal – vyhrál jsi!' });
+  });
+
+  it('vzdal jsem se sám → poražený vidí, že prohrál vzdáním', () => {
+    const m = mount({ color: 'black' }); // hraju černé, bílý vyhrál = já (černý) jsem se vzdal
+    m.socket.message({ type: 'game-state', game: pvpGame('black', 'white-wins', 'resign') });
+    expect(endText(m)).toEqual({ modal: 'Vzdal ses – prohrál jsi.', status: 'Vzdal ses – prohrál jsi.' });
+  });
+
+  it('remíza dohodou vs. remíza podle pravidel se v textu LIŠÍ', () => {
+    const agreed = mount({ color: 'black' });
+    agreed.socket.message({ type: 'game-state', game: pvpGame('black', 'draw', 'draw-agreement') });
+    expect(modalText(agreed)).toBe('Remíza dohodou.');
+
+    const byRules = mount({ color: 'black' });
+    byRules.socket.message({ type: 'game-state', game: pvpGame('black', 'draw', 'rules') });
+    expect(modalText(byRules)).toBe('Remíza podle pravidel.');
+  });
+
+  it('bez důvodu (reason null) spadne na dosavadní neutrální text – žádná regrese', () => {
+    const m = mount({ color: 'black' });
+    m.socket.message({ type: 'game-state', game: pvpGame('black', 'black-wins', null) });
+    expect(modalText(m)).toBe('Vyhrál jsi!');
+  });
+
+  it('starší server: klíč reason ve stavu úplně CHYBÍ → fallback, deska nezamrzne', () => {
+    const m = mount({ color: 'black' });
+    // Stav bez pole `reason` (undefined, ne null) – simuluje server před fází 78.
+    const legacy = { mode: 'pvp', id: 'g1', position: { ...initialPosition(), turn: 'black' }, result: 'black-wins', legalMoves: [] };
+    m.socket.message({ type: 'game-state', game: legacy as unknown as PvpGameDto });
+    // Guard stav NEzahodil (jinak by výsledkový modal vůbec nevznikl) a text je neutrální.
+    expect(modalClosed(m)).toBe(false);
+    expect(modalText(m)).toBe('Vyhrál jsi!');
+  });
+
+  it('důvod přežije znovuotevření výsledku (Odveta odmítnuta → reopenResult)', () => {
+    const m = mount({ color: 'black' });
+    m.socket.message({ type: 'game-state', game: pvpGame('black', 'black-wins', 'resign') });
+    clickModalPrimary(m); // Odveta → čekací modal
+    expect(modalText(m)).toContain('Čekám');
+    // Soupeř odvetu odmítl → zpět na výsledkový modal; důvod musí zůstat.
+    m.emitRematchDeclined();
+    expect(modalText(m)).toBe('Soupeř se vzdal – vyhrál jsi!');
   });
 });
 

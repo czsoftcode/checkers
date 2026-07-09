@@ -57,9 +57,11 @@ describe('PvP partie na engine REST endpointech (fáze 68)', () => {
     expect(dto.id).toBe(id);
     expect((dto.position as { turn: string }).turn).toBe('black');
     expect(dto.result).toBe('ongoing');
+    expect(dto.reason).toBeNull(); // fáze 78: běžící partie → žádný důvod konce
     expect(Array.isArray(dto.legalMoves)).toBe(true);
     // Engine-specifická pole se do PvP DTO nesmí protáhnout (ne falešně null).
-    expect(Object.keys(dto).sort()).toEqual(['id', 'legalMoves', 'mode', 'position', 'result']);
+    // `reason` je NAOPAK součástí PvP kontraktu (fáze 78) – musí být přítomné.
+    expect(Object.keys(dto).sort()).toEqual(['id', 'legalMoves', 'mode', 'position', 'reason', 'result']);
   });
 
   it('POST /games/:id/moves vrátí 409 pvp_not_playable, ne 500', async () => {

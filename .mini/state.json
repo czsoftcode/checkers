@@ -387,6 +387,11 @@
       "id": 77,
       "title": "PvP: vzdání a remíza",
       "status": "done"
+    },
+    {
+      "id": 78,
+      "title": "PvP: důvod konce partie",
+      "status": "done"
     }
   ]
 }

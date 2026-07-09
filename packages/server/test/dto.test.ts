@@ -65,24 +65,35 @@ describe('gameToDto', () => {
 });
 
 describe('pvpGameToDto', () => {
-  it('PvP tvar: mode pvp, pozice/turn/result/legalMoves, žádná engine pole', () => {
-    const dto = pvpGameToDto('g1', initialGameState(), 'ongoing');
+  it('PvP tvar: mode pvp, pozice/turn/result/legalMoves/reason, žádná engine pole', () => {
+    const dto = pvpGameToDto('g1', initialGameState(), 'ongoing', null);
     expect(dto.mode).toBe('pvp');
     expect(dto.id).toBe('g1');
     expect(dto.position.turn).toBe('black');
     expect(dto.result).toBe('ongoing');
+    expect(dto.reason).toBeNull();
     expect(dto.legalMoves).toHaveLength(7);
     // Engine-specifická pole na PvP DTO NESMÍ existovat (ne falešně null) – kdyby
     // se sem protáhla, klient by je omylem četl jako platný stav enginu/úrovně.
+    // `reason` je NAOPAK součástí PvP kontraktu (fáze 78), tak musí být přítomné.
     const keys = Object.keys(dto).sort();
-    expect(keys).toEqual(['id', 'legalMoves', 'mode', 'position', 'result']);
+    expect(keys).toEqual(['id', 'legalMoves', 'mode', 'position', 'reason', 'result']);
   });
 
   it('result se PŘEDÁVÁ zvenčí (efektivní výsledek), DTO ho neodvozuje', () => {
     // Rozehraná pozice, ale vnucený výsledek (simulace budoucího konce PvP).
-    const dto = pvpGameToDto('g2', initialGameState(), 'black-wins');
+    const dto = pvpGameToDto('g2', initialGameState(), 'black-wins', 'resign');
     expect(dto.result).toBe('black-wins');
     expect(dto.position.turn).toBe('black');
+  });
+
+  it('reason se PŘEDÁVÁ zvenčí do drátu (identita) – vzdání, dohoda, pravidla', () => {
+    // Důvod konce je pár k result (fáze 78): DTO ho jen serializuje tak, jak ho
+    // volající předá. Kdyby ho DTO ignorovalo nebo přepsalo, výherce by u vzdané
+    // partie neviděl, PROČ vyhrál – tenhle test to hlídá pro všechny tři důvody.
+    expect(pvpGameToDto('r', initialGameState(), 'white-wins', 'resign').reason).toBe('resign');
+    expect(pvpGameToDto('d', initialGameState(), 'draw', 'draw-agreement').reason).toBe('draw-agreement');
+    expect(pvpGameToDto('p', initialGameState(), 'draw', 'rules').reason).toBe('rules');
   });
 });
 

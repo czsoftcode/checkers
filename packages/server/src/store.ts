@@ -71,6 +71,15 @@ interface GameRecordBase {
    * partie čte {@link effectiveResult} = `forcedResult ?? gameResultFromState`.
    */
   readonly forcedResult: GameResult | null;
+  /**
+   * PROČ byl {@link forcedResult} vynucen (fáze 78). `'resign'` = někdo se vzdal,
+   * `'draw-agreement'` = přijatá nabídka remízy. `null`, dokud výsledek nevznikl
+   * vynuceně (partie běží, nebo skončila čistě podle pravidel z pozice). Drží se
+   * kvůli tomu, aby druhý hráč u výsledku viděl DŮVOD konce, ne jen holé skóre –
+   * `forcedResult` sám (jen výherní strana) vzdání od dohody nerozliší. Drátový
+   * důvod (včetně `'rules'` pro konec z pozice) odvozuje {@link endReason}.
+   */
+  readonly forcedReason: ForcedReason | null;
 }
 
 /**
@@ -126,6 +135,8 @@ interface StoredGameBase {
   moves: Move[];
   archived: boolean;
   forcedResult: GameResult | null;
+  /** Příčina vynuceného konce (fáze 78); `null` dokud výsledek nevznikl vynuceně. */
+  forcedReason: ForcedReason | null;
 }
 interface EngineStoredGame extends StoredGameBase {
   mode: 'engine';
@@ -180,6 +191,39 @@ export function effectiveResult(game: {
   return game.forcedResult ?? gameResultFromState(game.state);
 }
 
+/**
+ * Příčina VYNUCENÉHO konce partie (mimo pravidla): vzdání, nebo přijatá remíza.
+ * Uloženo ve stavu partie vedle `forcedResult` (viz {@link GameRecordBase}).
+ */
+export type ForcedReason = 'resign' | 'draw-agreement';
+
+/**
+ * Drátový důvod konce partie z pohledu klienta (fáze 78). Vynucené příčiny
+ * ({@link ForcedReason}) plus `'rules'` = terminální výsledek plynoucí čistě z
+ * pozice (soupeř bez tahu / bez kamenů, nebo remíza podle pravidel – 40 tahů /
+ * opakování). Rozdíl `'draw-agreement'` vs. `'rules'` odděluje dohodnutou remízu
+ * od remízy podle pravidel; klient podle toho volí text.
+ */
+export type EndReason = ForcedReason | 'rules';
+
+/**
+ * Drátový důvod konce partie, nebo `null` když partie BĚŽÍ (fáze 78). Vazba na
+ * efektivní výsledek je tvrdá: dokud je `ongoing`, důvod je `null` – nikdy se
+ * nevrací zastaralý/predčasný důvod (stav partie chodí klientovi v každém
+ * game-state, ale důvod má smysl jen u terminálního výsledku). Skončila-li
+ * partie vynuceně, vrací `forcedReason`; jinak (konec z pozice) `'rules'`.
+ */
+export function endReason(game: {
+  readonly forcedResult: GameResult | null;
+  readonly forcedReason: ForcedReason | null;
+  readonly state: GameState;
+}): EndReason | null {
+  if (effectiveResult(game) === 'ongoing') {
+    return null;
+  }
+  return game.forcedReason ?? 'rules';
+}
+
 export class GameStore {
   private readonly games = new Map<string, StoredGame>();
 
@@ -212,6 +256,7 @@ export class GameStore {
       moves: [...game.moves],
       archived: game.archived,
       forcedResult: game.forcedResult,
+      forcedReason: game.forcedReason,
     };
     if (game.mode === 'pvp') {
       return { ...base, mode: 'pvp', players: game.players };
@@ -323,6 +368,7 @@ export class GameStore {
       moves: seeded?.moves ?? [],
       archived: false,
       forcedResult: null,
+      forcedReason: null,
       level,
       ballotIndex: seeded?.index ?? null,
       humanColor,
@@ -350,6 +396,7 @@ export class GameStore {
       moves: [],
       archived: false,
       forcedResult: null,
+      forcedReason: null,
       players: { black: challengerId, white: challengedId },
       drawOfferBy: null,
       rematchOfferBy: null,
@@ -415,6 +462,7 @@ export class GameStore {
       return 'already-over';
     }
     game.forcedResult = opposite(game.humanColor) === 'white' ? 'white-wins' : 'black-wins';
+    game.forcedReason = 'resign';
     return this.toRecord(id, game);
   }
 
@@ -442,6 +490,7 @@ export class GameStore {
       return 'already-over';
     }
     game.forcedResult = 'draw';
+    game.forcedReason = 'draw-agreement';
     return this.toRecord(id, game);
   }
 
@@ -478,6 +527,7 @@ export class GameStore {
       return 'already-over';
     }
     game.forcedResult = myColor === 'black' ? 'white-wins' : 'black-wins';
+    game.forcedReason = 'resign';
     game.drawOfferBy = null;
     return this.toRecord(id, game);
   }
@@ -551,6 +601,7 @@ export class GameStore {
       return 'no-offer';
     }
     game.forcedResult = 'draw';
+    game.forcedReason = 'draw-agreement';
     game.drawOfferBy = null;
     return this.toRecord(id, game);
   }

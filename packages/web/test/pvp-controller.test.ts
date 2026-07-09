@@ -18,12 +18,17 @@ afterEach(() => {
 });
 
 /** PvP stav v drátovém tvaru z libovolné pozice (legalMoves dopočítá z pravidel). */
-function pvpDto(position: Position, result: GameResult = 'ongoing'): PvpGameDto {
+function pvpDto(
+  position: Position,
+  result: GameResult = 'ongoing',
+  reason: PvpGameDto['reason'] = null,
+): PvpGameDto {
   return {
     mode: 'pvp',
     id: 'g1',
     position,
     result,
+    reason,
     legalMoves: legalMoves(position).map((m) => ({
       from: m.from,
       path: [...m.path],
@@ -122,6 +127,7 @@ function mount(myColor: Color, opts: { sendResult?: boolean; throwOnSend?: boole
   const sent: Sent[] = [];
   const statuses: PvpStatus[] = [];
   const errors: string[] = [];
+  const plays: string[] = []; // odehrané zvuky v pořadí (move/land/win/loss/draw)
   const controller = createPvpController({
     myColor,
     sendMove: (from, path) => {
@@ -133,11 +139,18 @@ function mount(myColor: Color, opts: { sendResult?: boolean; throwOnSend?: boole
     },
     onStatus: (s) => statuses.push(s),
     onError: (m) => errors.push(m),
+    soundPlayer: { unlock: () => undefined, play: (event) => plays.push(event) },
   });
   disposers.push(() => controller.dispose());
   document.body.append(controller.element);
-  return { controller, sent, statuses, errors };
+  return { controller, sent, statuses, errors, plays };
 }
+
+/** Počet odehraných zvuků daného druhu. */
+const countPlays = (plays: readonly string[], event: string): number =>
+  plays.filter((e) => e === event).length;
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Najde mezi kandidáty pozici s černým vícenásobným skokem (path délky ≥ 2). */
 function findDoubleJump(): { position: Position; move: Move } {
@@ -166,7 +179,7 @@ describe('createPvpController', () => {
   it('applyState ohlásí stav – na tahu jsem, když je má barva a partie běží', () => {
     const h = mount('black');
     h.controller.applyState(pvpDto(initialPosition())); // výchozí = černý na tahu
-    expect(h.statuses.at(-1)).toEqual({ result: 'ongoing', turn: 'black', myTurn: true });
+    expect(h.statuses.at(-1)).toEqual({ result: 'ongoing', turn: 'black', myTurn: true, reason: null });
   });
 
   it('legální klik-sekvence (výběr → cíl) pošle správné {from, path} a zamkne vstup', () => {
@@ -288,11 +301,23 @@ describe('createPvpController', () => {
     expect(h.statuses.at(-1)!.myTurn).toBe(true); // zpět na tahu
   });
 
+  it('reason: platný projde do statusu, neznámý/chybějící se normalizuje na null (fáze 78)', () => {
+    const h = mount('black');
+    // Platný důvod projde beze změny.
+    h.controller.applyState(pvpDto(initialPosition(), 'white-wins', 'resign'));
+    expect(h.statuses.at(-1)!.reason).toBe('resign');
+    // Neznámá hodnota ze staršího/rozbitého stavu → null (skořápka spadne na text
+    // bez důvodu, deska nezamrzne). Zub: kdyby normalizace v applyState zmizela,
+    // status by nesl 'nonsense' a outcomeText by dostal cizí hodnotu.
+    h.controller.applyState({ ...pvpDto(initialPosition(), 'white-wins'), reason: 'nonsense' as never });
+    expect(h.statuses.at(-1)!.reason).toBeNull();
+  });
+
   it('terminální výsledek zamkne desku – klik nic nepošle', () => {
     const h = mount('black');
     // Pozice, kde je černý nominálně na tahu, ale partie je rozhodnutá (výhra bílého).
     h.controller.applyState(pvpDto(initialPosition(), 'white-wins'));
-    expect(h.statuses.at(-1)).toEqual({ result: 'white-wins', turn: 'black', myTurn: false });
+    expect(h.statuses.at(-1)).toEqual({ result: 'white-wins', turn: 'black', myTurn: false, reason: null });
     const simple = legalMoves(initialPosition()).find((m) => m.path.length === 1)!;
     click(h.controller.element, simple.from);
     click(h.controller.element, simple.path[0]!);
@@ -581,5 +606,73 @@ describe('createPvpController – hop-po-hopu vícenásobný skok', () => {
     expect(hasPiece(h.controller.element, move.from)).toBe(true);
     expect(hasPiece(h.controller.element, captured0)).toBe(true);
     expect(h.statuses.at(-1)!.myTurn).toBe(true);
+  });
+});
+
+describe('createPvpController – zvuk konce partie (fáze 78)', () => {
+  // jsdom nemá WAAPI → animace `view.update` se resolvne hned, pak platí prodleva
+  // END_SOUND_DELAY_MS (~500 ms); proto se čeká delay(600) na skutečné odehrání.
+
+  it('výhra mé barvy → fanfára (win), právě jednou a až po prodlevě', async () => {
+    const h = mount('black');
+    h.controller.applyState(pvpDto(initialPosition())); // běží
+    h.controller.applyState(pvpDto(initialPosition(), 'black-wins', 'resign')); // černý vyhrál
+    // Hned po přechodu ještě NEzní (zpožděno za animaci + prodlevu).
+    expect(countPlays(h.plays, 'win')).toBe(0);
+    await delay(600);
+    expect(countPlays(h.plays, 'win')).toBe(1);
+    expect(countPlays(h.plays, 'loss')).toBe(0);
+    // Další stav se stejným výsledkem zvuk NEopakuje (přechod ongoing→konec už proběhl).
+    h.controller.applyState(pvpDto(initialPosition(), 'black-wins', 'resign'));
+    await delay(600);
+    expect(countPlays(h.plays, 'win')).toBe(1);
+  });
+
+  it('prohra mé barvy → zvuk prohry (loss)', async () => {
+    const h = mount('black');
+    h.controller.applyState(pvpDto(initialPosition()));
+    h.controller.applyState(pvpDto(initialPosition(), 'white-wins', 'resign')); // bílý vyhrál = já prohrál
+    await delay(600);
+    expect(countPlays(h.plays, 'loss')).toBe(1);
+    expect(countPlays(h.plays, 'win')).toBe(0);
+  });
+
+  it('výhra závisí na MÉ barvě: bílý hráč u black-wins slyší prohru, ne výhru', async () => {
+    const h = mount('white');
+    h.controller.applyState(pvpDto(initialPosition()));
+    h.controller.applyState(pvpDto(initialPosition(), 'black-wins', 'resign'));
+    await delay(600);
+    // Zub: kdyby se barva ignorovala (natvrdo black=win), zaznělo by 'win'.
+    expect(countPlays(h.plays, 'loss')).toBe(1);
+    expect(countPlays(h.plays, 'win')).toBe(0);
+  });
+
+  it('remíza → zvuk remízy (draw)', async () => {
+    const h = mount('black');
+    h.controller.applyState(pvpDto(initialPosition()));
+    h.controller.applyState(pvpDto(initialPosition(), 'draw', 'draw-agreement'));
+    await delay(600);
+    expect(countPlays(h.plays, 'draw')).toBe(1);
+  });
+
+  it('dispose před doběhnutím prodlevy zvuk konce zahodí (odchod z obrazovky)', async () => {
+    const h = mount('black');
+    h.controller.applyState(pvpDto(initialPosition()));
+    h.controller.applyState(pvpDto(initialPosition(), 'black-wins', 'resign'));
+    h.controller.dispose(); // odejdu dřív, než prodleva doběhne
+    await delay(600);
+    expect(countPlays(h.plays, 'win')).toBe(0);
+  });
+
+  it('PRVNÍ stav rovnou terminální (vstup do dohrané partie) zvuk NEhraje', async () => {
+    // Zub proti falešnému zvuku při načtení/reconnectu do už skončené partie (todo 42):
+    // počáteční result='ongoing' je jen default PŘED prvním stavem, ne důkaz, že partie
+    // běžela. Kdyby chyběl guard `sawOngoing`, zazněla by tu fanfára hned při vstupu.
+    const h = mount('black');
+    h.controller.applyState(pvpDto(initialPosition(), 'black-wins', 'resign')); // první = konec
+    await delay(600);
+    expect(countPlays(h.plays, 'win')).toBe(0);
+    expect(countPlays(h.plays, 'loss')).toBe(0);
+    expect(countPlays(h.plays, 'draw')).toBe(0);
   });
 });

@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-07-09
+
+### Added
+
+- **Výsledek PvP partie ukáže, PROČ hra skončila.** Když se soupeř vzdá, uvidíš
+  „Soupeř se vzdal – vyhrál jsi!" místo holého „Vyhrál jsi!" (a když se vzdáš ty,
+  „Vzdal ses – prohrál jsi."). Remíza navíc rozlišuje „Remíza dohodou." od „Remíza
+  podle pravidel.". Text je v překryvném okně i ve stavovém řádku.
+- **Zvuk konce partie i ve hře dvou lidí.** Konec PvP partie teď zahraje stejné
+  zvuky jako hra proti počítači: fanfáru při výhře, zvuk prohry a zvuk remízy
+  (z pohledu tvé barvy), krátce po dokončení posledního tahu.
+
 ## [0.62.0] - 2026-07-09
 
 ### Added

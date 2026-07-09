@@ -9,7 +9,7 @@
 import { legalMoves } from '@checkers/rules';
 import type { Color, GameResult, GameState, Move, Position, Square } from '@checkers/rules';
 import type { GameLevel } from './levels.js';
-import type { EngineStatus } from './store.js';
+import type { EndReason, EngineStatus } from './store.js';
 
 /** Tah ve tvaru pro drát: prostá, JSON-serializovatelná data (čísla 1–32). */
 export interface MoveDto {
@@ -79,6 +79,14 @@ export interface PvpGameDto {
   readonly position: Position;
   readonly result: GameResult;
   readonly legalMoves: MoveDto[];
+  /**
+   * Důvod konce partie z pohledu klienta (fáze 78): `'resign'` (soupeř se vzdal),
+   * `'draw-agreement'` (dohodnutá remíza), `'rules'` (konec podle pravidel), nebo
+   * `null` dokud partie BĚŽÍ. Váže se na `result`: kdykoli je `result !== 'ongoing'`,
+   * je `reason` neprázdný a naopak. Klient podle něj u výsledku ukáže, PROČ hra
+   * skončila (aby výherce po vzdání soupeře neviděl jen „Vyhrál jsi!").
+   */
+  readonly reason: EndReason | null;
 }
 
 /** Stav partie na drátě: engine, nebo PvP. Diskriminátor `mode` je zdroj pravdy. */
@@ -140,18 +148,26 @@ export function gameToDto(
 }
 
 /**
- * Stav PvP partie v drátovém tvaru. `result` se – stejně jako u {@link gameToDto}
- * – PŘEDÁVÁ zvenčí (efektivní výsledek přes `effectiveResult`), DTO ho neodvozuje.
- * Kdo je na tahu, klient čte z `position.turn`; server je autorita nad legalitou
- * (`legalMoves`).
+ * Stav PvP partie v drátovém tvaru. `result` i `reason` se – stejně jako u
+ * {@link gameToDto} – PŘEDÁVAJÍ zvenčí (efektivní výsledek přes `effectiveResult`,
+ * důvod přes `endReason`), DTO je neodvozuje. Volající je počítá ze stejného
+ * záznamu, takže `result`/`reason` zůstávají v páru (oba terminální, nebo oba
+ * „běží"). Kdo je na tahu, klient čte z `position.turn`; server je autorita nad
+ * legalitou (`legalMoves`).
  */
-export function pvpGameToDto(id: string, state: GameState, result: GameResult): PvpGameDto {
+export function pvpGameToDto(
+  id: string,
+  state: GameState,
+  result: GameResult,
+  reason: EndReason | null,
+): PvpGameDto {
   return {
     mode: 'pvp',
     id,
     position: state.position,
     result,
     legalMoves: legalMoveDtos(state.position),
+    reason,
   };
 }
 

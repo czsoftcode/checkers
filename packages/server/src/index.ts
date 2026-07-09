@@ -9,13 +9,15 @@ export const DEFAULT_PORT = 3000;
 export { buildApp } from './app.js';
 export type { BuildAppOptions } from './app.js';
 export { formatGamePdn, writeGamePdn } from './archive.js';
-export { GameStore, effectiveResult, opposite } from './store.js';
+export { GameStore, effectiveResult, endReason, opposite } from './store.js';
 export type {
   GameRecord,
   EngineGameRecord,
   PvpGameRecord,
   PvpPlayers,
   EngineStatus,
+  ForcedReason,
+  EndReason,
 } from './store.js';
 export { ChallengeRegistry } from './challenges.js';
 export type {

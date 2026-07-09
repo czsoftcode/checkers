@@ -24,7 +24,7 @@ import { ERROR_CODES, sendError } from './errors.js';
 import { LEVELS, STRENGTH_BY_LEVEL, levelUsesBook } from './levels.js';
 import { OPENING_BOOK, lookupBookMove } from './opening-book.js';
 import type { OpeningBook } from './opening-book.js';
-import { GameStore, effectiveResult, opposite } from './store.js';
+import { GameStore, effectiveResult, endReason, opposite } from './store.js';
 import type { GameRecord, PvpGameRecord } from './store.js';
 import type { EngineMover } from './engine-client.js';
 
@@ -170,9 +170,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   function dtoFor(record: GameRecord): AnyGameDto {
     if (record.mode === 'pvp') {
       // PvP tvar (fáze 70): bez engine-specifických polí. `effectiveResult` platí
-      // i pro PvP (forcedResult je zatím vždy null – vzdání/remíza PvP je todo 40 –
-      // takže se výsledek odvodí čistě z pozice).
-      return pvpGameToDto(record.id, record.state, effectiveResult(record));
+      // i pro PvP (vzdání/remíza fáze 77 nastaví `forcedResult`). `endReason` k němu
+      // přidá DŮVOD konce (vzdání / dohoda / pravidla / běží), ať výherce u výsledku
+      // vidí, PROČ hra skončila (fáze 78) – oba se počítají z téhož záznamu, drží spolu.
+      return pvpGameToDto(record.id, record.state, effectiveResult(record), endReason(record));
     }
     // Ballot tahy: JEN u Mistrovství (`ballotIndex !== null`). Ballot je vždy tři
     // půltahy, které store nasadil jako první tři položky historie (viz store

@@ -36,6 +36,7 @@
  */
 
 import type { Color, GameResult } from '@checkers/rules';
+import type { EndReason } from './server-client.js';
 
 import { backgroundUrls, pickBackground } from './backgrounds.js';
 import { createGameSocket } from './game-socket.js';
@@ -72,14 +73,32 @@ export interface GameScreen {
   dispose(): void;
 }
 
-/** Text výsledku z pohledu hráče `myColor` (jen pro terminální výsledek). */
-function outcomeText(result: Exclude<GameResult, 'ongoing'>, myColor: Color): string {
+/**
+ * Text výsledku z pohledu hráče `myColor` (jen pro terminální výsledek). `reason`
+ * (fáze 78) doplní, PROČ hra skončila – hlavně vzdání soupeře, ať výherce nevidí
+ * jen holé „Vyhrál jsi!". Když důvod chybí (`null` – starší/rozbitý stav, konec
+ * ještě bez důvodu), spadne na dosavadní neutrální text.
+ */
+function outcomeText(
+  result: Exclude<GameResult, 'ongoing'>,
+  myColor: Color,
+  reason: EndReason | null,
+): string {
   if (result === 'draw') {
+    if (reason === 'draw-agreement') {
+      return 'Remíza dohodou.';
+    }
+    if (reason === 'rules') {
+      return 'Remíza podle pravidel.';
+    }
     return 'Remíza.';
   }
   const iWin =
     (result === 'black-wins' && myColor === 'black') ||
     (result === 'white-wins' && myColor === 'white');
+  if (reason === 'resign') {
+    return iWin ? 'Soupeř se vzdal – vyhrál jsi!' : 'Vzdal ses – prohrál jsi.';
+  }
   return iWin ? 'Vyhrál jsi!' : 'Prohrál jsi.';
 }
 
@@ -98,6 +117,10 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   // autoritativní stav; výsledkový modal naopak drží (konec je konec) – zavře ho až
   // volba Odveta/Konec.
   let result: GameResult = 'ongoing';
+  // Důvod konce partie z posledního stavu (fáze 78); drží se vedle `result`, ať
+  // ho výsledkový modal ukáže i po znovuotevření (Odveta odmítnuta → reopenResult).
+  // Normalizovaný už v controlleru (jen platný `EndReason`, jinak `null`).
+  let endReason: EndReason | null = null;
   // `false`, dokud nedorazí PRVNÍ stav partie – do té doby je deska prázdná a
   // tlačítka (vzdát/remíza) zamčená (není co vzdát, partie se teprve načítá).
   let started = false;
@@ -508,10 +531,11 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
     hideMoveError();
     started = true;
     result = status.result;
+    endReason = status.reason;
     clearDrawState(); // zavře případný dotaz vzdání/nabídky (ne výsledkový modal)
     updateTurnIndicator(status);
     if (status.result !== 'ongoing') {
-      setStatus(outcomeText(status.result, info.color));
+      setStatus(outcomeText(status.result, info.color, endReason));
       openResultModal(status.result); // konec partie → modal s Odveta/Konec
     } else {
       setStatus('');
@@ -599,8 +623,8 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
    */
   function openResultModal(terminal: Exclude<GameResult, 'ongoing'>): void {
     modalKind = 'result';
-    modalMsg.textContent = outcomeText(terminal, info.color);
-    modalDialog.setAttribute('aria-label', outcomeText(terminal, info.color));
+    modalMsg.textContent = outcomeText(terminal, info.color, endReason);
+    modalDialog.setAttribute('aria-label', outcomeText(terminal, info.color, endReason));
     modalPrimaryBtn.textContent = 'Odveta';
     modalPrimaryBtn.className = 'btn-rematch';
     modalSecondaryBtn.textContent = 'Konec';

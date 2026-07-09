@@ -18,6 +18,15 @@ import type { Color, GameResult, Position, Square } from '@checkers/rules';
 export type EngineStatus = 'idle' | 'thinking' | 'error';
 
 /**
+ * Důvod konce partie z pohledu klienta (fáze 78) – ručně držená kopie serverového
+ * `EndReason` (`store.ts`). `'resign'` = soupeř se vzdal, `'draw-agreement'` =
+ * dohodnutá remíza, `'rules'` = konec podle pravidel. Server ho posílá jen u PvP
+ * stavu (`PvpGameDto.reason`) a jen u terminálního výsledku; jinak `null`.
+ */
+export const END_REASONS = ['resign', 'draw-agreement', 'rules'] as const;
+export type EndReason = (typeof END_REASONS)[number];
+
+/**
  * JEDINÝ web-side seznam úrovní obtížnosti. Hodnoty MUSÍ sedět na server
  * (`levels.ts`, zod enum) – web na balíček server nezávisí (nesváže build graf),
  * takže je to ručně držená kopie kontraktu, stejně jako `GameDto` níž. Neznámou
@@ -93,6 +102,13 @@ export interface PvpGameDto {
   readonly position: Position;
   readonly result: GameResult;
   readonly legalMoves: MoveDto[];
+  /**
+   * Důvod konce partie (fáze 78), nebo `null` dokud partie běží. VOLITELNÝ na
+   * klientu schválně: kdyby dorazil starší/nekompletní stav bez `reason`, guard
+   * ho nezahodí (deska nezamrzne) a text výsledku spadne na neutrální variantu
+   * bez důvodu. Server ho u živého kontraktu posílá vždy (u PvP stavu).
+   */
+  readonly reason?: EndReason | null;
 }
 
 /**
@@ -296,6 +312,15 @@ function isGameResult(value: unknown): value is GameResult {
   return (
     value === 'ongoing' || value === 'black-wins' || value === 'white-wins' || value === 'draw'
   );
+}
+
+/**
+ * Platná hodnota `EndReason` (fáze 78). Normalizace na hranici: cokoli jiného
+ * (chybějící, `null`, neznámý řetězec ze staršího/rozbitého stavu) NENÍ důvod →
+ * volající spadne na neutrální text výsledku, deska nezamrzne.
+ */
+export function isEndReason(value: unknown): value is EndReason {
+  return value === 'resign' || value === 'draw-agreement' || value === 'rules';
 }
 
 /**

@@ -7,8 +7,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { legalMoves } from '@checkers/rules';
-import type { Move } from '@checkers/rules';
-import { GameStore, effectiveResult } from '../src/index.js';
+import type { Cell, Move } from '@checkers/rules';
+import { GameStore, effectiveResult, endReason } from '../src/index.js';
 
 /** Odehraje na store první legální tah aktuální pozice a vrátí ho. */
 function playFirstLegal(store: GameStore, id: string): Move {
@@ -281,6 +281,70 @@ describe('GameStore – PvP vzdání (resignPvp, fáze 77)', () => {
     const store = new GameStore();
     const { id } = store.create();
     expect(() => store.resignPvp(id, 'A')).toThrow(/není PvP/);
+  });
+});
+
+describe('GameStore – důvod konce partie (forcedReason/endReason, fáze 78)', () => {
+  it('rozehraná partie: forcedReason null, endReason vrací null (ne předčasný důvod)', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    const rec = store.get(id);
+    if (rec === undefined) {
+      throw new Error('partie musí existovat');
+    }
+    // Zub: kdyby endReason nevázal na běžící stav, ukázal by 'rules' už za běhu –
+    // klient by během hry zobrazil falešný „konec podle pravidel".
+    expect(rec.forcedReason).toBeNull();
+    expect(endReason(rec)).toBeNull();
+  });
+
+  it('PvP vzdání → forcedReason resign, endReason resign', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    const rec = store.resignPvp(id, 'A');
+    if (typeof rec === 'string') {
+      throw new Error(`čekal jsem záznam, dostal ${rec}`);
+    }
+    expect(rec.forcedReason).toBe('resign');
+    expect(endReason(rec)).toBe('resign');
+  });
+
+  it('PvP přijatá remíza → forcedReason draw-agreement, endReason draw-agreement', () => {
+    const store = new GameStore();
+    const { id } = store.createPvp('A', 'B');
+    store.offerDrawPvp(id, 'A');
+    const rec = store.acceptDrawPvp(id, 'B');
+    if (typeof rec === 'string') {
+      throw new Error(`čekal jsem záznam, dostal ${rec}`);
+    }
+    expect(rec.forcedReason).toBe('draw-agreement');
+    expect(endReason(rec)).toBe('draw-agreement');
+  });
+
+  it('konec z pozice (bez vynucení) → forcedReason null, ale endReason rules', () => {
+    // Terminální výsledek plynoucí z pozice: bílý nemá kámen ani tah → černý vyhrál.
+    // forcedResult zůstává null (nikdo se nevzdal), přesto je partie u konce, tak
+    // endReason musí dát 'rules' (ne null) – jinak by výherce neviděl žádný důvod.
+    const board = new Array<Cell>(32).fill(null);
+    board[0] = { color: 'black', kind: 'man' }; // jen černý kámen, bílý bez figur
+    const overGame = {
+      forcedResult: null,
+      forcedReason: null,
+      state: { position: { board, turn: 'white' }, pliesWithoutProgress: 0, repetitionHistory: [] },
+    } as const;
+    expect(effectiveResult(overGame)).not.toBe('ongoing');
+    expect(endReason(overGame)).toBe('rules');
+  });
+
+  it('engine vzdání také nastaví forcedReason resign (konzistence napříč režimy)', () => {
+    const store = new GameStore();
+    const { id } = store.create();
+    const rec = store.resign(id);
+    if (typeof rec === 'string') {
+      throw new Error(`čekal jsem záznam, dostal ${rec}`);
+    }
+    expect(rec.forcedReason).toBe('resign');
+    expect(endReason(rec)).toBe('resign');
   });
 });
 

@@ -1,0 +1,39 @@
+{
+  "id": 78,
+  "title": "PvP: důvod konce partie",
+  "goal": "V PvP partii se u výsledku (modal i stavový pruh) ukáže, proč hra skončila — hlavně že se soupeř vzdal (a analogicky přijatá remíza vs. remíza podle pravidel) — aby výherce neviděl jen holé 'Vyhrál jsi!'.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Store: zaznamenej důvod vynuceného konce",
+      "status": "done",
+      "detail": "Do uloženého záznamu partie přidej forcedReason ('resign' | 'draw-agreement' | null); nastav ho vedle forcedResult v resignPvp (→ 'resign') a acceptDrawPvp (→ 'draw-agreement'). Helper endReason(game) vrací drátový důvod: null když effectiveResult === 'ongoing', jinak forcedReason ?? 'rules'. Test se zuby: po vzdání/přijetí remízy sedí důvod, u rozehrané null."
+    },
+    {
+      "title": "DTO a drát: přenes důvod k PvP stavu",
+      "status": "done",
+      "detail": "Přidej reason do PvpGameDto, pvpGameToDto ho přijme; dtoFor v app.ts ho spočítá přes endReason(record) a oprav zastaralý komentář (forcedResult vždy null). Test kontraktu: game-state pro vzdanou / dohodnutou / normálně dohranou partii nese očekávaný reason."
+    },
+    {
+      "title": "Klient: parse reason a text výsledku",
+      "status": "done",
+      "detail": "room-client/game-screen přečte game.reason; outcomeText (+ modal + stavový pruh) ukáže důvod z pohledu hráče — vzdání soupeře → 'Soupeř se vzdal.', remíza dohodou vs. podle pravidel, normální konec beze změny; neznámý/chybějící reason = fallback na dnešní text. Test se zuby na obou pohledech a obou druzích remízy."
+    },
+    {
+      "title": "Ověření: build + typecheck + lint + testy + ruční průchod",
+      "status": "done",
+      "detail": "Celý balík zelený; ruční kontrola v prohlížeči: soupeř se vzdá → druhý vidí důvod; remíza dohodou i podle pravidel se liší."
+    }
+  ],
+  "startedAt": "2026-07-09T08:37:30.131Z",
+  "resolvedVerify": [
+    "Ruční průchod v prohlížeči: soupeř se vzdá → druhý vidí důvod",
+    "Ruční průchod: remíza dohodou vs. remíza podle pravidel se v UI liší",
+    "Slyšitelný zvuk konce PvP partie: výhra / prohra / remíza"
+  ],
+  "completedAt": "2026-07-09T09:11:06.411Z",
+  "autoCommit": {
+    "preSha": "8413cf4ba8eeccb036806939d17176f1ad9ede46",
+    "subject": "Phase 78: PvP: důvod konce partie"
+  }
+}
