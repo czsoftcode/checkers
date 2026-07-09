@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 
 import { createAppShell } from '../src/app-shell.js';
+import { setLocale } from '../src/i18n.js';
 import type {
   BoardController,
   BoardControllerOptions,
@@ -37,6 +38,10 @@ function fakeImageFactory(failUrls: ReadonlySet<string> = new Set()): () => HTML
 }
 
 beforeEach(() => {
+  // Tyhle testy ověřují CHOVÁNÍ skořápky, ne jazyk – přibij je na češtinu (jinak by
+  // default locale v jsdom byl 'en' a všechny české asserty na texty by spadly).
+  // i18n v cs/en pokrývá samostatný app-shell-i18n.test.ts.
+  setLocale('cs');
   // Úroveň se pamatuje v LocalStorage → čistý start, ať se volba neprolije mezi testy.
   localStorage.clear();
 });

@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.68.0] - 2026-07-09
+
+### Added
+
+- **Obrazovka hry proti počítači umí anglicky.** Podle jazyka nastaveného v
+  prohlížeči se česky, nebo anglicky zobrazí celá obrazovka hry proti počítači:
+  výběr úrovně soupeře, tlačítka (nabídnout remízu, vzdát se, nová hra, do
+  místnosti), potvrzení vzdání, oznámení výsledku (vyhráli jste / vyhrál počítač /
+  remíza) i reakce počítače na nabídku remízy. Názvy úrovní se zobrazují ve zvoleném
+  jazyce, hra sama funguje stejně jako dřív. Tím je v obou jazycích celé viditelné
+  rozhraní klienta (herní místnost, partie dvou lidí i hra proti počítači).
+
 ## [0.67.0] - 2026-07-09
 
 ### Added

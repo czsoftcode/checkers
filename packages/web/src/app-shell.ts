@@ -11,6 +11,8 @@
 
 import { backgroundUrls, pickBackground } from './backgrounds.js';
 import { createBoardController } from './controller.js';
+import { t } from './i18n.js';
+import type { MessageKey } from './i18n.js';
 import type {
   BoardController,
   BoardControllerOptions,
@@ -26,16 +28,18 @@ import blackStoneUrl from './assets/black.webp?url';
 import whiteStoneUrl from './assets/white.webp?url';
 
 /**
- * České popisky úrovní pro UI (interní hodnoty zůstávají anglické na drátě).
- * `Record<GameLevel, …>` vynutí popisek pro KAŽDOU úroveň – přidání úrovně do
- * `GAME_LEVELS` bez popisku sem shodí typecheck (jediný zdroj = server-client).
+ * Popisky úrovní pro UI přes i18n KLÍČE (ne hotový text): `t()` je přeloží podle
+ * jazyka až při vykreslení. Interní hodnoty (`professional` …) zůstávají anglické
+ * na drátě – tohle je JEN zobrazení. `Record<GameLevel, MessageKey>` vynutí klíč
+ * pro KAŽDOU úroveň – přidání úrovně do `GAME_LEVELS` bez klíče sem shodí typecheck
+ * (jediný zdroj = server-client).
  */
-const LEVEL_LABELS: Record<GameLevel, string> = {
-  professional: 'Profesionál',
-  championship: 'Mistrovství',
-  intermediate: 'Pokročilý',
-  beginner: 'Začátečník',
-  education: 'Výuka',
+const LEVEL_LABEL_KEYS: Record<GameLevel, MessageKey> = {
+  professional: 'ai.level.professional',
+  championship: 'ai.level.championship',
+  intermediate: 'ai.level.intermediate',
+  beginner: 'ai.level.beginner',
+  education: 'ai.level.education',
 };
 
 /** Klíč v LocalStorage pro zapamatovanou volbu úrovně (přežije reload stránky). */
@@ -202,14 +206,14 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // Bez viditelného popisku (sedí v řádku tlačítek) → přístupnost drží aria-label.
   const levelSelect = document.createElement('select');
   levelSelect.className = 'level-select';
-  levelSelect.setAttribute('aria-label', 'Úroveň soupeře pro novou hru');
+  levelSelect.setAttribute('aria-label', t('ai.levelAria'));
   // Pořadí = pořadí v `GAME_LEVELS` (Profesionál → Mistrovství → Pokročilý →
   // Začátečník → Výuka); první je výchozí. Jediný zdroj hodnot i pořadí, žádná
   // druhá kopie seznamu.
   for (const value of GAME_LEVELS) {
     const opt = document.createElement('option');
     opt.value = value;
-    opt.textContent = LEVEL_LABELS[value];
+    opt.textContent = t(LEVEL_LABEL_KEYS[value]);
     levelSelect.append(opt);
   }
   // Předvyplň naposledy zvolenou úrovní z LocalStorage (přežije reload). Musí být
@@ -227,9 +231,9 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const controlsDivider = document.createElement('span');
   controlsDivider.className = 'controls-divider';
   controlsDivider.setAttribute('aria-hidden', 'true');
-  const offerDrawBtn = button('btn-offer-draw', 'Nabízím remízu');
-  const resignBtn = button('btn-resign', 'Vzdávám hru');
-  const newGameBtn = button('btn-newgame', 'Nová hra');
+  const offerDrawBtn = button('btn-offer-draw', t('ai.offerDraw'));
+  const resignBtn = button('btn-resign', t('ai.resign'));
+  const newGameBtn = button('btn-newgame', t('ai.newGame'));
   controls.append(levelSelect, controlsDivider, offerDrawBtn, resignBtn, newGameBtn);
   // „Do místnosti" jen když je návrat zapojen (main.ts). Sedí v téže řadě jako
   // ostatní tlačítka → dědí responzivní chování (na mobilu se zalomí), na rozdíl
@@ -243,7 +247,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     const exitDivider = document.createElement('span');
     exitDivider.className = 'controls-divider';
     exitDivider.setAttribute('aria-hidden', 'true');
-    const exitBtn = button('btn-back-room', 'Do místnosti');
+    const exitBtn = button('btn-back-room', t('ai.toRoom'));
     exitBtn.addEventListener('click', () => {
       onExit();
     });
@@ -260,9 +264,9 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   const confirm = document.createElement('div');
   confirm.className = 'confirm hidden';
   const confirmLabel = document.createElement('span');
-  confirmLabel.textContent = 'Opravdu vzdát?';
-  const yesBtn = button('btn-confirm-yes', 'Ano');
-  const noBtn = button('btn-confirm-no', 'Zrušit');
+  confirmLabel.textContent = t('ai.confirmResign');
+  const yesBtn = button('btn-confirm-yes', t('ai.yes'));
+  const noBtn = button('btn-confirm-no', t('ai.cancel'));
   confirm.append(confirmLabel, yesBtn, noBtn);
 
   // Panel nad deskou nese UŽ JEN ovládání (tlačítka + přepínač) a potvrzení vzdání –
@@ -332,7 +336,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   modalDialog.setAttribute('aria-modal', 'true');
   const modalMsg = document.createElement('p');
   modalMsg.className = 'modal-msg';
-  const modalCloseBtn = button('btn-modal-close', 'Zavřít');
+  const modalCloseBtn = button('btn-modal-close', t('ai.close'));
   modalDialog.append(modalMsg, modalCloseBtn);
   modal.append(modalDialog);
   element.append(modal);
@@ -416,13 +420,13 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     // černé, jinak vyhrál počítač (a naopak). Remíza je na barvě nezávislá.
     if (s.result === 'black-wins' || s.result === 'white-wins') {
       const humanWon = s.result === `${humanColor}-wins`;
-      return humanWon ? 'Vyhráli jste.' : 'Vyhrál počítač.';
+      return humanWon ? t('ai.resultWin') : t('ai.resultLoss');
     }
     if (s.result === 'draw') {
-      return 'Remíza.';
+      return t('ai.resultDraw');
     }
     if (s.engineStatus === 'error') {
-      return 'Počítač hlásí chybu, partie stojí.';
+      return t('ai.engineError');
     }
     return null;
   }
@@ -600,7 +604,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       return;
     }
     offering = true;
-    offerMsg.textContent = 'Počítač zvažuje nabídku…';
+    offerMsg.textContent = t('ai.drawThinking');
     offerMsg.classList.remove('hidden');
     refreshControls();
     let outcome: DrawOfferOutcome;
@@ -614,9 +618,9 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       offerMsg.textContent = '';
       offerMsg.classList.add('hidden');
     } else if (outcome === 'declined') {
-      offerMsg.textContent = 'Počítač remízu odmítl, hrajete dál.';
+      offerMsg.textContent = t('ai.drawDeclined');
     } else {
-      offerMsg.textContent = 'Nabídku se teď nepodařilo vyřídit, zkuste to znovu.';
+      offerMsg.textContent = t('ai.drawFailed');
     }
     refreshControls();
   }
@@ -703,7 +707,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       controller = null;
     }
     boardSlot.replaceChildren();
-    setStatus('Načítám partii…');
+    setStatus(t('ai.loading'));
     try {
       // `ballotToSend` do createGame JEN když existuje (2. kolo) – ne posílat
       // spurious `undefined` třetím argumentem. Drží drát i volání čisté: 1. kolo
@@ -753,7 +757,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
       setStatus(''); // hláška jde do modalu, ne do (mizejícího) řádku stavu
       // Umělé `white-wins` níž jen odemyká „Novou hru" – NESMÍ vyvolat výherní modal,
       // proto ho hlásíme ručně jako chybu (a `render()` se na téhle cestě nevolá).
-      showModal('Partii se nepodařilo založit. Zkuste to znovu tlačítkem Nová hra.');
+      showModal(t('ai.createFailed'));
       // Chyba = partie „neběží": povol Novou hru k opakování, vzdání i nabídku zamkni.
       lastStatus = { result: 'white-wins', turn: 'white', engineStatus: 'idle' };
       resignBtn.disabled = true;

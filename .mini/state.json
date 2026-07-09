@@ -412,6 +412,11 @@
       "id": 82,
       "title": "i18n: PvP herní obrazovka + modaly konce",
       "status": "done"
+    },
+    {
+      "id": 83,
+      "title": "i18n: AI obrazovka (hra vs. počítač)",
+      "status": "done"
     }
   ]
 }

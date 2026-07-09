@@ -151,6 +151,37 @@ const cs = {
   'game.rematchIncomingMsg': 'Soupeř chce odvetu. Barvy se prohodí.',
   'game.rematchIncomingAria': 'Soupeř nabízí odvetu',
   'game.acceptRematch': 'Přijmout odvetu',
+
+  // Obrazovka hry proti počítači (fáze 83): úrovně soupeře, ovládání, modal vzdání,
+  // výsledek/chyba do modalu, reakce počítače na nabídku remízy, hlášky zakládání.
+  // Interní hodnoty úrovní (professional atd.) jdou po drátě anglicky – tady je JEN
+  // zobrazovací popisek.
+  'ai.level.professional': 'Profesionál',
+  'ai.level.championship': 'Mistrovství',
+  'ai.level.intermediate': 'Pokročilý',
+  'ai.level.beginner': 'Začátečník',
+  'ai.level.education': 'Výuka',
+  'ai.levelAria': 'Úroveň soupeře pro novou hru',
+  'ai.offerDraw': 'Nabízím remízu',
+  'ai.resign': 'Vzdávám hru',
+  'ai.newGame': 'Nová hra',
+  'ai.toRoom': 'Do místnosti',
+  'ai.confirmResign': 'Opravdu vzdát?',
+  'ai.yes': 'Ano',
+  'ai.cancel': 'Zrušit',
+  'ai.close': 'Zavřít',
+  // Výsledek z pohledu člověka (párování humanWon v terminalMessage).
+  'ai.resultWin': 'Vyhráli jste.',
+  'ai.resultLoss': 'Vyhrál počítač.',
+  'ai.resultDraw': 'Remíza.',
+  'ai.engineError': 'Počítač hlásí chybu, partie stojí.',
+  // Reakce počítače na nabídku remízy (řádek offerMsg).
+  'ai.drawThinking': 'Počítač zvažuje nabídku…',
+  'ai.drawDeclined': 'Počítač remízu odmítl, hrajete dál.',
+  'ai.drawFailed': 'Nabídku se teď nepodařilo vyřídit, zkuste to znovu.',
+  // Zakládání partie.
+  'ai.loading': 'Načítám partii…',
+  'ai.createFailed': 'Partii se nepodařilo založit. Zkuste to znovu tlačítkem Nová hra.',
 } as const;
 
 /** Klíč překladu – odvozený z `cs`, takže `t()` napovídá jen existující klíče. */
@@ -213,6 +244,30 @@ const en = {
   'game.rematchIncomingMsg': 'Your opponent wants a rematch. Colors will be swapped.',
   'game.rematchIncomingAria': 'Opponent offers a rematch',
   'game.acceptRematch': 'Accept the rematch',
+
+  'ai.level.professional': 'Professional',
+  'ai.level.championship': 'Championship',
+  'ai.level.intermediate': 'Intermediate',
+  'ai.level.beginner': 'Beginner',
+  'ai.level.education': 'Tutorial',
+  'ai.levelAria': 'Opponent level for a new game',
+  'ai.offerDraw': 'Offer a draw',
+  'ai.resign': 'Resign',
+  'ai.newGame': 'New game',
+  'ai.toRoom': 'Back to the room',
+  'ai.confirmResign': 'Really resign?',
+  'ai.yes': 'Yes',
+  'ai.cancel': 'Cancel',
+  'ai.close': 'Close',
+  'ai.resultWin': 'You won.',
+  'ai.resultLoss': 'The computer won.',
+  'ai.resultDraw': 'Draw.',
+  'ai.engineError': 'The computer reports an error, the game is halted.',
+  'ai.drawThinking': 'The computer is considering the offer…',
+  'ai.drawDeclined': 'The computer declined the draw, play continues.',
+  'ai.drawFailed': 'The offer could not be processed right now, please try again.',
+  'ai.loading': 'Loading the game…',
+  'ai.createFailed': 'The game could not be created. Try again with the New game button.',
 } satisfies Record<MessageKey, string>;
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { cs, en };

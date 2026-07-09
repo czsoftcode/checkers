@@ -1,0 +1,47 @@
+{
+  "id": 83,
+  "title": "i18n: AI obrazovka (hra vs. počítač)",
+  "goal": "Přeložit přes t() obrazovku hry proti počítači (app-shell.ts + controller.ts): výběr úrovně soupeře, tlačítka (nabídnout remízu, vzdát, nová hra, do místnosti), modal potvrzení vzdání, výsledky (vyhráli jste / vyhrál počítač / remíza), reakci počítače na nabídku remízy a chybové hlášky při zakládání partie, s klíči cs/en a testy se zuby. Kritické: popisky úrovní zůstávají jen zobrazovací - interní hodnota (professional atd.) jde po drátě anglicky, přeloží se jen label. Mimo fázi: ruční přepínač jazyka, board-view (bez českých textů), serverové hlášky.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Klíče ai.* do slovníků cs/en",
+      "status": "done",
+      "detail": "Do i18n.ts přidat kompletní sadu klíčů pro AI obrazovku (úrovně soupeře, tlačítka, modal vzdání, výsledky, notice remízy počítače, chybové/synchronizační hlášky) s cs i en; en přibitý přes satisfies."
+    },
+    {
+      "title": "Migrace app-shell.ts na t()",
+      "status": "done",
+      "detail": "Přepsat LEVEL_LABELS (hodnota professional atd. zůstává anglicky na drátě, přeloží se jen zobrazení; udržet typovou úplnost přes všechny úrovně), terminalMessage (výhra/prohra podle barvy člověka + remíza + chyba enginu), tlačítka, modal vzdání, notice reakce počítače na remízu a chyby zakládání partie."
+    },
+    {
+      "title": "Migrace controller.ts na t()",
+      "status": "skipped",
+      "detail": "Přepsat 7 prefixů synchronizačních/chybových hlášek (server tah nepřijal, nápověda selhala, vzdání/remíza se nepodařily, dorovnání stavu, engine error, ballot). Prefix + serverová zpráva zůstává složený (server je autorita, jeho text česky)."
+    },
+    {
+      "title": "Ochrana stávajících testů na cs",
+      "status": "done",
+      "detail": "Do test souborů app-shell/controller, které asertují na konkrétní české texty, přidat setLocale('cs') (default locale v jsdom je en, bez toho by texty spadly). Ověřují chování, ne jazyk."
+    },
+    {
+      "title": "Zubaté testy: úrovně (hodnota EN) + terminalMessage",
+      "status": "done",
+      "detail": "Test, že odeslaná/uložená hodnota úrovně je anglický klíč (ne lokalizovaný label) - kontrakt se serverem. Test terminalMessage pro výhru i prohru × obě barvy člověka + remíza, v cs i en. Padne při záměně větve nebo přeložení hodnoty."
+    },
+    {
+      "title": "Ověření: build + typecheck + lint + testy + ruční průchod",
+      "status": "done",
+      "detail": "pnpm build, typecheck, lint, celá sada zelená; ruční průchod hry proti počítači v cs i en (výběr úrovně, dohrát partii, modaly vzdání/výsledku)."
+    }
+  ],
+  "startedAt": "2026-07-09T12:55:29.875Z",
+  "resolvedVerify": [
+    "Ruční průchod hry proti počítači v cs i en"
+  ],
+  "completedAt": "2026-07-09T13:16:15.999Z",
+  "autoCommit": {
+    "preSha": "4db7fbe1de6b8b088aa8ca8d989ccb43397b0ed2",
+    "subject": "Phase 83: i18n: AI obrazovka (hra vs. počítač)"
+  }
+}
