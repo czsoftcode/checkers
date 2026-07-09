@@ -4,6 +4,7 @@ import type { GameResult } from '@checkers/rules';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createGameScreen } from '../src/game-screen.js';
+import { setLocale } from '../src/i18n.js';
 import type { GameWebSocket } from '../src/game-socket.js';
 import type { GameLink } from '../src/lobby.js';
 import type { ChallengeAcceptedInfo } from '../src/room-client.js';
@@ -243,6 +244,10 @@ function pressKey(key: string): void {
 }
 
 beforeEach(() => {
+  // Tyhle testy ověřují CHOVÁNÍ obrazovky, ne jazyk – přibij je na češtinu (jinak by
+  // default locale v jsdom byl 'en' a všechny české asserty na texty by spadly).
+  // i18n v cs/en pokrývá samostatný game-screen-i18n.test.ts.
+  setLocale('cs');
   // Úvodní REST snapshot v game-socket volá fetch – utni ho na „nic" (ne-ok), ať
   // v jsdom neběží reálná síť ani nespadne do console.error.
   vi.stubGlobal('fetch', () => Promise.resolve({ ok: false } as Response));

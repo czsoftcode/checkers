@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-07-09
+
+### Added
+
+- **Herní obrazovka (hra dvou lidí) umí anglicky.** Podle jazyka nastaveného v
+  prohlížeči se česky, nebo anglicky zobrazí celá obrazovka partie: panel s
+  tlačítky (nabídnout remízu, vzdát se), stav připojení, oznámení o výsledku i
+  všechna vyskakovací okna – potvrzení vzdání, příchozí nabídka remízy, výsledek
+  partie s volbou odvety, čekání na odvetu i hláška o přerušeném spojení. Text
+  výsledku respektuje pohled hráče (výhra/prohra, vzdání soupeře vs. vlastní
+  vzdání). Chybové hlášky ze serveru zatím zůstávají česky.
+
 ## [0.66.0] - 2026-07-09
 
 ### Added

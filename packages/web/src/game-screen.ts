@@ -39,6 +39,7 @@ import type { Color, GameResult } from '@checkers/rules';
 import type { EndReason } from './server-client.js';
 
 import { backgroundUrls, pickBackground } from './backgrounds.js';
+import { t } from './i18n.js';
 import { createGameSocket } from './game-socket.js';
 import type { GameSocketFactory } from './game-socket.js';
 import { preloadImages } from './image-preload.js';
@@ -79,27 +80,27 @@ export interface GameScreen {
  * jen holé „Vyhrál jsi!". Když důvod chybí (`null` – starší/rozbitý stav, konec
  * ještě bez důvodu), spadne na dosavadní neutrální text.
  */
-function outcomeText(
+export function outcomeText(
   result: Exclude<GameResult, 'ongoing'>,
   myColor: Color,
   reason: EndReason | null,
 ): string {
   if (result === 'draw') {
     if (reason === 'draw-agreement') {
-      return 'Remíza dohodou.';
+      return t('game.resultDrawAgreement');
     }
     if (reason === 'rules') {
-      return 'Remíza podle pravidel.';
+      return t('game.resultDrawRules');
     }
-    return 'Remíza.';
+    return t('game.resultDraw');
   }
   const iWin =
     (result === 'black-wins' && myColor === 'black') ||
     (result === 'white-wins' && myColor === 'white');
   if (reason === 'resign') {
-    return iWin ? 'Soupeř se vzdal – vyhrál jsi!' : 'Vzdal ses – prohrál jsi.';
+    return iWin ? t('game.resultResignWin') : t('game.resultResignLoss');
   }
-  return iWin ? 'Vyhrál jsi!' : 'Prohrál jsi.';
+  return iWin ? t('game.resultWin') : t('game.resultLoss');
 }
 
 /** Postaví herní obrazovku. Vrací kořenový prvek k vložení do stránky. */
@@ -163,7 +164,7 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   // soupeře, ne o moje.
   const opponentLabel = document.createElement('span');
   opponentLabel.className = 'pvp-opponent-label';
-  opponentLabel.textContent = 'Soupeř:';
+  opponentLabel.textContent = t('game.opponentLabel');
   const opponent = document.createElement('span');
   opponent.className = 'pvp-opponent';
   opponent.textContent = info.opponentNick;
@@ -176,11 +177,11 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   const offerDrawBtn = document.createElement('button');
   offerDrawBtn.type = 'button';
   offerDrawBtn.className = 'btn-offer-draw';
-  offerDrawBtn.textContent = 'Nabídnout remízu';
+  offerDrawBtn.textContent = t('game.offerDraw');
   const resignBtn = document.createElement('button');
   resignBtn.type = 'button';
   resignBtn.className = 'btn-resign';
-  resignBtn.textContent = 'Vzdát se';
+  resignBtn.textContent = t('game.resign');
   // ZÁMĚRNĚ bez tlačítka „Zpět do místnosti" za běhu partie (fáze 77): jen se odpojí
   // z DOM, ale na serveru zůstaneš `busy` (v partii) → zablokovaný pro další hru až
   // do refreshe (bez reconnectionu se do partie nevrátíš). Čistý odchod z běžící
@@ -263,7 +264,7 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   statusBar.append(statusLine, noticeLine, errorLine);
 
   element.append(panel, boardRow, statusBar, modal);
-  setStatus('Připojuji k partii…');
+  setStatus(t('game.connecting'));
 
   // Zapnutí webp kamene indikátoru AŽ po ověřeném načtení obou obrázků (jako u
   // desky – `piece-images.ts`): jistota, že se `url(...)` ve `styles.css` opravdu
@@ -310,10 +311,10 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
     }
     if (options.link.offerDraw()) {
       iOffered = true;
-      setNotice('Nabídl jsi remízu, čekám na odpověď soupeře…');
+      setNotice(t('game.drawOfferedWaiting'));
       refreshControls();
     } else {
-      setNotice('Spojení není dostupné – zkus to znovu.');
+      setNotice(t('game.connUnavailable'));
     }
   };
   offerDrawBtn.addEventListener('click', onOfferDraw);
@@ -336,7 +337,7 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
       // dole), ukaž poznámku a modal zavři tak jako tak (opakovat jde přes tlačítko).
       closeModal();
       if (!options.link.resign()) {
-        setNotice('Spojení není dostupné – zkus to znovu.');
+        setNotice(t('game.connUnavailable'));
       }
     } else if (modalKind === 'draw-offer') {
       // Přijetí nabídky → server ukončí partii, terminální stav (draw) dorazí OBĚMA
@@ -345,7 +346,7 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
       if (options.link.acceptDraw()) {
         closeModal();
       } else {
-        setNotice('Spojení není dostupné – zkus to znovu.');
+        setNotice(t('game.connUnavailable'));
       }
     } else if (modalKind === 'result') {
       // ODVETA: nabídni soupeři a ZŮSTAŇ na obrazovce (čekej). Po přijetí přijde nová
@@ -354,14 +355,14 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
       if (options.link.offerRematch()) {
         openRematchWaitModal();
       } else {
-        setNotice('Spojení není dostupné – zkus to znovu.');
+        setNotice(t('game.connUnavailable'));
       }
     } else if (modalKind === 'rematch-incoming') {
       // PŘIJMOUT odvetu → server založí novou partii, obě strany přejdou přes
       // `challenge-accepted` (tahle obrazovka se zahodí). Modal nezavírám ručně –
       // udělá to přechod. Když příkaz nedošel, zůstaň na dotazu s hláškou.
       if (!options.link.acceptRematch()) {
-        setNotice('Spojení není dostupné – zkus to znovu.');
+        setNotice(t('game.connUnavailable'));
       }
     } else if (modalKind === 'disconnected') {
       // NOUZOVÝ východ po ztrátě spojení → do místnosti (server-side busy zůstane,
@@ -377,9 +378,9 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
       // Modal zavři JEN při úspěšném odeslání (viz přijetí výš).
       if (options.link.rejectDraw()) {
         closeModal();
-        setNotice('Nabídku remízy jsi odmítl.');
+        setNotice(t('game.drawRejectedByYou'));
       } else {
-        setNotice('Spojení není dostupné – zkus to znovu.');
+        setNotice(t('game.connUnavailable'));
       }
     } else if (modalKind === 'result' || modalKind === 'rematch-wait') {
       // KONEC: uvolní oba na serveru (ať můžou hrát s někým jiným) a přechod do
@@ -393,7 +394,7 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
       if (options.link.declineRematch()) {
         reopenResult();
       } else {
-        setNotice('Spojení není dostupné – zkus to znovu.');
+        setNotice(t('game.connUnavailable'));
       }
     }
   };
@@ -430,7 +431,7 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   // Soupeř odmítl MOU nabídku → zruš „čekám" a oznam to.
   const unsubscribeRejected = options.link.onDrawRejected(() => {
     iOffered = false;
-    setNotice('Soupeř nabídku remízy odmítl.');
+    setNotice(t('game.drawRejectedByOpponent'));
     refreshControls();
   });
 
@@ -449,7 +450,7 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
       return;
     }
     reopenResult();
-    setModalNotice('Soupeř odvetu odmítl.');
+    setModalNotice(t('game.rematchDeclinedByOpponent'));
   });
   // Soupeř dal „Konec" → partie skončila pro OBA → přesun do místnosti (ať nevisím na
   // výsledku/dotazu a nevím, co se děje). Server mě už uvolnil z busy.
@@ -477,7 +478,7 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
         // zavolá renderStatus (ta stav vyprázdní), proto hlášku i modal řešíme AŽ PO něm.
         controller.setConnectionLost();
         connLost = true;
-        setStatus('Spojení s partií se přerušilo.');
+        setStatus(t('game.connLost'));
         // Deska je mrtvá → schovej i indikátor na tahu (jinak by dál svítil kámen a
         // aria-label by tvrdil „na tahu", i když se nedá hrát).
         turnIndicator.classList.add('hidden');
@@ -515,7 +516,10 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
     turnIndicator.classList.toggle('hidden', !ongoing);
     turnStone.classList.toggle('black', status.turn === 'black');
     turnStone.classList.toggle('white', status.turn === 'white');
-    turnIndicator.setAttribute('aria-label', status.turn === info.color ? 'Na tahu: ty' : 'Na tahu: soupeř');
+    turnIndicator.setAttribute(
+      'aria-label',
+      status.turn === info.color ? t('game.turnYou') : t('game.turnOpponent'),
+    );
   }
 
   /**
@@ -593,11 +597,11 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   /** Otevře modal s dotazem na potvrzení vzdání (nevratná akce → varovné tlačítko). */
   function openResignModal(): void {
     modalKind = 'resign';
-    modalMsg.textContent = 'Opravdu se vzdát? Partii tím prohráváš.';
-    modalDialog.setAttribute('aria-label', 'Opravdu se vzdát?');
-    modalPrimaryBtn.textContent = 'Ano, vzdát se';
+    modalMsg.textContent = t('game.resignConfirmMsg');
+    modalDialog.setAttribute('aria-label', t('game.resignConfirmAria'));
+    modalPrimaryBtn.textContent = t('game.resignYes');
     modalPrimaryBtn.className = 'btn-resign-yes';
-    modalSecondaryBtn.textContent = 'Zrušit';
+    modalSecondaryBtn.textContent = t('game.cancel');
     modalSecondaryBtn.className = 'btn-resign-no';
     refreshControls();
     showModal();
@@ -606,11 +610,11 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   /** Otevře modal s příchozí nabídkou remízy (kladná akce → zelené tlačítko). */
   function openDrawOfferModal(): void {
     modalKind = 'draw-offer';
-    modalMsg.textContent = 'Soupeř nabízí remízu.';
-    modalDialog.setAttribute('aria-label', 'Soupeř nabízí remízu');
-    modalPrimaryBtn.textContent = 'Přijmout remízu';
+    modalMsg.textContent = t('game.drawOfferMsg');
+    modalDialog.setAttribute('aria-label', t('game.drawOfferAria'));
+    modalPrimaryBtn.textContent = t('game.acceptDraw');
     modalPrimaryBtn.className = 'btn-draw-accept';
-    modalSecondaryBtn.textContent = 'Odmítnout';
+    modalSecondaryBtn.textContent = t('game.decline');
     modalSecondaryBtn.className = 'btn-draw-reject';
     refreshControls();
     showModal();
@@ -625,9 +629,9 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
     modalKind = 'result';
     modalMsg.textContent = outcomeText(terminal, info.color, endReason);
     modalDialog.setAttribute('aria-label', outcomeText(terminal, info.color, endReason));
-    modalPrimaryBtn.textContent = 'Odveta';
+    modalPrimaryBtn.textContent = t('game.rematch');
     modalPrimaryBtn.className = 'btn-rematch';
-    modalSecondaryBtn.textContent = 'Konec';
+    modalSecondaryBtn.textContent = t('game.end');
     modalSecondaryBtn.className = 'btn-end';
     refreshControls();
     showModal();
@@ -646,10 +650,10 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
    */
   function openRematchWaitModal(): void {
     modalKind = 'rematch-wait';
-    modalMsg.textContent = 'Nabídl jsi odvetu. Čekám na odpověď soupeře…';
-    modalDialog.setAttribute('aria-label', 'Čekám na odpověď soupeře na odvetu');
+    modalMsg.textContent = t('game.rematchWaitMsg');
+    modalDialog.setAttribute('aria-label', t('game.rematchWaitAria'));
     modalPrimaryBtn.className = 'btn-rematch hidden'; // ve waiting není co potvrdit
-    modalSecondaryBtn.textContent = 'Konec';
+    modalSecondaryBtn.textContent = t('game.end');
     modalSecondaryBtn.className = 'btn-end';
     setNotice('');
     refreshControls();
@@ -664,10 +668,9 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
    */
   function openDisconnectedModal(): void {
     modalKind = 'disconnected';
-    modalMsg.textContent =
-      'Spojení s partií se přerušilo. Pro novou hru může být potřeba obnovit stránku.';
-    modalDialog.setAttribute('aria-label', 'Spojení s partií se přerušilo');
-    modalPrimaryBtn.textContent = 'Zpět do místnosti';
+    modalMsg.textContent = t('game.disconnectedMsg');
+    modalDialog.setAttribute('aria-label', t('game.disconnectedAria'));
+    modalPrimaryBtn.textContent = t('game.backToRoom');
     modalPrimaryBtn.className = 'btn-end';
     modalSecondaryBtn.className = 'btn-end hidden';
     showModal();
@@ -676,11 +679,11 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   /** Soupeř nabídl odvetu MNĚ (fáze 77): Přijmout (prohodí barvy) / Odmítnout. */
   function openRematchIncomingModal(): void {
     modalKind = 'rematch-incoming';
-    modalMsg.textContent = 'Soupeř chce odvetu. Barvy se prohodí.';
-    modalDialog.setAttribute('aria-label', 'Soupeř nabízí odvetu');
-    modalPrimaryBtn.textContent = 'Přijmout odvetu';
+    modalMsg.textContent = t('game.rematchIncomingMsg');
+    modalDialog.setAttribute('aria-label', t('game.rematchIncomingAria'));
+    modalPrimaryBtn.textContent = t('game.acceptRematch');
     modalPrimaryBtn.className = 'btn-draw-accept';
-    modalSecondaryBtn.textContent = 'Odmítnout';
+    modalSecondaryBtn.textContent = t('game.decline');
     modalSecondaryBtn.className = 'btn-draw-reject';
     setNotice('');
     refreshControls();

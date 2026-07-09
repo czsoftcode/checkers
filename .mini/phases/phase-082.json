@@ -1,0 +1,42 @@
+{
+  "id": 82,
+  "title": "i18n: PvP herní obrazovka + modaly konce",
+  "goal": "Přeložit přes t() celou PvP herní obrazovku (game-screen.ts) včetně stavového pruhu, tlačítek (vzdát/remíza/odveta/konec), modalů konce partie a textů důvodů konce, s klíči cs/en a testy pokrývajícími obě strany (výhra/prohra) × každý důvod konce. Mimo tuto fázi: solo AI obrazovka, popisky desky, ruční přepínač jazyka.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Klíče game.* do slovníků cs/en",
+      "status": "done",
+      "detail": "Do i18n.ts přidat kompletní sadu klíčů pro herní obrazovku (stavový pruh, tlačítka, modaly, notice, důvody konce) s cs i en překlady; en přibitý přes satisfies, chybějící klíč neprojde typovou kontrolou. Placeholdery {nick} kde je potřeba."
+    },
+    {
+      "title": "Migrace outcomeText na t()",
+      "status": "done",
+      "detail": "Přepsat funkci důvodů konce tak, aby vracela t(...) a zachovala párování iWin × reason (draw-agreement / rules / resign / default) beze změny logiky. Funkci exportovat kvůli testu. Riziko: v en verzi vypadne špatná varianta, když se párování rozjede."
+    },
+    {
+      "title": "Migrace UI prvků a modalů na t()",
+      "status": "done",
+      "detail": "Zbylé statické popisky (stavový pruh Soupeř:, Na tahu: soupeř/ty), tlačítka (Nabídnout remízu, Vzdát se, Přijmout/Odmítnout/Zrušit, Zpět do místnosti), texty modalů (potvrzení vzdání, příchozí remíza, odveta, přerušené spojení) a běhové notice hlášky přes t()."
+    },
+    {
+      "title": "Testy se zuby: výsledek × důvod × obě strany, cs/en",
+      "status": "done",
+      "detail": "Test outcomeText pro každý reason (draw-agreement, rules, resign, null) × obě strany (výhra i prohra) v cs i en; ověřit, že resign nezamění soupeř se vzdal / vzdal ses. Test padne při rozbití párování nebo klíče (ne jen kopie stringu)."
+    },
+    {
+      "title": "Ověření: build + typecheck + lint + testy + ruční průchod",
+      "status": "done",
+      "detail": "pnpm build, typecheck, lint, celá testovací sada zelená; ruční průchod PvP partie v prohlížeči s cs i en (dohrát do výsledku, otevřít modaly vzdání/remízy/odvety)."
+    }
+  ],
+  "startedAt": "2026-07-09T12:26:03.948Z",
+  "resolvedVerify": [
+    "Ruční průchod PvP partie v prohlížeči v cs i en"
+  ],
+  "completedAt": "2026-07-09T12:46:00.203Z",
+  "autoCommit": {
+    "preSha": "d303417384d3320af3de4c9e28af9f3840926dc2",
+    "subject": "Phase 82: i18n: PvP herní obrazovka + modaly konce"
+  }
+}

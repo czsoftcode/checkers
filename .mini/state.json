@@ -407,6 +407,11 @@
       "id": 81,
       "title": "i18n jádro + lobby (cs/en)",
       "status": "done"
+    },
+    {
+      "id": 82,
+      "title": "i18n: PvP herní obrazovka + modaly konce",
+      "status": "done"
     }
   ]
 }
