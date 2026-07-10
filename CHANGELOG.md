@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.70.0] - 2026-07-10
+
+### Changed
+
+- **Hra proti počítači běží celá v prohlížeči.** Výpočet tahů počítače (na všech
+  úrovních včetně nápovědy ve Výuce a losování Mistrovství) se přesunul ze serveru
+  přímo do prohlížeče a počítá se ve Web Workeru – tedy mimo hlavní vlákno, aby
+  přibližně sekundové přemýšlení nezaseklo ovládání. Hra proti počítači tím
+  nepotřebuje běžící herní server a funguje i přes prosté HTTP (např. test na mobilu
+  v místní síti). Hra dvou lidí přes web (PvP) se nemění – ta dál jede přes server,
+  který zůstává jediným rozhodčím nad pravidly.
+
 ### Fixed
 
 - **Favicon (ikona v záložce prohlížeče) funguje i v produkci.** Soubor se přesunul

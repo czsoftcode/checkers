@@ -122,6 +122,31 @@ function opposite(color: Color): Color {
   return color === 'black' ? 'white' : 'black';
 }
 
+/**
+ * ID lokální partie. Je to JEN klíč do in-memory mapy partií (žádná bezpečnostní
+ * ani drátová role – server ho nevidí), takže nepotřebuje kryptografickou sílu.
+ *
+ * POZOR na secure context: `crypto.randomUUID` je v prohlížeči dostupné jen na
+ * HTTPS nebo `localhost`/`127.0.0.1`. Přes prosté HTTP na LAN IP (typicky ruční
+ * test na mobilu z dev serveru, nebo cizí hosting bez TLS) je `undefined` a přímé
+ * volání by shodilo `createGame` (TypeError → „Partii se nepodařilo založit"),
+ * takže by AI deska byla v insecure contextu nepoužitelná. `crypto.getRandomValues`
+ * je dostupné I v insecure contextu → primární cesta; poslední záchrana
+ * (`Date.now` + `Math.random`) kdyby chybělo i `crypto` úplně. Unikátnost v rámci
+ * jedné stránky plně stačí (partie žijí jen v paměti tohoto klienta).
+ */
+function newGameId(): string {
+  const c: Crypto | undefined = globalThis.crypto;
+  if (c !== undefined && typeof c.randomUUID === 'function') {
+    return c.randomUUID();
+  }
+  if (c !== undefined && typeof c.getRandomValues === 'function') {
+    const bytes = c.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  return `game-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+}
+
 /** Přepis `Move` (rules) do drátového `MoveDto`. Kopie polí, ne readonly odkaz. */
 function moveToDto(move: Move): MoveDto {
   return { from: move.from, path: [...move.path], captures: [...move.captures] };
@@ -327,7 +352,7 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
         return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
       const game: LocalGame = {
-        id: globalThis.crypto.randomUUID(),
+        id: newGameId(),
         state: seeded.state,
         moves: seeded.moves,
         level,

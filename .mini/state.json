@@ -437,6 +437,11 @@
       "id": 87,
       "title": "LocalClient + Web Worker",
       "status": "done"
+    },
+    {
+      "id": 88,
+      "title": "Web: AI přes LocalClient",
+      "status": "done"
     }
   ]
 }

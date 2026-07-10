@@ -13,6 +13,7 @@
  */
 
 import type { Color, GameResult, Position, Square } from '@checkers/rules';
+import type { GameLevel } from '@checkers/ai';
 
 /** Stav tahu enginu na pozadí (kontrakt se serverem). */
 export type EngineStatus = 'idle' | 'thinking' | 'error';
@@ -27,21 +28,30 @@ export const END_REASONS = ['resign', 'draw-agreement', 'rules'] as const;
 export type EndReason = (typeof END_REASONS)[number];
 
 /**
- * JEDINÝ web-side seznam úrovní obtížnosti. Hodnoty MUSÍ sedět na server
- * (`levels.ts`, zod enum) – web na balíček server nezávisí (nesváže build graf),
- * takže je to ručně držená kopie kontraktu, stejně jako `GameDto` níž. Neznámou
- * hodnotu server odmítne (400). Odsud se odvozuje typ `GameLevel`, runtime guard
- * v `isGameDto` i výběr úrovně v UI – přidání úrovně = jediná změna tady (plus
- * její český popisek v `app-shell.ts`). POZOR: pořadí tu není jen kosmetika –
- * `app-shell.ts` z něj plní `<select>` a PRVNÍ prvek je výchozí soupeř nové hry.
- * `professional` proto musí zůstat první, ať UI default sedí na serverový
- * `DEFAULT_LEVEL` (jinak by se automatická úvodní partie a serverový default
- * tiše rozešly).
+ * Web-side seznam úrovní obtížnosti v UI POŘADÍ. Množina hodnot je táž jako
+ * `@checkers/ai` `LEVELS` (jediný zdroj pravdy o úrovních), ale POŘADÍ je tu
+ * lokální a ZÁMĚRNĚ jiné: `@checkers/ai` řadí championship-first, web
+ * professional-first. POZOR: pořadí tu není kosmetika – `app-shell.ts` z něj plní
+ * `<select>` a PRVNÍ prvek je výchozí soupeř nové hry, takže `professional` musí
+ * zůstat první, ať UI default sedí na `DEFAULT_LEVEL` (jinak by se automatická
+ * úvodní partie a default tiše rozešly).
+ *
+ * Zub proti driftu je DVOJÍ: `satisfies readonly GameLevel[]` (compile-time)
+ * odmítne úroveň, kterou `@checkers/ai` nezná; permutační test
+ * (`server-client-levels.test.ts`) hlídá, že jde o STEJNOU MNOŽINU (chytí i
+ * úroveň chybějící tady). Přidání/odebrání úrovně na jedné straně tak shodí buď
+ * typecheck, nebo test – ne tiše.
  */
-export const GAME_LEVELS = ['professional', 'championship', 'intermediate', 'beginner', 'education'] as const;
+export const GAME_LEVELS = [
+  'professional',
+  'championship',
+  'intermediate',
+  'beginner',
+  'education',
+] as const satisfies readonly GameLevel[];
 
-/** Úroveň obtížnosti posílaná do POST /games. Odvozeno z `GAME_LEVELS`. */
-export type GameLevel = (typeof GAME_LEVELS)[number];
+/** Úroveň obtížnosti posílaná do POST /games. Sdílený typ z `@checkers/ai`. */
+export type { GameLevel };
 
 /** Tah v drátovém tvaru (čísla polí 1–32). Klient ho zatím nečte, ale je součástí kontraktu. */
 export interface MoveDto {

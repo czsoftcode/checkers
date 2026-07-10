@@ -19,7 +19,9 @@ import { resolveInitialLocale, t } from './i18n.js';
 import { createAppShell } from './app-shell.js';
 import { createLobby } from './lobby.js';
 import { createGameScreen } from './game-screen.js';
-import { createHttpClient } from './server-client.js';
+import { createLocalClient } from './local-client.js';
+import { createWebWorkerEngineWorker } from './local/engine-worker.js';
+import type { ServerClient } from './server-client.js';
 import type { GameLink, Lobby } from './lobby.js';
 import type { ChallengeAcceptedInfo } from './room-client.js';
 import './analytics.js';
@@ -40,7 +42,20 @@ if (!(rootEl instanceof HTMLElement)) {
 // se do těl níže deklarovaných funkcí sám nepropíše.
 const root: HTMLElement = rootEl;
 
-const client = createHttpClient();
+// Sólo deska (hra proti AI) jede CELÁ v prohlížeči přes LocalClient + reálný Web
+// Worker (fáze 87/88): server AI nepočítá. JEDNA instance workeru i klienta na
+// život stránky (drží se, NE per-mount+dispose), ale vytvořená LÍNĚ až při prvním
+// vstupu do sóla: hráč, který jde jen do lobby nebo do PvP (worker nepoužívají),
+// tak zbytečně nespouští vlákno enginu ani nenačítá jeho bundle, a kdyby konstrukce
+// workeru selhala, neshodí to boot celé appky (lobby/PvP) na prázdnou stránku, jen
+// sólo desku. PvP se tohohle klienta NEDOTÝKÁ: jede přes game-screen/game-socket/
+// room-client (autoritativní server). `createHttpClient` tím zůstává z webu
+// nevolané (jeho odstranění je mimo řez, #52).
+let soloClientInstance: ServerClient | null = null;
+function soloClient(): ServerClient {
+  soloClientInstance ??= createLocalClient(createWebWorkerEngineWorker());
+  return soloClientInstance;
+}
 
 // Trvalé lobby v rámci multiplayer toku. Přežívá přechod do PvP hry (jen se odpojí
 // z DOM, room WS drží dál); `null`, jen když jsme v sólu (tam se lobby zavře).
@@ -84,7 +99,7 @@ function showLobby(): void {
 function showSolo(): void {
   clearTransient();
   disposeLobby(); // sólo je mimo místnost → zavři room WS
-  const shell = createAppShell(client, { onExit: showLobby });
+  const shell = createAppShell(soloClient(), { onExit: showLobby });
   transientDispose = () => {
     shell.dispose();
   };

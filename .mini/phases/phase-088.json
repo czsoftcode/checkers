@@ -1,0 +1,39 @@
+{
+  "id": 88,
+  "title": "Web: AI přes LocalClient",
+  "goal": "V main.ts přepnout AI/sólo desku (createAppShell) z HttpClient na LocalClient s reálným Web Workerem (oboje z fáze 87); PvP zůstává beze změny na serveru přes game-socket/room-client (ServerClient AI cestu nepoužívá). Sjednotit seznam úrovní s @checkers/ai: sdílet typ GameLevel + zub proti driftu (test, že webová GAME_LEVELS je permutací @checkers/ai LEVELS - stejná množina), UI pořadí professional-first zůstává lokální. Ověřit END-TO-END v prohlížeči (tady poprvé běží REÁLNÝ Web Worker, fáze 87 testovala jen in-process fakem): hra proti AI všech 5 úrovní vč. nápovědy Výuka, ballotu Mistrovství, remízy a vzdání je plně hratelná BEZ volání serveru; Vite worker bundling funguje, tah se počítá mimo hlavní vlákno, UI nezamrzne. Mimo řez: offline statický build (#50), PvP z cross-origin/CORS/WSS (#51), odstranění serverové AI (#52).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Dedup GameLevel + permutační zub",
+      "status": "done",
+      "detail": "server-client.ts importuje typ GameLevel z @checkers/ai (dnes ho odvozuje z vlastního GAME_LEVELS); GAME_LEVELS zůstane lokální seřazené pole (professional-first kvůli UI defaultu). Zub: test, že GAME_LEVELS je permutací @checkers/ai LEVELS (stejná množina). Výstup: test zelený; při přidání/odebrání úrovně na jedné straně padne; app-shell.ts import GAME_LEVELS dál sedí, web typecheck projde."
+    },
+    {
+      "title": "Přepnout AI desku na LocalClient + worker",
+      "status": "done",
+      "detail": "main.ts — createHttpClient() → createLocalClient(createWebWorkerEngineWorker()) předané do createAppShell (sólo); JEDNA instance worker+klient na život stránky; PvP (game-screen/game-socket) se nedotýká; createHttpClient zůstává nevolané. Výstup: web typecheck + stávající webové testy zelené; PvP tok beze změny."
+    },
+    {
+      "title": "Ověřit Vite worker bundling",
+      "status": "done",
+      "detail": "pnpm --filter @checkers/web build (vite build) vyprodukuje samostatný worker chunk (@checkers/ai+@checkers/engine zabalené do module workeru přes new Worker(new URL(...), {type:module})); dev (pnpm dev) načte worker bez chyby v konzoli. Výstup: build projde, worker chunk existuje v dist/, dev konzole bez chyby načtení workeru."
+    },
+    {
+      "title": "E2e přes Chrome bez serveru",
+      "status": "done",
+      "detail": "pnpm dev (Vite) se serverovým procesem NESPUŠTĚNÝM; přes claude-in-chrome projít akceptační checklist — všech 5 úrovní, nápověda (Výuka), ballot (Mistrovství), remíza, vzdání. Explicitně ověřit: (a) žádný request na /games (network tab) = AI na serveru nevisí; (b) UI nezamrzne během thinking; (c) floor invariant — Začátečník netáhne dřív než aiMovePauseMs. Výstup: doložený průchod (screenshoty/záznam); fallback ruční test na mobilu, kdyby Chrome nešel."
+    }
+  ],
+  "startedAt": "2026-07-10T21:10:41.418Z",
+  "resolvedVerify": [
+    "Vizuální průchod sóla na reálné obrazovce / mobilu",
+    "Subjektivní plynulost: UI nezamrzne během thinking",
+    "Floor timing: Začátečník netáhne dřív než aiMovePauseMs (jak je VIDĚT)"
+  ],
+  "completedAt": "2026-07-10T21:59:51.376Z",
+  "autoCommit": {
+    "preSha": "02812de9ddce03e3f4c0bfe6006eb5a48cb2b06d",
+    "subject": "Phase 88: Web: AI přes LocalClient"
+  }
+}
