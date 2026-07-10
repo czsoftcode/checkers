@@ -946,3 +946,18 @@ body {
   font-size: 0.95rem;
   color: #cdd;
 }
+
+/* Odkaz ven na živou verzi v itch modalu (fáze 89). Stylizovaný jako tlačítko, ať
+   vizuálně sedí vedle „Zavřít"; `.modal-dialog a` (0,1,1) přebije obecné odkazy. */
+.modal-dialog a.modal-link {
+  padding: 0.5rem 1rem;
+  border: 1px solid #3a7;
+  border-radius: 6px;
+  background: #2b4d7a;
+  color: #eee;
+  text-decoration: none;
+}
+
+.modal-dialog a.modal-link:hover {
+  background: #34608f;
+}

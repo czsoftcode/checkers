@@ -135,6 +135,19 @@ export interface LobbyOptions {
   readonly roomUrl?: string;
   /** Náhrada tovární funkce socketu – jen pro testy (fake socket). */
   readonly socketFactory?: RoomSocketFactory;
+  /**
+   * Itch build (fáze 89): AI-only publikace. V itch módu se místnost/room WS NIKDY
+   * neotevře – „hrát s člověkem" místo formuláře přezdívky otevře modal s odkazem
+   * na živou verzi. Výchozí hodnota se čte z `import.meta.env.VITE_ITCH`; parametr
+   * je hlavně pro testy (vynutit itch větev bez závislosti na build módu).
+   */
+  readonly itchMode?: boolean;
+  /**
+   * Adresa živé verze pro itch modal (kam odkázat na reálné PvP). Výchozí hodnota se
+   * čte z `import.meta.env.VITE_SITE_URL`; parametr je hlavně pro testy. Chybějící
+   * schéma (`https://`) se doplní.
+   */
+  readonly siteUrl?: string;
 }
 
 /** Ovládaná obrazovka místnosti. `dispose` zavře room WS (odchod z místnosti). */
@@ -165,6 +178,14 @@ type View = 'entry' | 'connecting' | 'joined' | 'disconnected';
 
 /** Postaví obrazovku místnosti. Vrací kořenový prvek k vložení do stránky. */
 export function createLobby(options: LobbyOptions): Lobby {
+  // Itch build (fáze 89): AI-only. Room WS se tu NIKDY neotevře – proto se do
+  // multiplayer větve (createRoomClient a její wiring) vůbec nevstoupí a vrátí se
+  // samostatný, kompaktní vstup s modalem. Výchozí přepínač z build módu, testy ho
+  // umí vynutit přes `options.itchMode`.
+  if (options.itchMode ?? import.meta.env.VITE_ITCH === '1') {
+    return createItchEntry(options);
+  }
+
   const element = document.createElement('div');
   element.className = 'lobby';
 
@@ -628,6 +649,171 @@ export function createLobby(options: LobbyOptions): Lobby {
     element,
     dispose: () => {
       room_client.dispose();
+    },
+  };
+}
+
+/**
+ * Doplní chybějící schéma k adrese živé verze: „dama.softcode.cz" → „https://dama.softcode.cz".
+ * Adresu už se schématem nechá být. Prázdnou (nenastavená env) vrátí prázdnou – volající
+ * pak odkaz vůbec nevykreslí (raději žádný než mrtvý `#`).
+ */
+function normalizeSiteUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return '';
+  }
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+/**
+ * Vstupní obrazovka ITCH buildu (fáze 89): AI-only. Vypadá jako lobby (stejné pozadí,
+ * karta, nadpis, přepínač jazyka, „hrát proti počítači"), ale MÍSTO formuláře přezdívky
+ * má tlačítko „hrát s člověkem", které otevře modal s odkazem na živou verzi. Room WS se
+ * tu NIKDY neotevře – `createRoomClient` se vůbec nevolá, takže na itch nevznikne žádné
+ * spojení do (mrtvého) serveru. `dispose` proto jen odvěsí posluchač Esc; žádný socket.
+ */
+function createItchEntry(options: LobbyOptions): Lobby {
+  const siteUrl = normalizeSiteUrl(options.siteUrl ?? import.meta.env.VITE_SITE_URL ?? '');
+
+  const element = document.createElement('div');
+  element.className = 'lobby';
+
+  // Stejné celostránkové pozadí jako v místnosti (viz `createLobby`): `<picture>` volí
+  // variantu podle orientace, `<source>` musí být před `<img>`.
+  const picture = document.createElement('picture');
+  const mobileSource = document.createElement('source');
+  mobileSource.media = '(orientation: portrait)';
+  mobileSource.srcset = introMobileUrl;
+  const pageBg = document.createElement('img');
+  pageBg.className = 'page-bg';
+  pageBg.alt = '';
+  pageBg.src = introUrl;
+  picture.append(mobileSource, pageBg);
+  element.append(picture);
+
+  const card = document.createElement('div');
+  card.className = 'lobby-card';
+
+  // Hlavička: nadpis + přepínač jazyka (jako v místnosti). Na itch je tu jediný pohled
+  // (bez WS), takže přepínač je vždy dostupný – rebuild přes `onLocaleChange` je neškodný.
+  const header = document.createElement('div');
+  header.className = 'lobby-header';
+  const heading = document.createElement('h1');
+  heading.className = 'lobby-title';
+  heading.textContent = t('lobby.title');
+
+  const langSelect = document.createElement('select');
+  langSelect.className = 'lobby-lang';
+  langSelect.setAttribute('aria-label', t('lobby.langAria'));
+  const activeLocale = getLocale();
+  for (const { locale, label } of LOCALES) {
+    const option = document.createElement('option');
+    option.value = locale;
+    option.textContent = label;
+    option.selected = locale === activeLocale;
+    langSelect.append(option);
+  }
+  langSelect.addEventListener('change', () => {
+    const chosen = langSelect.value;
+    if (!isLocale(chosen) || chosen === getLocale()) {
+      return;
+    }
+    saveLocale(chosen);
+    setLocale(chosen);
+    options.onLocaleChange();
+  });
+  header.append(heading, langSelect);
+
+  // „Hrát s člověkem": na itch NEotevírá místnost, jen modal s odkazem ven.
+  const humanBtn = document.createElement('button');
+  humanBtn.type = 'button';
+  humanBtn.className = 'lobby-human-btn';
+  humanBtn.textContent = t('itch.humanBtn');
+
+  // Sólo cesta (proti počítači) – shodná s místností: řídí ji caller přes `onPlayVsComputer`.
+  const soloBtn = document.createElement('button');
+  soloBtn.type = 'button';
+  soloBtn.className = 'lobby-solo-btn';
+  soloBtn.textContent = t('lobby.soloBtn');
+
+  card.append(header, humanBtn, soloBtn);
+  element.append(card);
+
+  // Modal (skrytý). Znovupoužívá CSP-bezpečné třídy `.modal-overlay`/`.modal-dialog`
+  // (jako modaly u hry – žádné inline styly). Zavírá se křížkem, klikem na pozadí i Esc.
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay hidden';
+  const dialog = document.createElement('div');
+  dialog.className = 'modal-dialog';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-label', t('itch.modalAria'));
+  const title = document.createElement('h2');
+  title.className = 'modal-msg';
+  title.textContent = t('itch.modalTitle');
+  const msg = document.createElement('p');
+  msg.className = 'modal-notice';
+  msg.textContent = t('itch.modalMsg');
+  dialog.append(title, msg);
+
+  // Odkaz ven na živou verzi. Vykreslí se JEN když je URL nastavená (jinak by byl mrtvý
+  // `#`); při nenastavené env se místo něj jen zaloguje varování. `rel=noopener` kvůli
+  // bezpečnosti u `target=_blank`.
+  if (siteUrl !== '') {
+    const link = document.createElement('a');
+    link.className = 'modal-link';
+    link.href = siteUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = t('itch.modalLink');
+    dialog.append(link);
+  } else {
+    console.warn('[itch] VITE_SITE_URL není nastavená – modal „hrát s člověkem" je bez odkazu.');
+  }
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'modal-close-btn';
+  closeBtn.textContent = t('itch.close');
+  dialog.append(closeBtn);
+  modal.append(dialog);
+  element.append(modal);
+
+  function openModal(): void {
+    modal.classList.remove('hidden');
+    document.addEventListener('keydown', onKeydown);
+    closeBtn.focus();
+  }
+  function closeModal(): void {
+    modal.classList.add('hidden');
+    document.removeEventListener('keydown', onKeydown);
+    humanBtn.focus();
+  }
+  function onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      closeModal();
+    }
+  }
+
+  humanBtn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+  // Klik na ztmavené pozadí (ne na dialog) zavře modal.
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+  soloBtn.addEventListener('click', () => {
+    options.onPlayVsComputer();
+  });
+
+  return {
+    element,
+    dispose: () => {
+      // Žádný room WS k zavření (na itch nevznikl). Uklidit jen globální Esc listener,
+      // kdyby se lobby disposlo s otevřeným modalem (rebuild při přepnutí jazyka).
+      document.removeEventListener('keydown', onKeydown);
     },
   };
 }

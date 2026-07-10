@@ -7,6 +7,20 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.71.0] - 2026-07-10
+
+### Added
+
+- **Statický build pro itch.io (hra proti počítači).** Nový režim buildu zabalí hru
+  do jednoho zipu, který jde nahrát na itch.io a hrát proti počítači kdekoliv v
+  prohlížeči, bez herního serveru. Assety, zvuky i ikona (favicon) se načítají přes
+  relativní cesty, takže hra funguje i z podadresáře, kam ji itch.io umístí. Externí
+  měření návštěvnosti (Plausible) je v itch verzi vypnuté – běží jen na hlavním webu.
+- **Tlačítko „Hrát s člověkem" v itch verzi.** Protože hra dvou lidí potřebuje herní
+  server, který na itch.io není, otevře tlačítko okno s vysvětlením a odkazem na plnou
+  verzi hry (adresa je nastavitelná). Hra proti člověku se z itch verze nikam
+  nepřipojuje. Hra proti počítači funguje beze změny.
+
 ## [0.70.0] - 2026-07-10
 
 ### Changed

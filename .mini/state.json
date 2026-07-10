@@ -442,6 +442,11 @@
       "id": 88,
       "title": "Web: AI přes LocalClient",
       "status": "done"
+    },
+    {
+      "id": 89,
+      "title": "Statický build pro itch",
+      "status": "done"
     }
   ]
 }

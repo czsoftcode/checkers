@@ -1,0 +1,34 @@
+{
+  "id": 89,
+  "title": "Statický build pro itch",
+  "goal": "Vytvořit itch build mode (Vite base:'./' + build flag, pozor i na absolutní favicon z fáze 85 → relativní) pro AI-only publikaci. Vstup: hra proti AI běží lokálně jako dnes; tlačítko 'hrát s člověkem' (PvP) NENÍ skryté, ale na itch otevře MODAL s vysvětlením a odkazem ven na živé stránky (produkční URL, konfigurovatelná — kde PvP reálně běží), místo aby otvíralo lobby/room WebSocket (ten na itch bez serveru míří na itch.zone → mrtvý). Žádný room WS ani přezdívka se na itch nespouští. Zabalit dist/ do zipu s index.html v kořeni a ověřit, že se z PODCESTY (jako na itch: html-classic.itch.zone/html/<id>/) načte a AI je plně hratelná offline (assety i favicon přes relativní cesty). Velikost bundlu (~1.7 MB assetů) proti limitu itch je bez problému, jen doložit. Mimo řez: reálné zprovoznění PvP z cross-origin/CORS/WSS (#51), odstranění serverové AI (#52), PWA/service worker (trvalý non-goal).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Vite itch mód: base, strip Plausible, favicon",
+      "status": "done",
+      "detail": "vite.config.ts čte mód; v itch módu base:'./', přes transformIndexHtml odstraní Plausible <script> a přepíše favicon /favicon.ico na relativní; .env.itch s VITE_ITCH=1 a VITE_SITE_URL=dama.softcode.cz. Výstup: vite build --mode itch vyprodukuje dist/index.html s relativními cestami k assetům i favicon a BEZ Plausible skriptu; default vite build beze změny (base /, Plausible přítomný, favicon absolutní)."
+    },
+    {
+      "title": "i18n modal + gating lobby entry na itch",
+      "status": "done",
+      "detail": "V itch módu (import.meta.env.VITE_ITCH) lobby entry view nahradí přezdívku/join tlačítkem 'hrát s člověkem' → modal s lokalizovaným textem (nové klíče v i18n.ts cs/en) a odkazem na VITE_SITE_URL; 'hrát proti počítači' beze změny; room WS se neotevře. Výstup: test — v itch módu lobby NEvytvoří room client a tlačítko otevře modal s odkazem; v běžném módu lobby beze změny; i18n klíče cs i en existují."
+    },
+    {
+      "title": "Balicí skript: zip s index.html v kořeni",
+      "status": "done",
+      "detail": "Skript v scripts/ (+ npm skript, např. build:itch) postaví itch mód a zabalí dist/ do zipu tak, že index.html je v KOŘENI zipu (ne v podsložce). Výstup: skript vyprodukuje .zip, jehož kořenová položka je index.html; doložit velikost (assety ~1.7 MB, pod limitem itch)."
+    },
+    {
+      "title": "Ověření z podcesty (Chrome) + regrese hlavního buildu",
+      "status": "done",
+      "detail": "Naservírovat dist/ z VNOŘENÉHO adresáře (simulace html-classic.itch.zone/html/<id>/, ne vite preview z rootu) a přes claude-in-chrome ověřit: AI hratelná offline, pozadí/zvuky/kameny/favicon z relativních cest, 'hrát s člověkem' → modal + odkaz, ŽÁDNÝ pokus o room WS (network tab). Regrese: default vite build dál produkuje dnešní index.html (base /, Plausible, absolutní favicon). Výstup: doložený Chrome průchod + potvrzení, že se itch mód nepropsal do defaultního buildu."
+    }
+  ],
+  "startedAt": "2026-07-10T22:17:13.700Z",
+  "completedAt": "2026-07-10T22:57:40.524Z",
+  "autoCommit": {
+    "preSha": "6cffb52a400c2fbb0d750bc47b386a162abb00d7",
+    "subject": "Phase 89: Statický build pro itch"
+  }
+}

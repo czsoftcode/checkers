@@ -6,3 +6,6 @@ coverage/
 
 # Archiv dokončených partií (PDN) – výstup serveru, ne zdroj pravdy (fáze 23)
 .pdn/
+
+# Balík itch buildu (výstup `pnpm build:itch`, fáze 89) – artefakt, ne zdroj
+checkers-itch.zip

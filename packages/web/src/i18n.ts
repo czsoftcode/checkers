@@ -172,6 +172,17 @@ const cs = {
   'lobby.nickTaken': 'Přezdívka je obsazená. Zkus třeba „{suggestion}".',
   'lobby.langAria': 'Jazyk',
 
+  // Itch build (fáze 89): AI-only publikace. Hra s člověkem tady neběží (server je
+  // cross-origin, mrtvý WS) → tlačítko místo místnosti otevře modal s odkazem na
+  // živou verzi. Text vysvětluje, proč tu PvP není a kam pro něj jít.
+  'itch.humanBtn': 'Hrát s člověkem',
+  'itch.modalTitle': 'Hra s člověkem je na plné verzi',
+  'itch.modalMsg':
+    'Tady na itch.io běží jen hra proti počítači. Hra dvou lidí proti sobě potřebuje herní server, který itch nemá – najdeš ji na plné verzi hry.',
+  'itch.modalLink': 'Otevřít plnou verzi',
+  'itch.modalAria': 'Hra s člověkem je na plné verzi',
+  'itch.close': 'Zavřít',
+
   // Herní obrazovka PvP (fáze 82): stavový pruh, panel, modaly (vzdání, remíza,
   // odveta, ztráta spojení), aria-popisky a výsledek/důvod konce z pohledu hráče.
   'game.connecting': 'Připojuji k partii…',
@@ -276,6 +287,14 @@ const en = {
   'lobby.disconnectedBefore': 'Could not connect to the room (server not responding).',
   'lobby.nickTaken': 'That nickname is taken. Try “{suggestion}”.',
   'lobby.langAria': 'Language',
+
+  'itch.humanBtn': 'Play against a human',
+  'itch.modalTitle': 'Human vs human is on the full version',
+  'itch.modalMsg':
+    'Here on itch.io only playing against the computer works. Two people playing against each other need a game server, which itch does not have – you will find it on the full version of the game.',
+  'itch.modalLink': 'Open the full version',
+  'itch.modalAria': 'Human vs human is on the full version',
+  'itch.close': 'Close',
 
   'game.connecting': 'Connecting to the game…',
   'game.opponentLabel': 'Opponent:',
