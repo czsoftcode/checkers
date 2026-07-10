@@ -33,8 +33,14 @@ import type {
   EvaluateRequest,
   HelloRequest,
   HelloResponse,
+  Strength,
 } from '@checkers/engine';
 import { LineBuffer } from '@checkers/engine';
+
+// `Strength` (páky síly bestmove) žije v `@checkers/engine` (tvar polí protokolu,
+// jeden zdroj pro server i @checkers/ai). Re-export drží veřejné API serveru
+// beze změny – volající serveru ho dál importují z `@checkers/server`.
+export type { Strength };
 
 /** Rozdíl mezi měkkým limitem enginu a tvrdým stropem klienta (ms). */
 export const HARD_TIMEOUT_MARGIN_MS = 500;
@@ -56,18 +62,6 @@ export interface SpawnCommand {
 /** Vyhodnocení pozice enginem: skóre z pohledu STRANY NA TAHU (jako search). */
 export interface EngineEvaluation {
   readonly score: number;
-}
-
-/**
- * Volitelné páky síly pro `bestmove` (kalibrace úrovní hry). Tvar sedí na
- * volitelná pole `BestmoveRequest` z protokolu enginu (fáze 34): oboje chybí →
- * engine hraje naplno (Profesionál). Mapu úroveň → `Strength` drží `levels.ts`.
- */
-export interface Strength {
-  /** Strop hloubky iterativního prohlubování; chybí → bez stropu. */
-  readonly maxDepth?: number;
-  /** Míra nepozornosti 0..1 (pravděpodobnost horšího tahu); chybí → 0. */
-  readonly carelessness?: number;
 }
 
 /** Minimum, které server potřebuje od enginu (umožní stub v testech). */

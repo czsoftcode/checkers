@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // types: [] – balíček je základ prohlížečového offline klienta, MUSÍ zůstat
+    // bez node: (cíl fáze 86). Prázdné `types` vynutí browser-safe už kompilátorem:
+    // náhodné node globály (process, Buffer) v src/ pak neprojdou tiše.
+    "types": []
+  },
+  "include": ["src", "test"]
+}

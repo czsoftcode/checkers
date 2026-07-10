@@ -8,7 +8,7 @@
 
 import { legalMoves } from '@checkers/rules';
 import type { Color, GameResult, GameState, Move, Position, Square } from '@checkers/rules';
-import type { GameLevel } from './levels.js';
+import type { GameLevel } from '@checkers/ai';
 import type { EndReason, EngineStatus } from './store.js';
 
 /** Tah ve tvaru pro drát: prostá, JSON-serializovatelná data (čísla 1–32). */

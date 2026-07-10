@@ -75,6 +75,23 @@ export interface BestmoveRequest {
 }
 
 /**
+ * Volitelné páky síly enginu (kalibrace úrovní hry) = jen ta VOLITELNÁ pole
+ * `BestmoveRequest` (`maxDepth`, `carelessness`) bez zbytku obálky. Chybí obě →
+ * Profesionál (žádný strop hloubky, žádná nepozornost).
+ *
+ * Definováno TADY, u protokolu, protože je to doslova tvar páček protokolu. Jeden
+ * zdroj tvaru pro všechny volající: `@checkers/server` (engine-client) i
+ * `@checkers/ai` (mapa `STRENGTH_BY_LEVEL`, orchestrátor) ho importují odsud, ať
+ * se definice páček nerozejde s tím, co engine na drátě přijímá.
+ */
+export interface Strength {
+  /** Strop iterativního prohlubování; chybí → bez stropu (MAX_SEARCH_DEPTH). */
+  readonly maxDepth?: number;
+  /** Míra nepozornosti 0..1 (pravděpodobnost horšího tahu); chybí → 0. */
+  readonly carelessness?: number;
+}
+
+/**
  * Požadavek na vyhodnocení pozice BEZ výběru tahu: engine vrátí skóre pozice
  * z pohledu strany na tahu (stejný search jako bestmove, jen se zahodí tah a
  * vrátí skóre). Slouží serveru k rozhodnutí o nabídce remízy – engine je jen

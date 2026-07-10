@@ -17,8 +17,8 @@ import {
   playBallot,
 } from '@checkers/rules';
 import type { Color, GameResult, GameState, Move } from '@checkers/rules';
-import { DEFAULT_LEVEL } from './levels.js';
-import type { GameLevel } from './levels.js';
+import { DEFAULT_LEVEL } from '@checkers/ai';
+import type { GameLevel } from '@checkers/ai';
 
 /**
  * Opačná barva. Barvu enginu si server dopočítává z uložené barvy člověka

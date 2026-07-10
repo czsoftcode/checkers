@@ -1,7 +1,7 @@
 {
   "version": 2,
   "createdAt": "2026-07-02T22:58:19.487Z",
-  "currentPhaseId": null,
+  "currentPhaseId": 86,
   "phases": [
     {
       "id": 1,
@@ -427,6 +427,11 @@
       "id": 85,
       "title": "Favicon.ico funguje i v produkci",
       "status": "done"
+    },
+    {
+      "id": 86,
+      "title": "Sdílený balíček @checkers/ai",
+      "status": "doing"
     }
   ]
 }

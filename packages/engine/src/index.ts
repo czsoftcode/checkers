@@ -21,6 +21,7 @@ export {
   type EvaluateResponse,
   type ErrorResponse,
   type EngineResponse,
+  type Strength,
 } from './protocol.js';
 export { LineBuffer } from './line-buffer.js';
 export { handleLine } from './handler.js';
@@ -37,9 +38,11 @@ export {
 export {
   searchRoot,
   searchTimed,
+  chooseMove,
   MAX_SEARCH_DEPTH,
   WIN_SCORE,
   type EvalFn,
+  type RankedMove,
   type SearchResult,
   type TimedSearchOptions,
   type TimedSearchResult,

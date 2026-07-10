@@ -11,7 +11,7 @@
  * (a nasazení), ne přepínač za běhu – vědomé omezení rozsahu.
  */
 
-import type { Strength } from './engine-client.js';
+import type { Strength } from '@checkers/engine';
 
 /** Úroveň obtížnosti. Interní hodnoty (drát/kód); v UI se lokalizují do češtiny. */
 export const LEVELS = ['championship', 'professional', 'intermediate', 'beginner', 'education'] as const;

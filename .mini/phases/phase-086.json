@@ -1,0 +1,39 @@
+{
+  "id": 86,
+  "title": "Sdílený balíček @checkers/ai",
+  "goal": "Vytvořit balíček @checkers/ai jako jediný zdroj knihy zahájení (opening book), mapování úroveň→síla (STRENGTH_BY_LEVEL, levelUsesBook, LEVELS, DEFAULT_LEVEL, typ Strength) a orchestrátoru výběru tahu (book → search → chooseMove, s volitelným parametrem maxDepth), napojit na něj server beze změny jeho chování (strop maxDepth 12 zůstává jen nepoužitým parametrem pro budoucí offline klienta, na server se NEaplikuje) a přibít shodu serverové a sdílené cesty kontraktním testem nad reálným kódem obou stran (tatáž pozice + seed + úroveň → týž tah). Přesun opening-book.ts a levels.ts (vč. typu Strength) ze serveru; server je začne importovat z @checkers/ai. Balíček závisí jen na @checkers/rules a @checkers/engine (čisté exporty, žádné node:). Rozsah: JEN balíček + napojení serveru; regrese hlídají stávající serverové testy. Mimo řez: změna webového klienta, Web Worker, offline build, dedup webové kopie GAME_LEVELS.",
+  "status": "doing",
+  "steps": [
+    {
+      "title": "Založit balíček @checkers/ai (skeleton)",
+      "status": "done",
+      "detail": "package.json (name @checkers/ai, exports ./src/index.ts, deps @checkers/rules + @checkers/engine workspace), tsconfig dle base, skripty typecheck/test jako ostatní balíčky, prázdný src/index.ts. Výstup: pnpm -r typecheck prochází, balíček je součástí workspace."
+    },
+    {
+      "title": "Rozšířit veřejné API @checkers/engine",
+      "status": "done",
+      "detail": "Přesunout typ Strength ({maxDepth?, carelessness?}) ze server/engine-client.ts do @checkers/engine a doexportovat z indexu chooseMove + typ RankedMove. engine-client.ts i server index.ts re-export Strength napojit na engine. Výstup: engine exportuje Strength, chooseMove, RankedMove; server typecheck + testy zelené."
+    },
+    {
+      "title": "Přesunout opening book do @checkers/ai",
+      "status": "done",
+      "detail": "opening-book.ts (buildBook, SEED_LINES, OPENING_BOOK, lookupBookMove, OpeningBook) beze změny logiky do @checkers/ai + jeho unit testy; app.ts a server index.ts importují z @checkers/ai, index.ts drží pass-through re-export. Výstup: book testy zelené v ai, opening-book*.test.ts/levels-book.test.ts na serveru zelené beze změny očekávání."
+    },
+    {
+      "title": "Přesunout mapu úrovní do @checkers/ai",
+      "status": "done",
+      "detail": "LEVELS, DEFAULT_LEVEL, STRENGTH_BY_LEVEL, LEVELS_WITH_BOOK, levelUsesBook, GameLevel do @checkers/ai (importuje Strength z enginu); re-point 4 serverových importů (app.ts, dto.ts, store.ts, index.ts) na @checkers/ai + pass-through re-export v index.ts. Výstup: všechny serverové testy zelené beze změny očekávání."
+    },
+    {
+      "title": "Orchestrátor výběru tahu v @checkers/ai",
+      "status": "done",
+      "detail": "Funkce computeAiMove(position, {strength, timeMs, maxDepth?, book?}, rng) reprodukující serverovou cestu — book lookup → legalita přes rules legalMoves → fallback na searchTimed+chooseMove; rankRoot = carelessness > 0, carelessness absent → 0, maxDepth volitelný a BEZ aplikace stropu 12. Výstup: unit test základního chování (legální tah; knižní pozice → knižní tah; nelegální knižní tah → fallback)."
+    },
+    {
+      "title": "Kontraktní test: orchestrátor == handleLine",
+      "status": "done",
+      "detail": "Test v @checkers/ai porovná computeAiMove proti @checkers/engine handleLine se stejným seedem, pevným now a pevným maxDepth přes reprezentativní pozice a všechny úrovně (Profesionál/Mistrovství/Výuka/Střední/Začátečník) i knižní větev. Výstup: test zelený; při dočasné změně síly na jedné straně padne (má zuby)."
+    }
+  ],
+  "startedAt": "2026-07-10T18:51:26.193Z"
+}

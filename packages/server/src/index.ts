@@ -70,8 +70,11 @@ export type {
   SpawnCommand,
   Strength,
 } from './engine-client.js';
-export { LEVELS, DEFAULT_LEVEL, STRENGTH_BY_LEVEL, LEVELS_WITH_BOOK, levelUsesBook } from './levels.js';
-export type { GameLevel } from './levels.js';
-export { OPENING_BOOK, buildBook, lookupBookMove } from './opening-book.js';
-export type { OpeningBook } from './opening-book.js';
+// Kniha zahájení a mapa úrovní žijí v `@checkers/ai` (fáze 86). Pass-through
+// re-export drží veřejné API serveru beze změny – testy i volající serveru je
+// dál importují z `@checkers/server`.
+export { LEVELS, DEFAULT_LEVEL, STRENGTH_BY_LEVEL, LEVELS_WITH_BOOK, levelUsesBook } from '@checkers/ai';
+export type { GameLevel } from '@checkers/ai';
+export { OPENING_BOOK, buildBook, lookupBookMove } from '@checkers/ai';
+export type { OpeningBook } from '@checkers/ai';
 export { mulberry32 } from './prng.js';
