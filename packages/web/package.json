@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@checkers/ai": "workspace:*",
+    "@checkers/engine": "workspace:*",
     "@checkers/rules": "workspace:*"
   },
   "devDependencies": {

@@ -417,7 +417,7 @@ async function parseGameDto(response: Response, method: string, url: string): Pr
  * `result`/`legalMoves` se nezobrazují, takže se nekontrolují do hloubky. Cíl je
  * chytit drift kontraktu nebo cizí tělo dřív, než rozbije desku.
  */
-function isGameDto(value: unknown): value is GameDto {
+export function isGameDto(value: unknown): value is GameDto {
   if (typeof value !== 'object' || value === null) {
     return false;
   }

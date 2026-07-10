@@ -1,0 +1,52 @@
+{
+  "id": 87,
+  "title": "LocalClient + Web Worker",
+  "goal": "Vytvořit prohlížečový LocalClient, který plně splní rozhraní ServerClient (createGame vč. ballotu Mistrovství, getGame jako poll zachytávající tah enginu, postMove, resign, offerDraw, getHint) a reprodukuje serverový životní cyklus partie (humanColor, první tah enginu u člověk=bílý, model thinking→idle, konec s důvodem) čistě v prohlížeči bez běžícího serveru. Tah AI počítá přes @checkers/ai computeAiMove ve Web Workeru (mimo hlavní vlákno) s politikou úroveň→síla a stropem maxDepth 12 pro Profesionál/Mistrovství/Výuku (Začátečník d1/Střední d3 beze změny). Zub proti regresi: LocalClient dá pro danou pozici + seed + úroveň týž tah jako serverová cesta (mimo strop 12). NEZÁVISLÉ na běžícím serveru. Mimo řez: přepnutí webového UI na LocalClient (samostatná fáze #49), offline build, PvP, změna serveru.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Politika síly + jádro výpočtu tahu",
+      "status": "done",
+      "detail": "Čistá funkce strengthFor(level) (z @checkers/ai STRENGTH_BY_LEVEL + strop maxDepth 12 pro Profesionál/Mistrovství/Výuku; Začátečník/Střední beze změny) a computeMove(position, level, seed) volající @checkers/ai computeAiMove s touto politikou a OPENING_BOOK. Výstup: unit testy — silné úrovně dostanou maxDepth 12, slabé beze změny; tah == computeAiMove se stejnou Strength."
+    },
+    {
+      "title": "Worker transport za injektovatelným rozhraním",
+      "status": "done",
+      "detail": "Rozhraní EngineWorker { computeMove(req): Promise<Move> }, in-process implementace (volá jádro z kroku 1) a tenký reálný Web Worker modul (new Worker(new URL(...), {type:module}), přijme zprávu → jádro → pošle tah). Výstup: in-process impl otestovaná; reálný worker se zabalí Vite buildem (typecheck+build projde). Testy dál používají in-process fake (jsdom nemá worker)."
+    },
+    {
+      "title": "LocalClient: skeleton + createGame (+ballot)",
+      "status": "done",
+      "detail": "LocalClient implements ServerClient s in-memory stavem partie (id, position, result, level, humanColor, ballot, engineStatus, endReason). createGame(level, humanColor, ballotIndex?) sestaví GameDto — u Mistrovství los ballotu přes mulberry32(seed) (offline seed náhodný, v testu injektovaný) → pozice s bílým na tahu + ballotMoves + ballotIndex; u člověk=bílý spustí první tah enginu (thinking). Výstup: test — GameDto má platný tvar (isGameDto), Mistrovství vrátí ballot, člověk=bílý → engineStatus:thinking."
+    },
+    {
+      "title": "postMove + trigger enginu + poll model thinking→idle",
+      "status": "done",
+      "detail": "postMove(id, from, path) aplikuje tah člověka přes rules, detekuje konec (rules), jinak spustí tah enginu (worker, thinking) a vrátí GameDto; getGame(id) vrací aktuální stav; po doběhu workeru se tah enginu aplikuje proti AKTUÁLNÍ pozici → idle. Výstup: test řídí createGame→postMove→poll getGame dokud idle, tah enginu se objeví; sedí na dnešní controller (poll à 250 ms, single-flight)."
+    },
+    {
+      "title": "resign + offerDraw + endReason",
+      "status": "done",
+      "detail": "resign(id) → terminální výsledek + endReason:resign. offerDraw(id) → searchTimed(position).score z pohledu enginu, přijmout když <= 0 (DRAW_ACCEPT_MAX_ENGINE_SCORE) → konec + endReason:draw-agreement, jinak odmítnutí; vrací DrawOffer (verdikt + stav). Výstup: testy — resign dá správný výsledek; remíza přijata/odmítnuta podle znaménka skóre."
+    },
+    {
+      "title": "getHint + chybové cesty",
+      "status": "done",
+      "detail": "getHint(id) → computeAiMove plnou silou + strop maxDepth 12, bez nepozornosti; vrací MoveDto, stav nemění. Chybové cesty (konec hry, není tah člověka) → ServerError-like code, aby se controller nezasekl. Výstup: test — nápověda vrátí legální tah na tahu člověka; po konci / mimo tah člověka chyba se strojovým kódem."
+    },
+    {
+      "title": "Regresní test: LocalClient == computeAiMove (pevný seed)",
+      "status": "done",
+      "detail": "LocalClient s injektovaným in-process workerem a PEVNÝM seedem přes reprezentativní pozice a všechny úrovně; tah enginu z LocalClient == computeAiMove(stejná pozice+seed+Strength) in-process (na server tranzitivně přes fázi 86). Výstup: test zelený; při dočasné změně politiky síly na jedné straně padne (má zuby)."
+    }
+  ],
+  "startedAt": "2026-07-10T20:00:33.635Z",
+  "resolvedVerify": [
+    "Reálný Web Worker za běhu (round-trip postMessage → tah)"
+  ],
+  "completedAt": "2026-07-10T20:52:36.280Z",
+  "autoCommit": {
+    "preSha": "37150c4c8cbc97d715c8368927d72aefbb6c974b",
+    "subject": "Phase 87: LocalClient + Web Worker"
+  }
+}

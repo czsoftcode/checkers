@@ -432,6 +432,11 @@
       "id": 86,
       "title": "Sdílený balíček @checkers/ai",
       "status": "done"
+    },
+    {
+      "id": 87,
+      "title": "LocalClient + Web Worker",
+      "status": "done"
     }
   ]
 }
