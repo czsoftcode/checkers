@@ -2,7 +2,7 @@
   "id": 86,
   "title": "Sdílený balíček @checkers/ai",
   "goal": "Vytvořit balíček @checkers/ai jako jediný zdroj knihy zahájení (opening book), mapování úroveň→síla (STRENGTH_BY_LEVEL, levelUsesBook, LEVELS, DEFAULT_LEVEL, typ Strength) a orchestrátoru výběru tahu (book → search → chooseMove, s volitelným parametrem maxDepth), napojit na něj server beze změny jeho chování (strop maxDepth 12 zůstává jen nepoužitým parametrem pro budoucí offline klienta, na server se NEaplikuje) a přibít shodu serverové a sdílené cesty kontraktním testem nad reálným kódem obou stran (tatáž pozice + seed + úroveň → týž tah). Přesun opening-book.ts a levels.ts (vč. typu Strength) ze serveru; server je začne importovat z @checkers/ai. Balíček závisí jen na @checkers/rules a @checkers/engine (čisté exporty, žádné node:). Rozsah: JEN balíček + napojení serveru; regrese hlídají stávající serverové testy. Mimo řez: změna webového klienta, Web Worker, offline build, dedup webové kopie GAME_LEVELS.",
-  "status": "doing",
+  "status": "done",
   "steps": [
     {
       "title": "Založit balíček @checkers/ai (skeleton)",
@@ -35,5 +35,10 @@
       "detail": "Test v @checkers/ai porovná computeAiMove proti @checkers/engine handleLine se stejným seedem, pevným now a pevným maxDepth přes reprezentativní pozice a všechny úrovně (Profesionál/Mistrovství/Výuka/Střední/Začátečník) i knižní větev. Výstup: test zelený; při dočasné změně síly na jedné straně padne (má zuby)."
     }
   ],
-  "startedAt": "2026-07-10T18:51:26.193Z"
+  "startedAt": "2026-07-10T18:51:26.193Z",
+  "completedAt": "2026-07-10T19:28:41.562Z",
+  "autoCommit": {
+    "preSha": "bee4010767c46e3fae5742551c7cbbc961c38eb0",
+    "subject": "Phase 86: Sdílený balíček @checkers/ai"
+  }
 }
