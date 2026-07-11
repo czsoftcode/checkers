@@ -14,8 +14,20 @@
  * tah jí MUSÍ projít, notace desku vůbec nevidí.
  */
 
-import { BOARD_SQUARES, isNeighbor, jumpedSquareBetween } from './board.js';
+import { BOARD_SQUARES, isNeighbor, jumpedSquareBetween, raySquares } from './board.js';
+import { AMERICAN_RULESET } from './ruleset.js';
+import type { Ruleset } from './ruleset.js';
 import type { Move, Square } from './types.js';
+
+/**
+ * Smí prostý tah `from → target` existovat? U `king: 'short'` jen na souseda
+ * (americká dáma i muž). U `king: 'flying'` na libovolné pole na diagonále –
+ * notace desku NEVIDÍ, takže NEkontroluje obsazení mezipolí (to hlídá
+ * `applyMove` / brána `legalMoves`); relaxace je čistě STRUKTURÁLNÍ.
+ */
+function simpleReachable(from: Square, target: Square, ruleset: Ruleset): boolean {
+  return ruleset.king === 'flying' ? raySquares(from, target) !== null : isNeighbor(from, target);
+}
 
 /**
  * Převede tah do PDN textu. Strukturálně nesmyslný tah (prázdná path,
@@ -23,7 +35,7 @@ import type { Move, Square } from './types.js';
  * odmítá RangeError – jinak by se nesmysl tiše „vypral": text by se zpátky
  * parsoval na JINÝ (korektní) tah a korupce by zmizela z dohledu.
  */
-export function formatMove(move: Move): string {
+export function formatMove(move: Move, ruleset: Ruleset = AMERICAN_RULESET): string {
   if (move.path.length === 0) {
     throw new RangeError('Neplatný tah: prázdná path');
   }
@@ -34,9 +46,9 @@ export function formatMove(move: Move): string {
       );
     }
     const target = move.path[0];
-    if (target === undefined || !isNeighbor(move.from, target)) {
+    if (target === undefined || !simpleReachable(move.from, target, ruleset)) {
       throw new RangeError(
-        `Neplatný tah: ${String(target)} nesousedí s ${String(move.from)} (teleport)`,
+        `Neplatný tah: ${String(target)} neleží na diagonále z ${String(move.from)} (teleport)`,
       );
     }
     return `${String(move.from)}-${String(target)}`;
@@ -87,7 +99,7 @@ function parseSquare(token: string, text: string): Square {
  * pole mimo 1–32, nesousední prostý tah, krok bez skokové geometrie,
  * dvakrát přeskočené stejné pole) odmítá RangeError.
  */
-export function parseMove(text: string): Move {
+export function parseMove(text: string, ruleset: Ruleset = AMERICAN_RULESET): Move {
   const hasDash = text.includes('-');
   const hasX = text.includes('x');
   if (hasDash && hasX) {
@@ -103,8 +115,8 @@ export function parseMove(text: string): Move {
       throw new RangeError(`Neplatný PDN zápis „${text}": prostý tah má přesně 2 pole`);
     }
     const [from, target] = tokens.map((token) => parseSquare(token, text)) as [Square, Square];
-    if (!isNeighbor(from, target)) {
-      throw new RangeError(`Neplatný PDN zápis „${text}": pole spolu nesousedí`);
+    if (!simpleReachable(from, target, ruleset)) {
+      throw new RangeError(`Neplatný PDN zápis „${text}": pole neleží na diagonále`);
     }
     return { from, path: [target], captures: [] };
   }

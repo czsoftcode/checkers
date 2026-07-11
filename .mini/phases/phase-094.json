@@ -1,0 +1,44 @@
+{
+  "id": 94,
+  "title": "Létavá dáma: prostý tah (klouzání)",
+  "goal": "Přidat king: 'flying' do Ruleset a implementovat paprskové generování PROSTÉHO tahu dámy (klouže po diagonále, dokud nenarazí na kámen nebo okraj), včetně ray-aware validace v apply.ts a notation.ts - sem přirozeně dopadá threading ruleset do applyMove odložený z fáze A (na king:'flying' se reálně větví, není to mrtvý parametr). Braní létavé dámy a perft jsou MIMO řez (fáze B2/B3). Brána: golden testy klouzavého prostého tahu dámy (různé vzdálenosti, blokace kamenem/okrajem), apply a notation přijmou i dlouhý prostý tah, a americká varianta beze změny = všechny dosavadní testy zelené beze změny čísel. Řez z todo 57 (fáze B), 57 zůstává otevřené do dokončení B2+B3.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Přidat 'flying' do typu Ruleset",
+      "status": "done",
+      "detail": "Rozšířit king: 'short' | 'flying'; AMERICAN_RULESET zůstává 'short'. Aktualizovat doc komentář (dnes píše flying přijde ve fázi B)."
+    },
+    {
+      "title": "board.ts: helper paprsku diagonály",
+      "status": "done",
+      "detail": "Nová funkce raySquares(from, to) -> pole polí od from (exkluzivně) po to (inkluzivně), pokud to leží na diagonále z from, jinak null (přes opakované neighborOf). Unit testy: různé vzdálenosti, ne-diagonála, mimo desku."
+    },
+    {
+      "title": "moves.ts: klouzavý prostý tah dámy",
+      "status": "done",
+      "detail": "simpleMovesFrom přijme ruleset; pro king:'flying' klouže po ALL_DIRS přes prázdná pole dokud nenarazí (kámen/okraj), každé prázdné pole je dopad; muž a 'short' beze změny. generateSimpleMoves protáhne ruleset a legalMoves ho předá (dnes NEpředává - opravit). Golden testy: klouzání na různé vzdálenosti, blok vlastním i cizím kamenem, blok okrajem."
+    },
+    {
+      "title": "apply.ts: ray-aware validace prostého tahu",
+      "status": "done",
+      "detail": "applyMove přijme ruleset (default AMERICAN, threading odložený z fáze A); pro king:'flying' prostý tah ověří paprsek (všechna mezipole i dopad prázdná) místo isNeighbor; 'short'/muž beze změny. Testy: dlouhý prostý tah projde; prostý tah přes obsazené pole -> RangeError."
+    },
+    {
+      "title": "notation.ts: ray-aware prostý tah",
+      "status": "done",
+      "detail": "formatMove/parseMove přijmou ruleset (default AMERICAN); flying povolí strukturálně prostý tah po diagonále na libovolnou vzdálenost (bez kontroly obsazení), 'short' zůstává isNeighbor. Roundtrip test dlouhého prostého tahu; americké notační testy beze změny."
+    },
+    {
+      "title": "Brána: lint + celý suite + golden flying zelené",
+      "status": "done",
+      "detail": "Nové flying golden testy zelené; všechny dosavadní testy (perft 1-6, notace, invarianty, engine, web) zelené beze změny čísel."
+    }
+  ],
+  "startedAt": "2026-07-11T14:23:37.741Z",
+  "completedAt": "2026-07-11T14:43:00.351Z",
+  "autoCommit": {
+    "preSha": "739a081ca1d5aab30f97007ac083cc8026dc5578",
+    "subject": "Phase 94: Létavá dáma: prostý tah (klouzání)"
+  }
+}

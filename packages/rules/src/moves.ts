@@ -78,9 +78,18 @@ export function cellAt(position: Position, square: Square): Cell {
  * Prosté tahy (bez braní) kamene na daném poli. Vrací prázdné pole, pokud
  * na poli nestojí kámen strany na tahu.
  *
+ * Létavá dáma (`ruleset.king === 'flying'`) KLOUŽE: po každé diagonále jde
+ * přes prázdná pole, dokud nenarazí na kámen (vlastní i cizí) nebo okraj –
+ * každé volné pole na cestě je samostatný dopad. Muž i dáma `'short'` táhnou
+ * jako dnes o 1 pole. Braní řeší `jumpMovesFrom`, ne tato funkce.
+ *
  * Stavební blok – IGNORUJE povinnost braní, viz `legalMoves`.
  */
-export function simpleMovesFrom(position: Position, square: Square): Move[] {
+export function simpleMovesFrom(
+  position: Position,
+  square: Square,
+  ruleset: Ruleset = AMERICAN_RULESET,
+): Move[] {
   const cell = cellAt(position, square);
   if (cell === null) {
     return [];
@@ -89,10 +98,22 @@ export function simpleMovesFrom(position: Position, square: Square): Move[] {
     return [];
   }
   const moves: Move[] = [];
+  const flying = cell.kind === 'king' && ruleset.king === 'flying';
   for (const dir of simpleMoveDirs(cell.color, cell.kind)) {
-    const target = neighborOf(square, dir);
-    if (target !== null && position.board[target - 1] === null) {
-      moves.push({ from: square, path: [target], captures: [] });
+    if (flying) {
+      // Klouže o krok, dokud jsou pole prázdná; první kámen/okraj zastaví.
+      let current: Square | null = square;
+      while ((current = neighborOf(current, dir)) !== null) {
+        if (position.board[current - 1] !== null) {
+          break;
+        }
+        moves.push({ from: square, path: [current], captures: [] });
+      }
+    } else {
+      const target = neighborOf(square, dir);
+      if (target !== null && position.board[target - 1] === null) {
+        moves.push({ from: square, path: [target], captures: [] });
+      }
     }
   }
   return moves;
@@ -200,7 +221,7 @@ export function legalMoves(position: Position, ruleset: Ruleset = AMERICAN_RULES
   if (jumps.length > 0) {
     return jumps;
   }
-  return generateSimpleMoves(position);
+  return generateSimpleMoves(position, ruleset);
 }
 
 /**
@@ -208,10 +229,13 @@ export function legalMoves(position: Position, ruleset: Ruleset = AMERICAN_RULES
  *
  * Stavební blok – IGNORUJE povinnost braní, viz `legalMoves`.
  */
-export function generateSimpleMoves(position: Position): Move[] {
+export function generateSimpleMoves(
+  position: Position,
+  ruleset: Ruleset = AMERICAN_RULESET,
+): Move[] {
   const moves: Move[] = [];
   for (let square = 1; square <= BOARD_SQUARES; square++) {
-    moves.push(...simpleMovesFrom(position, square));
+    moves.push(...simpleMovesFrom(position, square, ruleset));
   }
   return moves;
 }

@@ -467,6 +467,11 @@
       "id": 93,
       "title": "Ruleset abstrakce (jádro rules)",
       "status": "done"
+    },
+    {
+      "id": 94,
+      "title": "Létavá dáma: prostý tah (klouzání)",
+      "status": "done"
     }
   ]
 }

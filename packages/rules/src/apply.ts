@@ -4,8 +4,10 @@
  * varianta s undo se proti ní přibije testem ekvivalence.
  */
 
-import { isNeighbor, jumpedSquareBetween, squareToCoords } from './board.js';
+import { isNeighbor, jumpedSquareBetween, raySquares, squareToCoords } from './board.js';
 import { cellAt } from './moves.js';
+import { AMERICAN_RULESET } from './ruleset.js';
+import type { Ruleset } from './ruleset.js';
 import type { Cell, Color, Move, Position } from './types.js';
 
 /** Řada proměny = zadní řada soupeře: černý končí dole (řada 7), bílý nahoře (řada 0). */
@@ -18,10 +20,15 @@ const PROMOTION_ROW: Record<Color, number> = { black: 7, white: 0 };
  * celý jako tah muže (proměna tah ukončuje – hlídá už generátor).
  *
  * Validuje se STRUKTURA tahu, při porušení RangeError (žádná tichá korupce):
- * na `from` kámen strany na tahu, geometrie kroků (prostý tah = 1 pole na
- * souseda; skok = dopad přes bezprostředně přeskakované pole, které musí
+ * na `from` kámen strany na tahu, geometrie kroků (prostý tah krátké figury =
+ * 1 pole na souseda; prostý tah létavé dámy = paprsek diagonály s volnými
+ * mezipoli; skok = dopad přes bezprostředně přeskakované pole, které musí
  * nést soupeřův kámen), volná pole dopadu v okamžiku dopadu (origin se
  * uvolňuje – kruhový návrat na `from` je legální), captures bez duplicit.
+ *
+ * `ruleset` řídí jen dosah prostého tahu dámy (`king: 'flying'` → paprsek);
+ * default AMERICAN zachová dosavadní chování (dáma o 1 pole). Braní létavé
+ * dámy je zatím MIMO řez – skok se pořád validuje jako krok o 2 pole.
  *
  * NEvaliduje se plná legalita (povinnost braní, směr muže, úplnost
  * sekvence) – tu si drží server členstvím v `legalMoves`; engine tahá tahy
@@ -33,7 +40,11 @@ const PROMOTION_ROW: Record<Color, number> = { black: 7, white: 0 };
  * vyhodnocuje z finálního pole). Každý tah zvenčí MUSÍ projít bránou
  * členství v `legalMoves`; applyMove sám korupci pravidel nezastaví.
  */
-export function applyMove(position: Position, move: Move): Position {
+export function applyMove(
+  position: Position,
+  move: Move,
+  ruleset: Ruleset = AMERICAN_RULESET,
+): Position {
   const fromCell = cellAt(position, move.from);
   if (fromCell === null) {
     throw new RangeError(`Na poli ${String(move.from)} nestojí žádný kámen`);
@@ -60,6 +71,7 @@ export function applyMove(position: Position, move: Move): Position {
   const board: Cell[] = [...position.board];
   board[move.from - 1] = null;
 
+  const flyingKing = fromCell.kind === 'king' && ruleset.king === 'flying';
   let current = move.from;
   for (let i = 0; i < path.length; i++) {
     const landing = path[i];
@@ -76,7 +88,24 @@ export function applyMove(position: Position, move: Move): Position {
       throw new RangeError(`Neplatný tah: pole dopadu ${String(landing)} je obsazené`);
     }
     if (captures.length === 0) {
-      if (!isNeighbor(current, landing)) {
+      if (flyingKing) {
+        // Létavá dáma: dopad musí ležet na diagonále z `current` a všechna
+        // pole na cestě (mezipole i dopad) být prázdná. `landing` už je
+        // ověřen jako prázdný výše; paprsek dokontroluje mezipole.
+        const ray = raySquares(current, landing);
+        if (ray === null) {
+          throw new RangeError(
+            `Neplatný tah: ${String(landing)} neleží na diagonále z ${String(current)} (teleport)`,
+          );
+        }
+        for (const passed of ray) {
+          if (board[passed - 1] !== null) {
+            throw new RangeError(
+              `Neplatný tah: dáma z ${String(current)} na ${String(landing)} přeskakuje obsazené pole ${String(passed)}`,
+            );
+          }
+        }
+      } else if (!isNeighbor(current, landing)) {
         throw new RangeError(
           `Neplatný tah: ${String(landing)} nesousedí s ${String(current)} (teleport)`,
         );

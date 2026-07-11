@@ -84,7 +84,7 @@ function humanStrategy(io: CliIO): Strategy {
     io.out(renderPosition(state.position));
     io.out(
       `Na tahu: ${COLOR_TEXT[state.position.turn]}. Legální tahy: ${moves
-        .map(formatMove)
+        .map((move) => formatMove(move))
         .join(', ')}`,
     );
     for (;;) {

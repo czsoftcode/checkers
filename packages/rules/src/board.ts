@@ -129,6 +129,30 @@ export function isNeighbor(from: Square, target: Square): boolean {
 }
 
 /**
+ * Paprsek diagonály z `from` na `to`: pole od `from` (EXKLUZIVNĚ) po `to`
+ * (INKLUZIVNĚ), pokud `to` leží na některé z diagonál z `from`; jinak `null`.
+ * Jde po jednotlivých krocích přes {@link neighborOf}, takže výsledek obsahuje
+ * i všechna mezipole – volající si je ověří na obsazenost (klouzavá dáma).
+ *
+ * `null` znamená „nedosažitelné po diagonále": `to` mimo desku, `to === from`,
+ * nebo pole neleží na společné diagonále. Neplatné `from` (mimo 1–32) vyhodí
+ * RangeError přes `neighborOf` – stejně jako ostatní geometrie v tomto modulu.
+ */
+export function raySquares(from: Square, to: Square): Square[] | null {
+  for (const dir of ALL_DIRS) {
+    const squares: Square[] = [];
+    let current: Square | null = from;
+    while ((current = neighborOf(current, dir)) !== null) {
+      squares.push(current);
+      if (current === to) {
+        return squares;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Najde směr, kterým vede skok z `from` na `landing`, a vrátí přeskakované
  * pole; null, když `landing` není dopad žádného skoku z `from`. Pole mimo
  * 1–32 nevyhazují – prostě žádný skok nenajdou (chování zděděné z tabulek).
