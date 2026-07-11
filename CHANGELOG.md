@@ -7,6 +7,13 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Úklid serveru (bez dopadu na hru).** Vnitřní zjednodušení herního serveru po
+  přesunu výpočtu AI do prohlížeče: odstraněny už nepoužívané datové typy a cesty
+  pro hru proti počítači, které na serveru zůstaly jako mrtvý kód. Pro hráče se nic
+  nemění – hra proti počítači i hra dvou lidí (PvP) fungují beze změny.
+
 ## [0.72.0] - 2026-07-11
 
 ### Changed

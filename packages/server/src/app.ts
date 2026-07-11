@@ -12,8 +12,8 @@ import websocket from '@fastify/websocket';
 import { z } from 'zod';
 import type { Color } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { findLegalMove, gameToDto, legalMoveDtos, moveToDto, pvpGameToDto } from './dto.js';
-import type { AnyGameDto, GameStateMessage, MoveDto } from './dto.js';
+import { findLegalMove, legalMoveDtos, pvpGameToDto } from './dto.js';
+import type { GameStateMessage, MoveDto, PvpGameDto } from './dto.js';
 import { GameHub } from './hub.js';
 import { RoomPresence } from './presence.js';
 import type { RoomServerMessage } from './presence.js';
@@ -49,17 +49,17 @@ export interface BuildAppOptions {
    * ho `buildApp` nečte; `main.ts` ho i tak předává, ať se signatura nemění.
    */
   readonly pdnDir?: string;
-  /**
-   * Zdroj náhody pro los třítahového zahájení (úroveň Mistrovství). Předá se
-   * store. Když chybí, store použije `Math.random`; test injektuje seedovaný
-   * PRNG (`mulberry32`), aby byl los deterministický a měl zuby.
-   */
-  readonly rng?: () => number;
 }
 
+// `options` drží dnes už jen `pdnDir` – rezervovaný hook pro budoucí PvP PDN
+// archiv (fáze 90), který `buildApp` zatím nečte; `main.ts` ho i tak předává, ať
+// se signatura nemění. Po odstranění serverové AI (fáze 91) zmizel i `rng` (los
+// ballotu), takže buildApp z options aktuálně nečte NIC – param se drží kvůli
+// stabilní signatuře, proto je vědomě nevyužitý.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
-  const store = new GameStore(options.rng);
+  const store = new GameStore();
 
   // Jednotná obálka i pro chyby z frameworku: rozbité JSON tělo přijde jako 4xx
   // s `statusCode`, přemapuje se na invalid_request. Neočekávaná chyba (např.
@@ -92,32 +92,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     );
   });
 
-  /** GameDto ze záznamu: `result` je EFEKTIVNÍ výsledek (vzdání > pozice). */
-  function dtoFor(record: GameRecord): AnyGameDto {
-    if (record.mode === 'pvp') {
-      // PvP tvar (fáze 70): bez engine-specifických polí. `effectiveResult` platí
-      // i pro PvP (vzdání/remíza fáze 77 nastaví `forcedResult`). `endReason` k němu
-      // přidá DŮVOD konce (vzdání / dohoda / pravidla / běží), ať výherce u výsledku
-      // vidí, PROČ hra skončila (fáze 78) – oba se počítají z téhož záznamu, drží spolu.
-      return pvpGameToDto(record.id, record.state, effectiveResult(record), endReason(record));
-    }
-    // Ballot tahy: JEN u Mistrovství (`ballotIndex !== null`). Ballot je vždy tři
-    // půltahy, které store nasadil jako první tři položky historie (viz store
-    // `seedBallot`) – klient je na startu jednou přehraje (animace zahájení).
-    // Mimo Mistrovství `null`, ať se drát zbytečně nenafukuje a klient pozná, že
-    // žádné intro není. Kopie do drátového tvaru přes `moveToDto`.
-    const ballotMoves =
-      record.ballotIndex === null ? null : record.moves.slice(0, 3).map(moveToDto);
-    return gameToDto(
-      record.id,
-      record.state,
-      record.engineStatus,
-      effectiveResult(record),
-      record.level,
-      record.ballotIndex,
-      ballotMoves,
-      record.humanColor,
-    );
+  /**
+   * PvP DTO ze záznamu: `result` je EFEKTIVNÍ výsledek (vzdání/remíza > pozice).
+   * Po odstranění serverové AI (fáze 90/91) je každá partie PvP – engine větev
+   * zanikla. `effectiveResult` platí i pro PvP (vzdání/remíza fáze 77 nastaví
+   * `forcedResult`); `endReason` k němu přidá DŮVOD konce (vzdání / dohoda /
+   * pravidla / běží), ať výherce u výsledku vidí, PROČ hra skončila (fáze 78) –
+   * oba se počítají z téhož záznamu, drží spolu.
+   */
+  function dtoFor(record: GameRecord): PvpGameDto {
+    return pvpGameToDto(record.id, record.state, effectiveResult(record), endReason(record));
   }
 
   // Registr WS odběratelů partií (fáze 66). Push je aditivní: web klient dnes
@@ -147,7 +131,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
    * Rozešle AKTUÁLNÍ stav partie jejím WS odběratelům. Fire-and-forget vedlejší
    * efekt mutačních cest (tah člověka/enginu, vzdání, remíza) – volá se AŽ po
    * změně stavu, nikdy nesmí shodit REST odpověď ani tah enginu (o izolaci
-   * chyb se stará hub). Bez odběratelů je to no-op. Kontrakt drátu = `GameDto`
+   * chyb se stará hub). Bez odběratelů je to no-op. Kontrakt drátu = `PvpGameDto`
    * v obálce `{ type: 'game-state', game }`, stejný tvar jako REST.
    */
   function broadcast(record: GameRecord): void {
@@ -391,11 +375,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: 'Partie neexistuje.' });
           return;
         }
-        if (record.mode !== 'pvp') {
-          // Engine partie se přes místnost nehraje (jede REST + engine autorita).
-          send({ type: 'error', message: 'Tato partie se v místnosti nehraje.' });
-          return;
-        }
         // Členství → barva. Neúčastník (me.id ∉ players, i tah na cizí partii) →
         // odmítnutí, ne aplikace.
         const myColor: Color | null =
@@ -441,12 +420,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       };
 
       // Konec/nabídka remízy v PvP (fáze 77). Stejná autorita jako u tahu: identita
-      // hráče je `me.id` (přiřazená serverem při joinu), NE z klientovy zprávy. Guard
-      // proti engine partii je NUTNÝ PŘED voláním store: PvP metody store na engine
-      // partii hlasitě throwují (obranná assertion proti programové chybě), a ten throw
-      // by tudy shodil handler zprávy – proto sem PvP metodu nepustíme jinak než s
-      // ověřenou PvP partií. Vrací záznam k dalšímu zpracování, nebo `null` (chybu už
-      // poslal příchozímu a socket žije dál).
+      // hráče je `me.id` (přiřazená serverem při joinu), NE z klientovy zprávy. Ověří
+      // existenci partie a vrátí záznam k dalšímu zpracování, nebo `null` (chybu už
+      // poslal příchozímu a socket žije dál). Po odstranění serverové AI (fáze 90/91)
+      // je každá partie PvP, takže stačí ověřit, že vůbec existuje.
       const requirePvpGame = (gameId: unknown): PvpGameRecord | null => {
         if (typeof gameId !== 'string') {
           send({ type: 'error', message: 'Chybí id partie.' });
@@ -455,10 +432,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         const record = store.get(gameId);
         if (record === undefined) {
           send({ type: 'error', message: 'Partie neexistuje.' });
-          return null;
-        }
-        if (record.mode !== 'pvp') {
-          send({ type: 'error', message: 'Tato partie se v místnosti nehraje.' });
           return null;
         }
         return record;

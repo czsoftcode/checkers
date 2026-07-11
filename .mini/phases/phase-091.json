@@ -1,0 +1,29 @@
+{
+  "id": 91,
+  "title": "Sesypat store/dto union",
+  "goal": "Odstranit ze serveru mrtvé engine věci bez volajícího (ověřeno po fázi 90 A): EngineGameRecord, EngineStoredGame, store.create/resign/acceptDraw/setEngineStatus, gameToDto, GameDto, EngineStatus, engineStatus z GameRecordBase. Sesypat GameRecord/StoredGame union a AnyGameDto na jediný PvP typ; zjednodušit dtoFor na PvP-only větev (dnes větví mode==='pvp' → pvpGameToDto živá, jinak → gameToDto mrtvá) a toRecord overloady. Uklidit odpovídající re-exporty v index.ts. Čistý INTERNÍ refactor BEZ změny chování (mrtvé větve už dnes nikdy nefírují); PvP + build + typecheck + celá test sada zelené jako zub. POZOR: serverový dto.ts GameDto má kontraktní test (dto.test.ts) proti webové kopii — po odstranění serverového GameDto ho upravit/odstranit; web si svou kopii GameDto drží dál pro LocalClient, server AI DTO už neprodukuje, takže žádný sdílený kontrakt nezaniká (jen se to nesmí tvářit jako ztráta).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Odstranit mrtvé store metody bez volajícího",
+      "status": "done",
+      "detail": "Smazat store.create, store.resign, store.acceptDraw, store.setEngineStatus (ověřeno: žádný volající, PvP jede přes *Pvp varianty) + jejich serverové testy. Izolované, nezávislé na union collapse. Výstup: metody pryč; typecheck + PvP testy zelené."
+    },
+    {
+      "title": "Sesypat GameRecord/StoredGame union + AnyGameDto na PvP-only (atomicky)",
+      "status": "done",
+      "detail": "V jednom koherentním řezu (TS nezkompiluje půl unionu): store.ts — odstranit EngineGameRecord, EngineStoredGame, engine toRecord overload, engineStatus z GameRecordBase, typ EngineStatus; union GameRecord/StoredGame → jediný PvP typ. dto.ts — odstranit gameToDto, GameDto, AnyGameDto → PvpGameDto. app.ts — dtoFor na PvP-only větev (pryč engine branch, gameToDto, ballotMoves, čtení engineStatus). index.ts — pryč re-exporty EngineGameRecord/EngineStatus/GameDto/gameToDto. Upravit/smazat testy na smazané symboly VČ. dto.test.ts kontraktu (server GameDto mizí; web si kopii drží dál pro LocalClient, server AI DTO neprodukuje → žádný sdílený kontrakt nezaniká, vědomě zdůvodnit v reportu). Výstup: union sesypaný; typecheck + celá test sada zelené."
+    },
+    {
+      "title": "Ověřit: bez zbytků engine + PvP e2e",
+      "status": "done",
+      "detail": "pnpm -r typecheck + pnpm -r test zelené; grep serveru na Engine*/engineStatus/gameToDto = žádné mrtvé zbytky; kontraktní test fáze 86 v @checkers/ai netknutý; lehké e2e PvP (dva klienti, tah + konec partie se doručí). Výstup: čistý server bez stop po engine-game vrstvě; PvP prokazatelně funguje."
+    }
+  ],
+  "startedAt": "2026-07-11T00:43:39.809Z",
+  "completedAt": "2026-07-11T01:28:32.986Z",
+  "autoCommit": {
+    "preSha": "a485a35e3fe4f7986c4a70d547b49f2a20afe99c",
+    "subject": "Phase 91: Sesypat store/dto union"
+  }
+}

@@ -12,10 +12,8 @@ export { formatGamePdn, writeGamePdn } from './archive.js';
 export { GameStore, effectiveResult, endReason, opposite } from './store.js';
 export type {
   GameRecord,
-  EngineGameRecord,
   PvpGameRecord,
   PvpPlayers,
-  EngineStatus,
   ForcedReason,
   EndReason,
 } from './store.js';
@@ -26,8 +24,8 @@ export type {
   AcceptChallengeResult,
   RejectChallengeResult,
 } from './challenges.js';
-export { moveToDto, legalMoveDtos, gameToDto, pvpGameToDto, findLegalMove } from './dto.js';
-export type { MoveDto, GameDto, PvpGameDto, AnyGameDto, GameStateMessage } from './dto.js';
+export { moveToDto, legalMoveDtos, pvpGameToDto, findLegalMove } from './dto.js';
+export type { MoveDto, PvpGameDto, GameStateMessage } from './dto.js';
 export { GameHub } from './hub.js';
 export type { HubSocket } from './hub.js';
 export { RoomPresence, NICK_MAX_LENGTH } from './presence.js';
@@ -62,4 +60,3 @@ export { LEVELS, DEFAULT_LEVEL, STRENGTH_BY_LEVEL, LEVELS_WITH_BOOK, levelUsesBo
 export type { GameLevel } from '@checkers/ai';
 export { OPENING_BOOK, buildBook, lookupBookMove } from '@checkers/ai';
 export type { OpeningBook } from '@checkers/ai';
-export { mulberry32 } from './prng.js';

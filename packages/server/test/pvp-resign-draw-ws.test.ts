@@ -227,19 +227,6 @@ describe('PvP vzdání přes room WS (fáze 77)', () => {
     expect(gameStore().get(gameId)?.forcedResult).toBeNull();
   });
 
-  it('vzdání ENGINE partie přes místnost → error „nehraje se v místnosti"', async () => {
-    const port = await start();
-    // Engine (non-PvP) partie už nevzniká REST cestou (serverová AI odstraněna,
-    // fáze 90) – vytvoříme ji přímo přes store, ať otestujeme, že room WS akci na
-    // ni odmítne (guard `mode !== 'pvp'`).
-    const engineGame = gameStore().create();
-    const player = await join(port, 'Dana');
-
-    sendResign(player.ws, engineGame.id);
-    const err = await takeMessage(player.received, 'error');
-    expect(err.message).toMatch(/v místnosti nehraje/i);
-  });
-
   it('vzdání před joinem → error „nejdřív vstup"', async () => {
     const port = await start();
     const { gameId } = await pairGame(port);
@@ -362,18 +349,6 @@ describe('PvP nabídka remízy přes room WS (fáze 77)', () => {
     expect(err.message).toMatch(/přijmout/i);
   });
 
-  it('nabídka remízy na ENGINE partii přes místnost → error „nehraje se v místnosti"', async () => {
-    const port = await start();
-    // Engine (non-PvP) partie už nevzniká REST cestou (serverová AI odstraněna,
-    // fáze 90) – vytvoříme ji přímo přes store, ať otestujeme, že room WS akci na
-    // ni odmítne (guard `mode !== 'pvp'`).
-    const engineGame = gameStore().create();
-    const player = await join(port, 'Eva');
-
-    sendDrawOffer(player.ws, engineGame.id);
-    const err = await takeMessage(player.received, 'error');
-    expect(err.message).toMatch(/v místnosti nehraje/i);
-  });
 });
 
 describe('PvP opuštění dohrané partie – uvolnění busy (leave-game, fáze 77)', () => {
@@ -447,19 +422,6 @@ describe('PvP opuštění dohrané partie – uvolnění busy (leave-game, fáze
     cyril.ws.send(JSON.stringify({ type: 'challenge', targetId: black.id }));
     const challenged = await takeMessage(black.received, 'challenged');
     expect(challenged.challenge.challengerNick).toBe('Cyril');
-  });
-
-  it('leave-game na ENGINE partii přes místnost → error „nehraje se v místnosti"', async () => {
-    const port = await start();
-    // Engine (non-PvP) partie už nevzniká REST cestou (serverová AI odstraněna,
-    // fáze 90) – vytvoříme ji přímo přes store, ať otestujeme, že room WS akci na
-    // ni odmítne (guard `mode !== 'pvp'`).
-    const engineGame = gameStore().create();
-    const player = await join(port, 'Filip');
-
-    sendLeaveGame(player.ws, engineGame.id);
-    const err = await takeMessage(player.received, 'error');
-    expect(err.message).toMatch(/v místnosti nehraje/i);
   });
 
   it('autorita: DRUHÉ leave-game na tutéž partii NEuvolní hráče, co mezitím začal novou hru', async () => {

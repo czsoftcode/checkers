@@ -265,19 +265,6 @@ describe('PvP hraní přes room WS – serverová autorita (fáze 70)', () => {
     expect(gameStore().get(gameId)?.state.position.turn).toBe('black');
   });
 
-  it('tah na ENGINE partii přes místnost → error „nehraje se v místnosti"', async () => {
-    const port = await start();
-    // Engine (non-PvP) partie už nevzniká REST cestou (serverová AI odstraněna,
-    // fáze 90) – vytvoříme ji přímo přes store, ať otestujeme, že room WS tah na
-    // ni odmítne (guard `mode !== 'pvp'` v handleMove).
-    const engineGame = gameStore().create();
-    const player = await join(port, 'Dana');
-
-    sendMove(player.ws, engineGame.id, 9, [13]);
-    const err = await takeMessage(player.received, 'error');
-    expect(err.message).toMatch(/v místnosti nehraje/i);
-  });
-
   it('čtení: GET /games/:id na PvP vrátí 200 PvP DTO', async () => {
     const port = await start();
     const { gameId } = await pairGame(port);

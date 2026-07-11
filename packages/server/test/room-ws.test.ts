@@ -225,9 +225,9 @@ describe('Místnost – přítomnost přes WS', () => {
 
   it('izolace od herní WS (fáze 66): odběratel partie nedostane nic z místnosti', async () => {
     const port = await start();
-    // Partie k odběru přes `/games/:id/ws` (serverová AI odstraněna, fáze 90 –
-    // engine partie už nevzniká REST cestou): stačí jakákoli partie ve store.
-    const game = gameStore().create();
+    // Partie k odběru přes `/games/:id/ws`: stačí jakákoli partie ve store
+    // (po fázi 90/91 je každá partie PvP).
+    const game = gameStore().createPvp('A', 'B');
 
     const gameWs = new WebSocket(`ws://127.0.0.1:${port}/games/${game.id}/ws`);
     openSockets.push(gameWs);

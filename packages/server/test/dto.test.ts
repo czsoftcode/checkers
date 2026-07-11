@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { initialGameState, legalMoves } from '@checkers/rules';
 import type { Cell, Color, Position } from '@checkers/rules';
-import { findLegalMove, gameToDto, moveToDto, pvpGameToDto } from '../src/index.js';
+import { findLegalMove, moveToDto, pvpGameToDto } from '../src/index.js';
 
 /** Postaví pozici z výčtu obsazených polí; zbytek desky je prázdný. */
 function positionWith(pieces: readonly (readonly [number, Cell])[], turn: Color): Position {
@@ -22,47 +22,6 @@ function positionWith(pieces: readonly (readonly [number, Cell])[], turn: Color)
 const BLACK_MAN: Cell = { color: 'black', kind: 'man' };
 const WHITE_MAN: Cell = { color: 'white', kind: 'man' };
 const BLACK_KING: Cell = { color: 'black', kind: 'king' };
-
-describe('gameToDto', () => {
-  it('výchozí pozice: ongoing, černý na tahu, 7 prostých tahů', () => {
-    const dto = gameToDto('abc', initialGameState(), 'idle', 'ongoing', 'beginner', null, null, 'black');
-    expect(dto.id).toBe('abc');
-    expect(dto.position.turn).toBe('black');
-    expect(dto.result).toBe('ongoing');
-    expect(dto.engineStatus).toBe('idle');
-    expect(dto.level).toBe('beginner');
-    expect(dto.ballotIndex).toBeNull();
-    expect(dto.ballotMoves).toBeNull();
-    expect(dto.humanColor).toBe('black');
-    expect(dto.mode).toBe('engine');
-    expect(dto.legalMoves).toHaveLength(7);
-    // Kontrakt tvaru tahu na drátě: { from, path, captures }, prostý tah bez braní.
-    for (const move of dto.legalMoves) {
-      expect(Object.keys(move).sort()).toEqual(['captures', 'from', 'path']);
-      expect(move.captures).toEqual([]);
-      expect(move.path).toHaveLength(1);
-    }
-  });
-
-  it('result se PŘEDÁVÁ zvenčí (efektivní výsledek), DTO ho neodvozuje z pozice', () => {
-    // Rozehraná pozice (černý na tahu), ale výsledek je vnucený white-wins –
-    // simuluje vzdanou partii. DTO musí vrátit předaný výsledek, ne 'ongoing'.
-    const dto = gameToDto('xyz', initialGameState(), 'idle', 'white-wins', 'professional', null, null, 'white');
-    expect(dto.result).toBe('white-wins');
-    expect(dto.position.turn).toBe('black');
-    // humanColor projde do drátu tak, jak ho volající předá (identita).
-    expect(dto.humanColor).toBe('white');
-  });
-
-  it('ballotMoves se PŘEDÁVAJÍ zvenčí (identita, DTO je jen serializuje)', () => {
-    // gameToDto ballot NEODVOZUJE (slicing historie dělá dtoFor v app.ts) – jen
-    // proláme, že pole projde do drátu tak, jak ho volající předá.
-    const moves = [{ from: 9, path: [14], captures: [] }];
-    const dto = gameToDto('m', initialGameState(), 'idle', 'ongoing', 'championship', 3, moves, 'black');
-    expect(dto.ballotIndex).toBe(3);
-    expect(dto.ballotMoves).toEqual(moves);
-  });
-});
 
 describe('pvpGameToDto', () => {
   it('PvP tvar: mode pvp, pozice/turn/result/legalMoves/reason, žádná engine pole', () => {
