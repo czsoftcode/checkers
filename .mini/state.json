@@ -502,6 +502,11 @@
       "id": 100,
       "title": "Ruleset přes engine + AI (plumbing)",
       "status": "done"
+    },
+    {
+      "id": 101,
+      "title": "Per-varianta váhy: létavá dáma",
+      "status": "done"
     }
   ]
 }

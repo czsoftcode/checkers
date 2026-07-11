@@ -5,7 +5,7 @@
  * v search.ts – okno `best - 1`). Kladné = strana na tahu stojí lépe.
  *
  * Složky (rozhodnutí fáze 14, kalibrace síly přijde ve fázi „síla pro cíl"):
- * - materiál: muž 100, dáma 130,
+ * - materiál: muž 100, dáma 130 (short/americká) nebo ~300 (flying, dle ruleset),
  * - zadní řada: muž stojící na vlastní zadní řadě hlídá proti proměně (+8),
  * - postup: drobný bonus za každou řadu, o kterou muž postoupil (+1/řada),
  *   aby engine v klidných pozicích tlačil vpřed místo přešlapování.
@@ -21,8 +21,16 @@ import type { Color, Position, Ruleset, Square } from '@checkers/rules';
 /** Hodnota muže. */
 export const MAN_VALUE = 100;
 
-/** Hodnota dámy. */
+/** Hodnota krátké (short) dámy – americká. Beze změny. */
 export const KING_VALUE = 130;
+
+/**
+ * Hodnota létavé (flying) dámy – pool/ruská/česká. Řádově 3× muž: létavá dáma
+ * ovládá celou diagonálu, je násobně cennější než krátká. Výchozí ~300 je
+ * podloženo self-play sanity (`selfplay-flying-king.test.ts`), ne odhadem od
+ * stolu; když by AI dámu podceňovala/přeceňovala, ladí se TATO konstanta.
+ */
+export const KING_VALUE_FLYING = 300;
 
 /** Bonus za muže na vlastní zadní řadě (hlídá pole proměny soupeře). */
 export const BACK_ROW_BONUS = 8;
@@ -41,12 +49,14 @@ const BACK_ROW: Record<Color, number> = { black: 0, white: 7 };
  * přeskočení by dvě různě poškozené pozice ohodnotilo stejně a chyba by
  * kaskádovala do výběru tahu.
  *
- * Signatura BEZ `ruleset`: v1 je čistě materiálová (žádné `legalMoves`), ruleset
- * nepotřebuje. Kontrakt `EvalFn` (druhý arg `ruleset?`) plní tak jako tak –
- * funkce s méně parametry je do něj přiřaditelná; search jí ruleset předá a v1 ho
- * prostě zahodí. (Ruleset konzumuje až v2 kvůli mobilitě přes `legalMoves`.)
+ * `ruleset` řídí JEN cenu dámy: `king: 'flying'` (pool/ruská/česká) → létavá
+ * dáma `KING_VALUE_FLYING`; `king: 'short'` (americká, default) → `KING_VALUE`.
+ * Ostatní složky (materiál muže, postup, zadní řada) jsou na variantě nezávislé.
+ * Chybí-li ruleset, počítá se americky (short) – dosavadní chování beze změny.
+ * Mobilitu přes `legalMoves` v1 stále nepočítá (to až v2).
  */
-export function evaluate(position: Position): number {
+export function evaluate(position: Position, ruleset: Ruleset = AMERICAN_RULESET): number {
+  const kingValue = ruleset.king === 'flying' ? KING_VALUE_FLYING : KING_VALUE;
   let black = 0;
   let white = 0;
   for (let square = 1; square <= BOARD_SQUARES; square++) {
@@ -59,7 +69,7 @@ export function evaluate(position: Position): number {
     }
     let value: number;
     if (cell.kind === 'king') {
-      value = KING_VALUE;
+      value = kingValue;
     } else {
       // Postup se měří od vlastní zadní řady: černý roste s řadou, bílý proti ní.
       const { row } = squareToCoords(square);

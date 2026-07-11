@@ -1,8 +1,21 @@
-import { initialPosition } from '@checkers/rules';
+import {
+  AMERICAN_RULESET,
+  CZECH_RULESET,
+  POOL_RULESET,
+  RUSSIAN_RULESET,
+  initialPosition,
+} from '@checkers/rules';
 import type { Cell, Position } from '@checkers/rules';
 import { describe, expect, it } from 'vitest';
 
-import { ADVANCE_BONUS, BACK_ROW_BONUS, evaluate, KING_VALUE, MAN_VALUE } from '../src/evaluate.js';
+import {
+  ADVANCE_BONUS,
+  BACK_ROW_BONUS,
+  evaluate,
+  KING_VALUE,
+  KING_VALUE_FLYING,
+  MAN_VALUE,
+} from '../src/evaluate.js';
 import { makePosition, mirrorPosition, randomPlayedPosition } from './support/position.js';
 
 describe('evaluate – základní vlastnosti', () => {
@@ -43,6 +56,45 @@ describe('evaluate – poziční složky', () => {
 
   it('dáma poziční bonusy nemá (ani na zadní řadě)', () => {
     expect(evaluate(makePosition('black', { 1: 'bk' }))).toBe(KING_VALUE);
+  });
+});
+
+describe('evaluate – cena létavé dámy per varianta', () => {
+  const flyingRulesets = [
+    ['pool', POOL_RULESET],
+    ['ruská', RUSSIAN_RULESET],
+    ['česká', CZECH_RULESET],
+  ] as const;
+
+  it.each(flyingRulesets)('flying varianta (%s) cení dámu na KING_VALUE_FLYING (300)', (_name, ruleset) => {
+    const king = makePosition('black', { 18: 'bk' });
+    expect(evaluate(king, ruleset)).toBe(KING_VALUE_FLYING);
+    // americká (short) tutéž dámu cení na 130 – řádový rozdíl.
+    expect(evaluate(king, AMERICAN_RULESET)).toBe(KING_VALUE);
+    expect(KING_VALUE_FLYING).toBeGreaterThan(KING_VALUE);
+  });
+
+  it.each(flyingRulesets)('pozice s dámou je s flying ruleset (%s) hodnocena výš než s americkým', (_name, ruleset) => {
+    // Vyrovnaný materiál kromě jedné černé dámy navíc → flying ji cení víc.
+    const position = makePosition('black', { 18: 'bk', 13: 'bm', 20: 'wm' });
+    expect(evaluate(position, ruleset)).toBeGreaterThan(evaluate(position, AMERICAN_RULESET));
+  });
+
+  it('výchozí ruleset (bez argumentu) je americký – short 130, chování beze změny', () => {
+    const king = makePosition('black', { 18: 'bk' });
+    expect(evaluate(king)).toBe(evaluate(king, AMERICAN_RULESET));
+    expect(evaluate(king)).toBe(KING_VALUE);
+  });
+
+  it('flying ruleset NEMĚNÍ hodnotu mužů (jen dámy)', () => {
+    // Pozice bez dámy: skóre musí být identické napříč rulesety.
+    const menOnly = makePosition('black', { 13: 'bm', 14: 'bm', 20: 'wm' });
+    expect(evaluate(menOnly, RUSSIAN_RULESET)).toBe(evaluate(menOnly, AMERICAN_RULESET));
+  });
+
+  it('americká pozice s dámou beze změny čísel (short 130 nezměněn)', () => {
+    // Regrese: americká dáma na poli 1 je pořád přesně KING_VALUE (žádný poziční bonus).
+    expect(evaluate(makePosition('black', { 1: 'bk' }), AMERICAN_RULESET)).toBe(KING_VALUE);
   });
 });
 

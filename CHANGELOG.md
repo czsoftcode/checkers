@@ -9,6 +9,11 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ### Added
 
+- **AI cení létavou dámu podle varianty.** Evaluace AI teď rozlišuje cenu dámy: krátká
+  (americká) dáma zůstává na 130, létavá (pool/ruská/česká) je řádově dražší (~300, tedy
+  zhruba 3× muž) – létavá dáma ovládá celou diagonálu, proto ji AI ve flying variantách
+  nedá lacino za muže. Hodnota je podložena self-play sanity (AI ve flying variantě drží
+  dámu a poráží náhodného hráče 20:0), ne odhadem. Americká hra zůstává beze změny čísel.
 - **Česká varianta pravidel (zatím jen v knihovně).** Přidána česká dáma: kámen (muž)
   bere jen vpřed, dáma je létavá (bere kdekoli po diagonále) a platí přednost braní
   dámou – může-li v pozici brát dáma, hráč musí brát dámou (skoky mužem se vynechají;

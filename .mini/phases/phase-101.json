@@ -1,0 +1,34 @@
+{
+  "id": 101,
+  "title": "Per-varianta váhy: létavá dáma",
+  "goal": "Produkční eval rozliší cenu dámy podle ruleset.king: krátká 130 (beze změny), létavá cca 3× (výchozí ~300, podloženo self-play sanity, ne odhadem od stolu). Ruleset už do evalu teče z D0; váhy ZŮSTÁVAJÍ v engine (ne v Ruleset - rules balíček bez AI-configu, vrstvení). V do ověřit, zda produkční eval je evaluate(v1) nebo evaluateV2 - podle toho, kterou search reálně volá; v1 dnes ruleset ignoruje, případně mu ho protáhnout. Brána: self-play sanity - AI ve flying variantě (pool/ruská/česká) neobětuje létavou dámu za muže a poráží random; AMERICKÁ eval beze změny čísel (short king 130 nezměněn -> americké testy i self-play beze změny). Řez z todo 59 (fáze D); 56 i 59 zůstávají otevřené.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Cena létavé dámy v evaluate (v1)",
+      "status": "done",
+      "detail": "Přidat ruleset param do evaluate (dnes ho ignoruje, EvalFn ho má volitelně). Cena dámy = ruleset.king === 'flying' ? KING_VALUE_FLYING (~300) : KING_VALUE (130). Nová konstanta KING_VALUE_FLYING. Search už ruleset předává (D0). Americká (short) beze změny."
+    },
+    {
+      "title": "Unit testy hodnocení",
+      "status": "done",
+      "detail": "Pozice s dámou hodnocená s flying cenou (pool/ruská/česká ruleset) je vyšší než s americkou (short 130); evaluate(pos, RUSSIAN) > evaluate(pos, AMERICAN) pro pozici s dámou. Americká pozice beze změny čísel."
+    },
+    {
+      "title": "Self-play sanity ve flying variantě",
+      "status": "done",
+      "detail": "Crafted pozice, kde by short-value AI vyměnila dámu za muže, flying-value ji podrží (targeted search test); + self-play sanity: AI ve flying variantě (pool) poráží random / neprohrává zjevně. Podložit výchozí ~300; když self-play ukáže problém, hodnotu upravit (ne od stolu)."
+    },
+    {
+      "title": "Brána: americká beze změny + ostatní zelené",
+      "status": "done",
+      "detail": "Americká eval/self-play/testy beze změny čísel (short 130 nezměněn); všechny balíčky zelené."
+    }
+  ],
+  "startedAt": "2026-07-11T19:58:41.279Z",
+  "completedAt": "2026-07-11T20:24:19.173Z",
+  "autoCommit": {
+    "preSha": "328e9b54ef1be7cae0f53da363b80b9707d3b559",
+    "subject": "Phase 101: Per-varianta váhy: létavá dáma"
+  }
+}
