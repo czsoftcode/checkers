@@ -10,7 +10,15 @@
  */
 
 import type { Direction } from './board.js';
-import { ALL_DIRS, BOARD_SQUARES, DIR, jumpOf, neighborOf } from './board.js';
+import {
+  ALL_DIRS,
+  BOARD_SQUARES,
+  DIR,
+  PROMOTION_ROW,
+  jumpOf,
+  neighborOf,
+  squareToCoords,
+} from './board.js';
 import { AMERICAN_RULESET } from './ruleset.js';
 import type { Ruleset } from './ruleset.js';
 import type { Cell, Color, Move, Piece, PieceKind, Position, Square } from './types.js';
@@ -256,6 +264,21 @@ function extendJumps(
   out: Move[],
   ruleset: Ruleset,
 ): void {
+  // Muž, který během braní dosáhl proměnné řady, tahem KONČÍ – proměna ukončuje
+  // sekvenci (pool checkers, APCA: „turns into a king and stops, even if it is
+  // possible to continue the capture"). Americká dáma to drží přirozeně (muž
+  // bere jen vpřed, z poslední řady skok vpřed není), ale pool bere i vzad –
+  // bez této zarážky by muž nelegálně pokračoval jako muž přes dámskou řadu.
+  // (Ruská proměna uprostřed braní = pokračovat jako DÁMA je jiný, zatím
+  // neimplementovaný režim; ta by tuto zarážku nahradila přepnutím na dámu.)
+  if (
+    piece.kind === 'man' &&
+    path.length > 0 &&
+    squareToCoords(current).row === PROMOTION_ROW[piece.color]
+  ) {
+    out.push({ from, path: [...path], captures: [...captures] });
+    return;
+  }
   let extended = false;
   for (const dir of captureDirs(piece.color, piece.kind, ruleset)) {
     const over = neighborOf(current, dir);

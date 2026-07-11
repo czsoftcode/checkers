@@ -3,10 +3,17 @@
  * a předpočítané tabulky sousedství (NEIGHBORS) a skoků (JUMPS).
  */
 
-import type { Square } from './types.js';
+import type { Color, Square } from './types.js';
 
 /** Počet hracích polí na desce 8×8 (hraje se jen na tmavých polích). */
 export const BOARD_SQUARES = 32;
+
+/**
+ * Řada proměny = zadní řada soupeře: černý postupuje dolů a promuje na řadě 7,
+ * bílý nahoru a promuje na řadě 0. Jediný zdroj pravdy sdílený `apply.ts`
+ * (kde se proměna provede) a `moves.ts` (kde muž braním na této řadě končí).
+ */
+export const PROMOTION_ROW: Record<Color, number> = { black: 7, white: 0 };
 
 /** Rozměr desky (8×8). */
 export const BOARD_SIZE = 8;

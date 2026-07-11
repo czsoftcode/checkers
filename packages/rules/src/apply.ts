@@ -4,14 +4,11 @@
  * varianta s undo se proti ní přibije testem ekvivalence.
  */
 
-import { isNeighbor, jumpedSquareBetween, raySquares, squareToCoords } from './board.js';
+import { PROMOTION_ROW, isNeighbor, jumpedSquareBetween, raySquares, squareToCoords } from './board.js';
 import { cellAt } from './moves.js';
 import { AMERICAN_RULESET } from './ruleset.js';
 import type { Ruleset } from './ruleset.js';
-import type { Cell, Color, Move, Position, Square } from './types.js';
-
-/** Řada proměny = zadní řada soupeře: černý končí dole (řada 7), bílý nahoře (řada 0). */
-const PROMOTION_ROW: Record<Color, number> = { black: 7, white: 0 };
+import type { Cell, Move, Position, Square } from './types.js';
 
 /**
  * Aplikuje tah a vrátí NOVOU pozici (vstup se nemutuje): kámen se posune na

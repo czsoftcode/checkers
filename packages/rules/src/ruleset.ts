@@ -30,3 +30,17 @@ export const AMERICAN_RULESET: Ruleset = {
   manCaptureBackward: false,
   king: 'short',
 };
+
+/**
+ * Pool checkers (American pool checkers, APCA): muž bere vpřed i VZAD, dáma je
+ * LÉTAVÁ (klouže po diagonále, turecký úder). Proměna: muž, který během braní
+ * dosáhne dámské řady, se proměd na dámu a KONČÍ tah – nepokračuje v braní
+ * (viz `extendJumps` v moves.ts). Tím se pool liší od ruské, kde muž po proměně
+ * uprostřed braní pokračuje jako dáma (zatím neimplementováno). Proměna
+ * uprostřed braní proto NENÍ samostatné pole Rulesetu – „stop" je společné
+ * chování s americkou a plyne z generátoru, ne z configu.
+ */
+export const POOL_RULESET: Ruleset = {
+  manCaptureBackward: true,
+  king: 'flying',
+};

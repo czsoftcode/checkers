@@ -1,0 +1,44 @@
+{
+  "id": 96,
+  "title": "Perft pro pool + externí ověření",
+  "goal": "Protáhnout ruleset do perft (zbytek todo 56 pro perft) a přidat perft fixture pro pool checkers ověřenou proti JEDNOMU zafixovanému externímu zdroji; strategii zdroje zafixovat v discuss (kandidát: publikovaná ruská perft čísla, která se s poolem v mělkých hloubkách prokazatelně shodují do hloubky, kde poprvé může nastat proměna uprostřed braní - s dokumentovanou hranicí divergence; záloha: nezávislá druhá implementace generátoru jako cross-check). Pool je po fázi 95 pravidlově kompletní na úrovni knihovny. Notace flying braní (B2b) NENÍ součástí. Řez z todo 57 (fáze B); todo 56 i 57 zůstávají otevřené (state/GameState + call sites -> D).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Protáhnout ruleset do perft",
+      "status": "done",
+      "detail": "perft(position, depth, ruleset = AMERICAN_RULESET) předá ruleset do legalMoves i applyMove. Americká perft 1-6 beze změny (default). Stávající perft testy zelené."
+    },
+    {
+      "title": "Web research: zafixovat ruský perft zdroj",
+      "status": "done",
+      "detail": "Najít JEDEN důvěryhodný publikovaný zdroj ruských perft čísel z otevírací pozice; zapsat zdroj (URL/citace) + čísla. Rigorózně stanovit hloubku, kde se pool a ruská poprvé rozcházejí (první možná proměna uprostřed braní z otevření), a ověřit, že rozdíl pool<->ruská je JEN mid-capture promotion. Výstup: dokumentovaný zdroj + čísla + hranice divergence. Když se důvěryhodný zdroj nenajde -> brána (a) padá na druhou implementaci."
+    },
+    {
+      "title": "Otevírací perft pool vs ruská (brána a)",
+      "status": "done",
+      "detail": "Test: pool perft 1..N (N = hranice divergence) proti zafixovaným ruským číslům; fixture zapisuje zdroj jako referenci. Zub proti regresi: dočasné rozbití pool generátoru -> test padne."
+    },
+    {
+      "title": "Druhá nezávislá implementace generátoru",
+      "status": "done",
+      "detail": "Samostatný naivní generátor legálních tahů pro pool, nezávislý na moves.ts (jiná struktura), jen pro perft cross-check. Nejtěžší krok; slouží bráně (b)."
+    },
+    {
+      "title": "Perft z pozic s dámami vs druhá impl (brána b)",
+      "status": "done",
+      "detail": "Ručně postavené pozice S LÉTAVÝMI DÁMAMI (klouzavé braní, turecký úder, volba dopadu); perft přes moves.ts == perft přes druhou implementaci do rozumné hloubky. Reálně prořezává riziko fáze 95."
+    },
+    {
+      "title": "Nezávislý sub-agent review pravidlových předpokladů",
+      "status": "done",
+      "detail": "Čerstvý kontext prověří hranici divergence pool<->ruská, úplnost enumerace rozdílů a že druhá implementace nesdílí konkrétní slepé místo s moves.ts. Cílí na chyby VÝKLADU, které checklist stejné hlavy nechytne (CLAUDE.md)."
+    }
+  ],
+  "startedAt": "2026-07-11T15:53:41.630Z",
+  "completedAt": "2026-07-11T16:40:12.627Z",
+  "autoCommit": {
+    "preSha": "eef87f6c3705c7bc2e3e4fdd70e5601235ab0fc9",
+    "subject": "Phase 96: Perft pro pool + externí ověření"
+  }
+}

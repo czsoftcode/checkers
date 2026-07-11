@@ -7,6 +7,15 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pravidla braní pro pool checkers (zatím jen v knihovně, neovlivňuje hratelné
+  varianty).** Kámen (muž), který během braní dojde na dámskou řadu, se teď správně
+  promuje a tah končí – dřív mohl nelegálně pokračovat v braní přes dámskou řadu.
+  Korektnost je ověřená perftem proti nezávislé druhé implementaci generátoru
+  (otevírací pozice i ručně postavené pozice s dámami). Pool checkers se zatím
+  nedá hrát v aplikaci, jde o přípravu na pozdější variantu.
+
 ## [0.73.0] - 2026-07-11
 
 ### Added

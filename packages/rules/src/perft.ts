@@ -10,6 +10,8 @@
 
 import { applyMove } from './apply.js';
 import { legalMoves } from './moves.js';
+import { AMERICAN_RULESET } from './ruleset.js';
+import type { Ruleset } from './ruleset.js';
 import type { Position } from './types.js';
 
 /**
@@ -20,8 +22,17 @@ import type { Position } from './types.js';
  */
 export const MAX_PERFT_DEPTH = 12;
 
-/** Počet listů stromu legálních tahů v hloubce `depth` (0 = 1 list, max MAX_PERFT_DEPTH). */
-export function perft(position: Position, depth: number): number {
+/**
+ * Počet listů stromu legálních tahů v hloubce `depth` (0 = 1 list, max
+ * MAX_PERFT_DEPTH). `ruleset` řídí variantu – předá se do `legalMoves`
+ * i `applyMove`, aby strom odpovídal pravidlům dané varianty. Default
+ * AMERICAN_RULESET zachovává dosavadní americká čísla 1–6 beze změny.
+ */
+export function perft(
+  position: Position,
+  depth: number,
+  ruleset: Ruleset = AMERICAN_RULESET,
+): number {
   if (!Number.isInteger(depth) || depth < 0 || depth > MAX_PERFT_DEPTH) {
     throw new RangeError(`Neplatná hloubka perft: ${String(depth)}`);
   }
@@ -29,8 +40,8 @@ export function perft(position: Position, depth: number): number {
     return 1;
   }
   let nodes = 0;
-  for (const move of legalMoves(position)) {
-    nodes += perft(applyMove(position, move), depth - 1);
+  for (const move of legalMoves(position, ruleset)) {
+    nodes += perft(applyMove(position, move, ruleset), depth - 1, ruleset);
   }
   return nodes;
 }
