@@ -7,6 +7,17 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.72.0] - 2026-07-11
+
+### Changed
+
+- **Herní server přestal počítat hru proti počítači.** Výpočet tahů počítače se do
+  prohlížeče přesunul už dřív (0.70.0); teď z herního serveru zmizela i nepoužívaná
+  serverová cesta pro AI (zakládání partie, tahy, vzdání, nápověda a nabídka remízy
+  přes HTTP) i podproces enginu, který server spouštěl. Pro hráče se nic nemění –
+  hra proti počítači běží dál v prohlížeči a hra dvou lidí (PvP) funguje beze změny;
+  server je teď výhradně rozhodčím nad PvP a je tím lehčí (nespouští žádný engine).
+
 ## [0.71.0] - 2026-07-10
 
 ### Added

@@ -53,26 +53,11 @@ export type {
 } from './presence.js';
 export { ERROR_CODES, sendError } from './errors.js';
 export type { ErrorCode, ErrorEnvelope } from './errors.js';
-export {
-  EngineClient,
-  defaultEngineCommand,
-  DEFAULT_ENGINE_TIME_MS,
-  HARD_TIMEOUT_MARGIN_MS,
-  EngineTimeoutError,
-  EngineCrashError,
-  EngineProtocolError,
-  EngineClosedError,
-} from './engine-client.js';
-export type {
-  EngineMover,
-  EngineEvaluation,
-  EngineClientOptions,
-  SpawnCommand,
-  Strength,
-} from './engine-client.js';
-// Kniha zahájení a mapa úrovní žijí v `@checkers/ai` (fáze 86). Pass-through
-// re-export drží veřejné API serveru beze změny – testy i volající serveru je
-// dál importují z `@checkers/server`.
+// Engine-client (podproces enginu) byl odstraněn s fází 90 – server AI nepočítá,
+// běží v prohlížeči přes @checkers/ai. Re-export už tedy není.
+// Úrovně a kniha zahájení žijí v `@checkers/ai` (fáze 86). Pass-through re-export
+// drží veřejné API serveru beze změny pro testy i volající, které je importují
+// z `@checkers/server`.
 export { LEVELS, DEFAULT_LEVEL, STRENGTH_BY_LEVEL, LEVELS_WITH_BOOK, levelUsesBook } from '@checkers/ai';
 export type { GameLevel } from '@checkers/ai';
 export { OPENING_BOOK, buildBook, lookupBookMove } from '@checkers/ai';

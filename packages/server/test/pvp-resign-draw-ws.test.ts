@@ -27,11 +27,8 @@ import type {
   ChallengeRegistry,
   GameStateMessage,
   GameStore,
-  OpeningBook,
   RoomServerMessage,
 } from '../src/index.js';
-
-const NO_BOOK: OpeningBook = new Map();
 
 let app: FastifyInstance;
 const openSockets: WebSocket[] = [];
@@ -45,7 +42,7 @@ afterEach(async () => {
 });
 
 async function start(): Promise<number> {
-  app = buildApp({ openingBook: NO_BOOK });
+  app = buildApp();
   await app.listen({ port: 0, host: '127.0.0.1' });
   return (app.server.address() as AddressInfo).port;
 }
@@ -232,9 +229,10 @@ describe('PvP vzdání přes room WS (fáze 77)', () => {
 
   it('vzdání ENGINE partie přes místnost → error „nehraje se v místnosti"', async () => {
     const port = await start();
-    const engineGame = await app
-      .inject({ method: 'POST', url: '/games' })
-      .then((r) => r.json<{ id: string }>());
+    // Engine (non-PvP) partie už nevzniká REST cestou (serverová AI odstraněna,
+    // fáze 90) – vytvoříme ji přímo přes store, ať otestujeme, že room WS akci na
+    // ni odmítne (guard `mode !== 'pvp'`).
+    const engineGame = gameStore().create();
     const player = await join(port, 'Dana');
 
     sendResign(player.ws, engineGame.id);
@@ -366,9 +364,10 @@ describe('PvP nabídka remízy přes room WS (fáze 77)', () => {
 
   it('nabídka remízy na ENGINE partii přes místnost → error „nehraje se v místnosti"', async () => {
     const port = await start();
-    const engineGame = await app
-      .inject({ method: 'POST', url: '/games' })
-      .then((r) => r.json<{ id: string }>());
+    // Engine (non-PvP) partie už nevzniká REST cestou (serverová AI odstraněna,
+    // fáze 90) – vytvoříme ji přímo přes store, ať otestujeme, že room WS akci na
+    // ni odmítne (guard `mode !== 'pvp'`).
+    const engineGame = gameStore().create();
     const player = await join(port, 'Eva');
 
     sendDrawOffer(player.ws, engineGame.id);
@@ -452,9 +451,10 @@ describe('PvP opuštění dohrané partie – uvolnění busy (leave-game, fáze
 
   it('leave-game na ENGINE partii přes místnost → error „nehraje se v místnosti"', async () => {
     const port = await start();
-    const engineGame = await app
-      .inject({ method: 'POST', url: '/games' })
-      .then((r) => r.json<{ id: string }>());
+    // Engine (non-PvP) partie už nevzniká REST cestou (serverová AI odstraněna,
+    // fáze 90) – vytvoříme ji přímo přes store, ať otestujeme, že room WS akci na
+    // ni odmítne (guard `mode !== 'pvp'`).
+    const engineGame = gameStore().create();
     const player = await join(port, 'Filip');
 
     sendLeaveGame(player.ws, engineGame.id);

@@ -1,0 +1,39 @@
+{
+  "id": 90,
+  "title": "Odstranit serverovou AI",
+  "goal": "Odstranit ze serveru MRTVOU AI cestu (web ji od fáze 88 nevolá, AI běží v prohlížeči): engine podproces (engine-client.ts) + jeho import v main.ts/index.ts; REST endpointy POST /games, POST /games/:id/moves, /resign, /offer-draw, GET /games/:id/hint; engine trigger a orchestraci v app.ts (maybeTriggerEngine, runEngineMove, engine.bestmove/evaluate, použití STRENGTH_BY_LEVEL a knihy); engine GameRecord (level/ballot/humanColor/engineStatus). ZACHOVAT BEZE ZMĚNY celý PvP: /room/ws, store.createPvp, sdílené GET /games/:id a /games/:id/ws (PvP snapshot+push), PvP tahy/vzdání/remíza po room WS. PDN archiv NEMAZAT — modul zůstává (dnes ho volal jen konec AI partie, takže dočasně BEZ volajícího), protože se má napojit na PvP (samostatná položka backlogu, uživatelův původní cíl). Smazat odpovídající serverové AI testy; PvP testy + kontraktní test fáze 86 (in-process v @checkers/ai) zůstávají zelené. PRVNÍ KROK fáze: ověřit, že produkční web serverovou AI už nevolá (grep webu na /games AI volání + potvrzení nasazení 88+), teprve pak mazat. Po odstranění engine-client zvážit, jestli server ještě přímo potřebuje @checkers/engine.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit, že web nemá volající serverové AI",
+      "status": "done",
+      "detail": "Grep webového src — žádné volání POST /games, /moves, /hint, /offer-draw, AI /resign (jen LocalClient); createHttpClient je nevolané. Kódová pojistka nad rámec produkčního ověření (dama.softcode.cz 0.71.0, hraná partie proti AI, žádné /games — potvrzeno uživatelem). Výstup: doloženo, že v repu neexistuje webová cesta na serverovou AI."
+    },
+    {
+      "title": "Odstranit listové AI endpointy /hint + /offer-draw",
+      "status": "done",
+      "detail": "Z app.ts smazat GET /games/:id/hint a POST /games/:id/offer-draw (obojí čistě AI; PvP remíza jde po room WS). Padnou volání engine.bestmove (hint) a engine.evaluate (draw). Smazat jejich serverové testy. Výstup: endpointy pryč; build + PvP testy zelené."
+    },
+    {
+      "title": "Odstranit AI herní endpointy POST /games, /moves, /resign + engine trigger",
+      "status": "done",
+      "detail": "Z app.ts smazat POST /games (založení AI hry), POST /games/:id/moves (+ maybeTriggerEngine/runEngineMove a engine.bestmove), AI POST /games/:id/resign; odstranit použití STRENGTH_BY_LEVEL a knihy v AI orchestraci. ZACHOVAT GET /games/:id a /games/:id/ws (PvP). Tím zmizí i jediný volající PDN archivu (modul zůstává bez volajícího dle rozhodnutí). Smazat AI testy. Výstup: poslední engine.* volání pryč; build + PvP testy zelené."
+    },
+    {
+      "title": "Odstranit engine-client + drátování enginu",
+      "status": "done",
+      "detail": "Smazat engine-client.ts a jeho re-export v index.ts; z main.ts odstranit new EngineClient, warmup a shutdown enginu; z buildApp vypustit parametr engine (pdnDir ponechat). Upravit test-buildery appky (staví bez enginu). Výstup: server nespouští podproces enginu; nastartuje a obsluhuje PvP bez enginu; build + PvP testy zelené."
+    },
+    {
+      "title": "Uklidit @checkers/engine dep + ověřit PvP e2e",
+      "status": "done",
+      "detail": "Zkontrolovat, zda server ještě přímo importuje @checkers/engine (po odstranění engine-client nejspíš už ne) — když ne, odebrat z packages/server/package.json. Ověřit celou sadu (pnpm -r typecheck + pnpm -r test), kontraktní test v @checkers/ai netknutý, lehké e2e PvP (dva klienti, tah se doručí). Výstup: čisté serverové závislosti; vše zelené; PvP funguje."
+    }
+  ],
+  "startedAt": "2026-07-11T00:04:07.086Z",
+  "completedAt": "2026-07-11T00:34:39.124Z",
+  "autoCommit": {
+    "preSha": "d922a97898df712923d9a204bd7c448586fa9eb1",
+    "subject": "Phase 90: Odstranit serverovou AI"
+  }
+}

@@ -447,6 +447,11 @@
       "id": 89,
       "title": "Statický build pro itch",
       "status": "done"
+    },
+    {
+      "id": 90,
+      "title": "Odstranit serverovou AI",
+      "status": "done"
     }
   ]
 }

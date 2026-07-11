@@ -23,9 +23,7 @@ import type { AddressInfo } from 'node:net';
 
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/index.js';
-import type { GameDto, OpeningBook, RoomPresence, RoomServerMessage } from '../src/index.js';
-
-const NO_BOOK: OpeningBook = new Map();
+import type { GameStore, RoomPresence, RoomServerMessage } from '../src/index.js';
 
 let app: FastifyInstance;
 const openSockets: WebSocket[] = [];
@@ -39,13 +37,17 @@ afterEach(async () => {
 });
 
 async function start(): Promise<number> {
-  app = buildApp({ openingBook: NO_BOOK });
+  app = buildApp();
   await app.listen({ port: 0, host: '127.0.0.1' });
   return (app.server.address() as AddressInfo).port;
 }
 
 function presence(): RoomPresence {
   return (app as unknown as { roomPresence: RoomPresence }).roomPresence;
+}
+
+function gameStore(): GameStore {
+  return (app as unknown as { gameStore: GameStore }).gameStore;
 }
 
 function waitFor(pred: () => boolean, timeoutMs = 1000): Promise<void> {
@@ -223,9 +225,9 @@ describe('Místnost – přítomnost přes WS', () => {
 
   it('izolace od herní WS (fáze 66): odběratel partie nedostane nic z místnosti', async () => {
     const port = await start();
-    const game = await app
-      .inject({ method: 'POST', url: '/games' })
-      .then((r) => r.json<GameDto>());
+    // Partie k odběru přes `/games/:id/ws` (serverová AI odstraněna, fáze 90 –
+    // engine partie už nevzniká REST cestou): stačí jakákoli partie ve store.
+    const game = gameStore().create();
 
     const gameWs = new WebSocket(`ws://127.0.0.1:${port}/games/${game.id}/ws`);
     openSockets.push(gameWs);

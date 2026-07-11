@@ -122,9 +122,6 @@ importers:
       '@checkers/ai':
         specifier: workspace:*
         version: link:../ai
-      '@checkers/engine':
-        specifier: workspace:*
-        version: link:../engine
       '@checkers/rules':
         specifier: workspace:*
         version: link:../rules

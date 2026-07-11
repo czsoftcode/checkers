@@ -26,13 +26,9 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/index.js';
 import type {
   ChallengeRegistry,
-  GameDto,
   GameStore,
-  OpeningBook,
   RoomServerMessage,
 } from '../src/index.js';
-
-const NO_BOOK: OpeningBook = new Map();
 
 let app: FastifyInstance;
 const openSockets: WebSocket[] = [];
@@ -46,7 +42,7 @@ afterEach(async () => {
 });
 
 async function start(): Promise<number> {
-  app = buildApp({ openingBook: NO_BOOK });
+  app = buildApp();
   await app.listen({ port: 0, host: '127.0.0.1' });
   return (app.server.address() as AddressInfo).port;
 }
@@ -246,9 +242,9 @@ describe('Párování výzvou přes WS (fáze 68)', () => {
 
   it('izolace od herní WS: odběratel partie nedostane nic z párování', async () => {
     const port = await start();
-    const game = await app
-      .inject({ method: 'POST', url: '/games' })
-      .then((r) => r.json<GameDto>());
+    // Partie k odběru přes `/games/:id/ws` (serverová AI odstraněna, fáze 90 –
+    // engine partie už nevzniká REST cestou): stačí jakákoli partie ve store.
+    const game = gameStore().create();
 
     const gameWs = new WebSocket(`ws://127.0.0.1:${port}/games/${game.id}/ws`);
     openSockets.push(gameWs);

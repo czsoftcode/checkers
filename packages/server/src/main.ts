@@ -1,21 +1,19 @@
 /**
- * Vstupní bod serveru: postaví app se zapojeným enginem a nechá ji naslouchat.
- * Port lze přebít proměnnou PORT (využívá to i curl brána, aby si vzala volný),
- * čas enginu na tah proměnnou ENGINE_TIME_MS.
+ * Vstupní bod serveru: postaví app a nechá ji naslouchat. Port lze přebít
+ * proměnnou PORT.
  *
- * Životní cyklus procesů: engine se spustí jako podproces (EngineClient), na
- * startu se ho pokusíme „zahřát" handshakem (warmup) – studený start tsx tak
- * nezdrží první reálný tah. Při vypnutí (SIGTERM/SIGINT) se nejdřív zavře HTTP
- * server (přestane brát requesty) a pak engine (SIGKILL + úklid pidfile), ať po
- * sobě nenecháme osiřelý proces.
+ * Server od fáze 90 NEpočítá AI – hra proti počítači běží celá v prohlížeči
+ * (@checkers/ai ve Web Workeru). Server je autorita jen nad PvP (room WS +
+ * `/games/:id/ws`), žádný podproces enginu se nespouští. `pdnDir` se app předává
+ * dál (PDN modul se drží pro budoucí napojení na PvP archiv), i když ho dnes nic
+ * nevolá. Při vypnutí (SIGTERM/SIGINT) se korektně zavře HTTP server.
  */
 
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildApp, DEFAULT_ENGINE_TIME_MS, DEFAULT_PORT, EngineClient } from './index.js';
+import { buildApp, DEFAULT_PORT } from './index.js';
 
 const port = Number(process.env.PORT ?? DEFAULT_PORT);
-const timeMs = Number(process.env.ENGINE_TIME_MS ?? DEFAULT_ENGINE_TIME_MS);
 
 // Kam archivovat dokončené partie (PDN).
 // Výchozí `.pdn` ukotvíme na KOŘEN REPA odvozený z polohy tohoto zdrojáku
@@ -31,19 +29,14 @@ const pdnDir = process.env.CHECKERS_PDN_DIR
   ? resolve(process.env.CHECKERS_PDN_DIR)
   : resolve(repoRoot, '.pdn');
 
-const engine = new EngineClient({ timeMs });
-const app = buildApp({ engine, pdnDir });
+const app = buildApp({ pdnDir });
 
-/** Kolik ms čekat na app.close(), než se engine ubije tak jako tak. */
-const APP_CLOSE_TIMEOUT_MS = 3000;
 /** Tvrdá pojistka: kdyby cokoli viselo, proces se ukončí i bez čistého konce. */
 const HARD_EXIT_TIMEOUT_MS = 5000;
 
-const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
 let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
-  console.log(`\n${signal} – vypínám server a engine…`);
+  console.log(`\n${signal} – vypínám server…`);
 
   // Pojistka proti zavěšení: ať se stane cokoli, proces po HARD_EXIT skončí.
   const hardExit = setTimeout(() => {
@@ -52,15 +45,12 @@ async function shutdown(signal: string): Promise<void> {
   }, HARD_EXIT_TIMEOUT_MS);
   hardExit.unref();
 
-  // app.close() může kvůli keep-alive spojení VISET; nečekáme na něj věčně,
-  // jinak by se engine.close() (a tím kill enginu) nikdy neprovedl → sirotek.
   try {
-    await Promise.race([app.close(), delay(APP_CLOSE_TIMEOUT_MS)]);
+    await app.close();
   } catch (err) {
     console.error('Chyba při zavírání serveru:', err);
+    process.exit(1);
   }
-  // engine.close() se provede VŽDY – zabije podproces a smaže pidfile.
-  await engine.close();
   process.exit(0);
 }
 
@@ -78,20 +68,11 @@ process.on('SIGTERM', () => onSignal('SIGTERM'));
 process.on('SIGINT', () => onSignal('SIGINT'));
 
 async function start(): Promise<void> {
-  // Zahřátí je best-effort: když engine nenaběhne, server pořád běží (partie
-  // pak jen skončí engine chybou), ale nechceme kvůli tomu spadnout při startu.
-  try {
-    const hello = await engine.warmup();
-    console.log(`Engine připraven: ${hello.engine} (protokol ${String(hello.protocol)}).`);
-  } catch (err) {
-    console.error('Zahřátí enginu selhalo (server běží dál):', err);
-  }
-
   const address = await app.listen({ port, host: '127.0.0.1' });
   console.log(`Server naslouchá na ${address}`);
 }
 
 start().catch((err: unknown) => {
   console.error('Server se nepodařilo spustit:', err);
-  void engine.close().finally(() => process.exit(1));
+  process.exit(1);
 });
