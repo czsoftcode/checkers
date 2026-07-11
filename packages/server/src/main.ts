@@ -5,8 +5,8 @@
  * Server od fáze 90 NEpočítá AI – hra proti počítači běží celá v prohlížeči
  * (@checkers/ai ve Web Workeru). Server je autorita jen nad PvP (room WS +
  * `/games/:id/ws`), žádný podproces enginu se nespouští. `pdnDir` se app předává
- * dál (PDN modul se drží pro budoucí napojení na PvP archiv), i když ho dnes nic
- * nevolá. Při vypnutí (SIGTERM/SIGINT) se korektně zavře HTTP server.
+ * dál – od fáze 92 z něj server archivuje každou dokončenou PvP partii jako
+ * anonymní PDN. Při vypnutí (SIGTERM/SIGINT) se korektně zavře HTTP server.
  */
 
 import { dirname, resolve } from 'node:path';

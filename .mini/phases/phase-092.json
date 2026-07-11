@@ -1,0 +1,24 @@
+{
+  "id": 92,
+  "title": "PvP partie do PDN archivu",
+  "goal": "Napojit PDN archiv (archive.ts, po fázi 90 bez volajícího) na konec PvP partie — jednosměrný zápis na disk, nenačítá se zpět. BEZ přezdívek hráčů (GDPR): záznam je ANONYMNÍ (jen tahy + výsledek + čas UTC), session ID se nezapisují. Formát ZŮSTÁVÁ PDN (ne md/yaml) — je to standardní notace dámy, přehratelná v libovolném nástroji, což je právě cíl 'zpětného přehrání'; vlastní formát by pro přehrání potřeboval parser navíc a ztratil kompatibilitu. Přeformátovat formatGamePdn (signaturu lze volně měnit — po fázi 90 nemá volajícího): [Event \"American Checkers\"] (dnes \"Checkers\"); standardní tagy [UTCDate]/[UTCTime] v UTC místo dosavadního [Date]; anonymní White/Black místo natvrdo [White \"Engine\"]/[Black \"Human\"] (např. \"?\", žádná jména); movetext s tahy POD SEBOU — jeden číslovaný tah (pár půltahů) na řádek pro čitelnost, ne vše v jednom řádku; PDN zůstane parseovatelný. Hook: writeGamePdn při KAŽDÉM terminálním konci PvP (resignPvp / acceptDrawPvp / přirozený konec dle pravidel v room WS handleru) PRÁVĚ JEDNOU (guard přes archived flag na záznamu). Testy: PDN se zapíše na konec PvP se správným formátem (Event, UTC datum+čas, výsledkový token, tahy pod sebou), idempotentně (ne dvakrát), rozehraná (ongoing) se NEarchivuje. Mimo řez: načítání PDN zpět, in-app přehrávání/analýza (non-goal projektu), ukládání jmen hráčů.",
+  "status": "doing",
+  "steps": [
+    {
+      "title": "Přeformátovat formatGamePdn (anonymní, UTC, tahy pod sebou)",
+      "status": "done",
+      "detail": "[Event \"American Checkers\"], standardní [UTCDate]/[UTCTime] v UTC místo [Date], anonymní White/Black bez jmen (GDPR) místo natvrdo Engine/Human, movetext s jedním číslovaným tahem (pár půltahů) na řádek místo jednoho řádku. Signaturu lze měnit (po fázi 90 bez volajícího). Přepsat její test na nový tvar. Výstup: čistá funkce vrací nový PDN formát; test kontroluje Event, UTC datum+čas, výsledkový token, tahy pod sebou; PDN zůstává parseovatelný."
+    },
+    {
+      "title": "Napojit archivaci na broadcast choke point (idempotentně)",
+      "status": "done",
+      "detail": "V broadcast(record) po odeslání stavu: když effectiveResult(record) !== ongoing A !record.archived A pdnDir je nastavený → formatGamePdn(record.moves, výsledek, new Date()) + writeGamePdn(pdnDir, id, pdn) + označit archived (store metoda markArchived, doplnit pokud chybí). Pokrývá všechny tři konce (vzdání/remíza/pravidla), protože všechny přes broadcast projdou. writeGamePdn nikdy nevyhazuje → selhání zápisu nesmí shodit konec partie ani WS. Bez pdnDir se nearchivuje. Výstup: terminální PvP záznam se zapíše právě jednou; record.moves ověřeně nese historii tahů."
+    },
+    {
+      "title": "Testy: PvP konec → PDN",
+      "status": "done",
+      "detail": "Vzdání, dohodnutá remíza i přirozený konec dle pravidel každý zapíšou PRÁVĚ JEDEN PDN se správným formátem a výsledkem; rozehraná (ongoing) partie se NEarchivuje; opakovaný broadcast už terminálního záznamu nezapíše podruhé (guard archived); bez pdnDir se nepíše nic. Injektovatelný čas/dir kvůli determinismu. Výstup: archivace PvP prokázaná zubatými testy nad reálným room WS tokem."
+    }
+  ],
+  "startedAt": "2026-07-11T01:48:46.628Z"
+}

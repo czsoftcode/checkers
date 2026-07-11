@@ -1,8 +1,12 @@
 /**
- * Archiv dokončených partií na disk (fáze 23). Jednosměrné a best-effort:
- * po skončení partie se z ní vyrobí PDN celé partie a atomicky zapíše jako
- * `<id>.pdn`. Zpět do hry se NIKDY nenačítá – server zůstává jediným zdrojem
- * pravdy, tohle je jen výstup pro rozbor ve vnějším nástroji.
+ * Archiv dokončených PvP partií na disk (fáze 23, napojeno fází 92). Jednosměrné
+ * a best-effort: po skončení partie se z ní vyrobí PDN celé partie a atomicky
+ * zapíše jako `<id>.pdn`. Zpět do hry se NIKDY nenačítá – server zůstává jediným
+ * zdrojem pravdy, tohle je jen výstup pro zpětné přehrání ve vnějším nástroji
+ * (standardní PDN je přehratelný v libovolném nástroji na dámu).
+ *
+ * Záznam je ANONYMNÍ (GDPR): nese jen tahy + výsledek + čas v UTC. Přezdívky
+ * hráčů ani session id se NEzapisují – tagy `[White]`/`[Black]` jsou `"?"`.
  *
  * Dvě oddělené odpovědnosti (schválně):
  * - `formatGamePdn` je ČISTÁ funkce (žádné I/O). Nesmyslný vstup (serializace
@@ -17,28 +21,40 @@ import { join } from 'node:path';
 import { formatMove } from '@checkers/rules';
 import type { GameResult, Move } from '@checkers/rules';
 
-/** Výsledkový token PDN. Člověk je černý (Black), engine bílý (White). */
+/**
+ * Výsledkový token PDN. Černý začíná a je v movetextu první; standardní PDN
+ * skóre `1-0` = vyhrál White, `0-1` = vyhrál Black.
+ */
 const RESULT_TOKEN: Record<Exclude<GameResult, 'ongoing'>, string> = {
   'black-wins': '0-1',
   'white-wins': '1-0',
   draw: '1/2-1/2',
 };
 
-/** Dvojmístné číslo s vedoucí nulou (den/měsíc v tagu Date). */
+/** Dvojmístné číslo s vedoucí nulou (den/měsíc/hodina/minuta/sekunda). */
 function pad2(value: number): string {
   return value.toString().padStart(2, '0');
 }
 
-/** Datum pro tag `[Date "YYYY.MM.DD"]` z lokálního času. */
-function formatPdnDate(date: Date): string {
-  return `${String(date.getFullYear())}.${pad2(date.getMonth() + 1)}.${pad2(date.getDate())}`;
+/** Datum pro tag `[UTCDate "YYYY.MM.DD"]` v UTC (ne lokální čas serveru). */
+function formatUtcDate(date: Date): string {
+  return `${String(date.getUTCFullYear())}.${pad2(date.getUTCMonth() + 1)}.${pad2(date.getUTCDate())}`;
+}
+
+/** Čas pro tag `[UTCTime "HH:MM:SS"]` v UTC. */
+function formatUtcTime(date: Date): string {
+  return `${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}:${pad2(date.getUTCSeconds())}`;
 }
 
 /**
- * Sestaví PDN celé partie: 7 povinných STR tagů + movetext s full-move
- * číslováním (černý+bílý půltah pod jedním číslem, černý začíná) + výsledkový
- * token. Lichý počet půltahů (partie končí po tahu černého) → poslední číslo
- * nese jen jeden půltah.
+ * Sestaví anonymní PDN celé partie: STR tagy + movetext s full-move číslováním
+ * (černý+bílý půltah pod jedním číslem, černý začíná) + výsledkový token.
+ * Každý číslovaný tah je na SAMOSTATNÉM řádku (čitelnost); PDN je vůči bílým
+ * znakům v movetextu tolerantní, takže zůstává parseovatelný. Lichý počet
+ * půltahů (partie končí po tahu černého) → poslední řádek nese jen jeden půltah.
+ *
+ * Bez jmen hráčů (GDPR): `[White "?"]` / `[Black "?"]`. Čas je v UTC
+ * (`[UTCDate]`/`[UTCTime]`), aby záznam nezávisel na časové zóně serveru.
  *
  * `result === 'ongoing'` je NEplatný vstup (archivuje se jen dokončená partie)
  * a vyhodí RangeError – tiše zapsat rozehranou partii jako „hotovou" by byla
@@ -50,24 +66,27 @@ export function formatGamePdn(moves: readonly Move[], result: GameResult, date: 
   }
   const token = RESULT_TOKEN[result];
   const tags = [
-    '[Event "Checkers"]',
+    '[Event "American Checkers"]',
     '[Site "local"]',
-    `[Date "${formatPdnDate(date)}"]`,
+    `[UTCDate "${formatUtcDate(date)}"]`,
+    `[UTCTime "${formatUtcTime(date)}"]`,
     '[Round "-"]',
-    '[White "Engine"]',
-    '[Black "Human"]',
+    '[White "?"]',
+    '[Black "?"]',
     `[Result "${token}"]`,
   ].join('\n');
 
-  const tokens: string[] = [];
+  // Jeden číslovaný tah (pár půltahů) na řádek. Výsledkový token na vlastním
+  // posledním řádku movetextu.
+  const lines: string[] = [];
   for (let i = 0; i < moves.length; i += 2) {
     const moveNo = i / 2 + 1;
     const black = formatMove(moves[i]!);
     const white = i + 1 < moves.length ? formatMove(moves[i + 1]!) : undefined;
-    tokens.push(white === undefined ? `${String(moveNo)}. ${black}` : `${String(moveNo)}. ${black} ${white}`);
+    lines.push(white === undefined ? `${String(moveNo)}. ${black}` : `${String(moveNo)}. ${black} ${white}`);
   }
-  tokens.push(token);
-  const movetext = tokens.join(' ');
+  lines.push(token);
+  const movetext = lines.join('\n');
 
   return `${tags}\n\n${movetext}\n`;
 }

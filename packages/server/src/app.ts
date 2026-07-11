@@ -14,6 +14,7 @@ import type { Color } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { findLegalMove, legalMoveDtos, pvpGameToDto } from './dto.js';
 import type { GameStateMessage, MoveDto, PvpGameDto } from './dto.js';
+import { formatGamePdn, writeGamePdn } from './archive.js';
 import { GameHub } from './hub.js';
 import { RoomPresence } from './presence.js';
 import type { RoomServerMessage } from './presence.js';
@@ -43,23 +44,25 @@ type ApplyMoveResult =
 
 export interface BuildAppOptions {
   /**
-   * Adresář pro archivní PDN dokončených partií. PDN modul (`archive.ts`) po
-   * odstranění serverové AI (fáze 90) dočasně nemá volajícího – parametr se drží
-   * pro budoucí napojení PDN archivu na PvP (samostatná backlog položka). Dnes
-   * ho `buildApp` nečte; `main.ts` ho i tak předává, ať se signatura nemění.
+   * Adresář pro archivní PDN dokončených PvP partií (fáze 92). Když je nastaven,
+   * server po KAŽDÉM terminálním konci partie (vzdání / dohodnutá remíza /
+   * přirozený konec dle pravidel) zapíše anonymní PDN celé partie právě jednou.
+   * Když není nastaven, archiv se vypne (nic se nepíše) – např. v testech, které
+   * archivaci netestují. Zápis je jednosměrný a best-effort (viz `archive.ts`).
    */
   readonly pdnDir?: string;
+  /**
+   * Zdroj aktuálního času pro tagy `[UTCDate]`/`[UTCTime]` archivního PDN.
+   * Injektovatelný kvůli determinismu testů; v produkci `() => new Date()`.
+   */
+  readonly now?: () => Date;
 }
 
-// `options` drží dnes už jen `pdnDir` – rezervovaný hook pro budoucí PvP PDN
-// archiv (fáze 90), který `buildApp` zatím nečte; `main.ts` ho i tak předává, ať
-// se signatura nemění. Po odstranění serverové AI (fáze 91) zmizel i `rng` (los
-// ballotu), takže buildApp z options aktuálně nečte NIC – param se drží kvůli
-// stabilní signatuře, proto je vědomě nevyužitý.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
   const store = new GameStore();
+  const pdnDir = options.pdnDir;
+  const now = options.now ?? ((): Date => new Date());
 
   // Jednotná obálka i pro chyby z frameworku: rozbité JSON tělo přijde jako 4xx
   // s `statusCode`, přemapuje se na invalid_request. Neočekávaná chyba (např.
@@ -137,6 +140,42 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   function broadcast(record: GameRecord): void {
     const message: GameStateMessage = { type: 'game-state', game: dtoFor(record) };
     hub.broadcast(record.id, JSON.stringify(message));
+    maybeArchive(record);
+  }
+
+  /**
+   * Napojení PDN archivu na PvP (fáze 92). `broadcast` je společný choke point
+   * VŠECH tří terminálních konců (vzdání, dohodnutá remíza, přirozený konec dle
+   * pravidel po tahu), takže archivace odsud pokryje všechny jednou.
+   *
+   * Guard `store.markArchived(id)` je atomický check-and-set (Node je
+   * jednovláknový, mezi čtením a zápisem `archived` není `await`): terminální
+   * záznam projde právě jednou, i kdyby `broadcast` přišel na tutéž partii
+   * vícekrát. Rozehraná (`ongoing`) partie i běh bez `pdnDir` se přeskočí.
+   *
+   * Zápis je fire-and-forget a `writeGamePdn` NIKDY nevyhazuje – selhání zápisu
+   * neshodí konec partie ani WS (best-effort archiv). Trade-off: partie se
+   * označí za archivovanou PŘED dokončením zápisu, takže selhaný zápis se už
+   * neopakuje (přijaté „nejvýš jednou", ne „garantovaně jednou na disku").
+   *
+   * Pozor na rozsah záruky „neshodí": platí pro I/O část (`writeGamePdn`).
+   * Synchronní příprava (`formatGamePdn`) je záměrně NEobalená – jediná její
+   * throw cesta (`result === 'ongoing'`) je odstíněná guardem výš, cokoli dalšího
+   * by byla programová korupce dat, která MÁ padnout hlasitě, ne se maskovat.
+   */
+  function maybeArchive(record: GameRecord): void {
+    if (pdnDir === undefined) {
+      return;
+    }
+    const result = effectiveResult(record);
+    if (result === 'ongoing') {
+      return;
+    }
+    if (!store.markArchived(record.id)) {
+      return; // už archivováno (nebo partie mezitím zmizela) – žádný druhý zápis
+    }
+    const pdn = formatGamePdn(record.moves, result, now());
+    void writeGamePdn(pdnDir, record.id, pdn);
   }
 
   /**
