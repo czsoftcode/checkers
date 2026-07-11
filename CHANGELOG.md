@@ -9,6 +9,13 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ### Added
 
+- **Ruská proměna uprostřed braní (zatím jen v knihovně).** Přidána ruská pravidla:
+  muž, který během skokové sekvence dojde na dámskou řadu, se v tom okamžiku stává
+  létavou dámou a – může-li – musí v braní pokračovat letmo (dřív takové pokračování
+  žádná varianta neuměla). Ruská varianta se tím od pool checkers liší jen tímto
+  jediným pravidlem; do bodu proměny jsou obě shodné. Korektnost je ověřená perftem
+  proti nezávislé druhé implementaci (otevírací pozice i ručně postavené pozice, kde
+  proměna reálně nastává). Ruská varianta se zatím nedá hrát v aplikaci, jde o přípravu.
 - **Zápis braní létavé dámy do PDN (zatím jen v knihovně).** Notace tahů (`formatMove`)
   teď umí zapsat klouzavé braní létavé dámy – bere kámen kdekoli na diagonále, ne jen
   o jedno pole. Výstup je standardní PDN (jen pole dopadu, brané kameny se nepíšou).

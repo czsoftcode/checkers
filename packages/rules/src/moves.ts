@@ -179,6 +179,11 @@ export function jumpMovesFrom(
     // zůstávají na desce jako blokery až do konce sekvence). Stará cesta se
     // NEDOTÝKÁ, aby americká čísla i pořadí tahů zůstala bajt-identická.
     extendFlyingKingJumps(board, cell, square, square, [], [], moves);
+  } else if (cell.kind === 'man' && ruleset.promoteMidCapture) {
+    // Ruský muž: turecko-úderová krok-2 cesta (keep-as-blocker), a jakmile
+    // dopadne na proměnnou řadu, přechází UPROSTŘED sekvence na létavou dámu.
+    // Pool muž (promoteMidCapture=false) i americká zůstávají na `extendJumps`.
+    extendRussianManJumps(board, cell, square, square, [], [], moves, ruleset);
   } else {
     extendJumps(board, cell, square, square, [], [], moves, ruleset);
   }
@@ -301,6 +306,76 @@ function extendJumps(
     captures.pop();
     path.pop();
     board[over - 1] = overCell;
+  }
+  if (!extended && path.length > 0) {
+    out.push({ from, path: [...path], captures: [...captures] });
+  }
+}
+
+/**
+ * DFS skokové sekvence RUSKÉHO muže (proměna uprostřed braní + turecký úder).
+ *
+ * Muž bere krok-2 obousměrně (`captureDirs` s `manCaptureBackward`), ale na
+ * rozdíl od `extendJumps` brané kameny NEODEBÍRÁ z pracovní desky – drží je
+ * jako blokery (turecký úder), stejně jako `extendFlyingKingJumps`. To je
+ * nutné, protože po proměně uprostřed sekvence by pozdější klouzavý segment
+ * dámy mohl přejet přes pole, kde muž předtím bral; ponechaný bloker to
+ * zakáže. Dvojímu braní téhož kamene brání členství v `captures`.
+ *
+ * PROMĚNA: jakmile muž DOPADNE na proměnnou řadu (`path.length > 0` a řada =
+ * `PROMOTION_ROW`), přestává být mužem a zbytek sekvence z tohoto pole se
+ * generuje jako LÉTAVÁ DÁMA přes `extendFlyingKingJumps` (piece = king).
+ * Delegace přebírá i tvorbu listu (pole nemá žádné další man-pokračování),
+ * takže nevznikne dvojitý list ani man-pokračování přes dámskou řadu.
+ *
+ * Terminace: `captures` monotónně roste (dřív braný kámen blokuje), hloubka je
+ * shora omezená počtem soupeřových kamenů – i po přechodu na dámu (viz
+ * terminace `extendFlyingKingJumps`).
+ */
+function extendRussianManJumps(
+  board: Cell[],
+  piece: Piece,
+  from: Square,
+  current: Square,
+  path: Square[],
+  captures: Square[],
+  out: Move[],
+  ruleset: Ruleset,
+): void {
+  // Dopad na proměnnou řadu uprostřed braní: HNED se stává létavou dámou.
+  // Zbytek sekvence (i případný list) obstará klouzavá cesta – žádné další
+  // man-pokračování z tohoto pole, žádný vlastní list zde (jinak dvojitý).
+  if (path.length > 0 && squareToCoords(current).row === PROMOTION_ROW[piece.color]) {
+    const king: Piece = { color: piece.color, kind: 'king' };
+    extendFlyingKingJumps(board, king, from, current, path, captures, out);
+    return;
+  }
+  let extended = false;
+  for (const dir of captureDirs(piece.color, 'man', ruleset)) {
+    const over = neighborOf(current, dir);
+    const landing = jumpOf(current, dir);
+    if (over === null || landing === null) {
+      continue;
+    }
+    const overCell = board[over - 1];
+    if (overCell === null || overCell === undefined || overCell.color === piece.color) {
+      continue;
+    }
+    // Turecký úder: dřív braný kámen (stále na desce) blokuje a nebere se dvakrát.
+    if (captures.includes(over)) {
+      continue;
+    }
+    // Dopad musí být volný – bloker (dřív braný kámen) tu leží dál a zabrání dopadu.
+    if (board[landing - 1] !== null) {
+      continue;
+    }
+    extended = true;
+    // Keep-as-blocker: braný kámen se NEnuluje (na rozdíl od `extendJumps`).
+    path.push(landing);
+    captures.push(over);
+    extendRussianManJumps(board, piece, from, landing, path, captures, out, ruleset);
+    captures.pop();
+    path.pop();
   }
   if (!extended && path.length > 0) {
     out.push({ from, path: [...path], captures: [...captures] });

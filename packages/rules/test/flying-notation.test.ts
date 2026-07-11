@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Move, Ruleset } from '../src/index.js';
 import { formatMove, parseMove } from '../src/index.js';
 
-const FLYING: Ruleset = { manCaptureBackward: false, king: 'flying' };
+const FLYING: Ruleset = { manCaptureBackward: false, king: 'flying', promoteMidCapture: false };
 
 describe('notace – klouzavý prostý tah létavé dámy', () => {
   it('formatMove zapíše dlouhý prostý tah pomlčkou (18-5)', () => {
@@ -37,7 +37,7 @@ describe('notace – klouzavý prostý tah létavé dámy', () => {
 });
 
 /** Pool ruleset = zdroj pravdy fáze pro klouzavé braní (jako flying-capture.test). */
-const POOL: Ruleset = { manCaptureBackward: true, king: 'flying' };
+const POOL: Ruleset = { manCaptureBackward: true, king: 'flying', promoteMidCapture: false };
 
 describe('notace – klouzavé braní létavé dámy (formatMove)', () => {
   it('dlouhé braní: brané pole se nepíše, výstup je jen dopad (4x18)', () => {

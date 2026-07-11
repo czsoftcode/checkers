@@ -141,18 +141,29 @@ function dfsCapture(
   captured: [number, number][],
   succ: RefPos[],
   manPromotesStop: boolean,
+  midPromote: boolean,
 ): void {
-  // Muž na dámské řadě braním KONČÍ (proměna ukončuje tah) – i kdyby další
-  // braní geometricky šlo. Tím se pool liší od ruské. `manPromotesStop=false`
-  // tuto zarážku VYPNE (muž pokračuje jako muž) – slouží jen k měření hloubky,
-  // kde zarážka poprvé změní perft (že fix má na úrovni perftu zuby).
-  if (manPromotesStop && !piece.king && captured.length > 0 && curR === promoRow(piece.color)) {
-    succ.push(makeSuccessor(orig, startR, startC, curR, curC, captured, piece));
-    return;
+  // Muž, který během braní dopadne na dámskou řadu:
+  //  - RUSKÁ (`midPromote=true`): HNED se stává létavou dámou a pokračuje
+  //    (může-li) v braní letmo – jen přepneme `piece.king` a padáme dál do
+  //    smyčky, kde už jede klouzavá větev. Finální kámen bude dáma (viz níže).
+  //  - POOL (`manPromotesStop=true`): braním KONČÍ (proměna ukončuje tah).
+  //  - MĚŘENÍ (`manPromotesStop=false`, `midPromote=false`): zarážka vypnutá,
+  //    muž pokračuje jako muž – slouží jen k důkazu, že fix má na perftu zuby.
+  let effPiece = piece;
+  if (!piece.king && captured.length > 0 && curR === promoRow(piece.color)) {
+    if (midPromote) {
+      effPiece = { color: piece.color, king: true };
+      // padáme dál – zbytek sekvence se generuje jako létavá dáma z tohoto pole
+    } else if (manPromotesStop) {
+      succ.push(makeSuccessor(orig, startR, startC, curR, curC, captured, piece));
+      return;
+    }
+    // jinak (měření): effPiece zůstává muž
   }
   let extended = false;
   for (const [dr, dc] of DIRS) {
-    if (piece.king) {
+    if (effPiece.king) {
       // Klouzej k prvnímu obsazenému poli.
       let rr = curR + dr;
       let cc = curC + dc;
@@ -164,7 +175,7 @@ function dfsCapture(
         continue;
       }
       const overCell = at(work, rr, cc);
-      if (overCell === null || overCell.color === piece.color) {
+      if (overCell === null || overCell.color === effPiece.color) {
         continue;
       }
       if (alreadyCaptured(captured, rr, cc)) {
@@ -176,7 +187,7 @@ function dfsCapture(
       while (inBounds(lr, lc) && at(work, lr, lc) === null) {
         extended = true;
         captured.push([rr, cc]);
-        dfsCapture(work, orig, piece, startR, startC, lr, lc, captured, succ, manPromotesStop);
+        dfsCapture(work, orig, effPiece, startR, startC, lr, lc, captured, succ, manPromotesStop, midPromote);
         captured.pop();
         lr += dr;
         lc += dc;
@@ -191,7 +202,7 @@ function dfsCapture(
         continue;
       }
       const overCell = at(work, or, oc);
-      if (overCell === null || overCell.color === piece.color) {
+      if (overCell === null || overCell.color === effPiece.color) {
         continue;
       }
       if (alreadyCaptured(captured, or, oc)) {
@@ -202,16 +213,18 @@ function dfsCapture(
       }
       extended = true;
       captured.push([or, oc]);
-      dfsCapture(work, orig, piece, startR, startC, lr, lc, captured, succ, manPromotesStop);
+      dfsCapture(work, orig, effPiece, startR, startC, lr, lc, captured, succ, manPromotesStop, midPromote);
       captured.pop();
     }
   }
   if (!extended && captured.length > 0) {
-    succ.push(makeSuccessor(orig, startR, startC, curR, curC, captured, piece));
+    // effPiece: u ruské proměny je to už dáma → makeSuccessor postaví dámu
+    // i když finální pole není na dámské řadě.
+    succ.push(makeSuccessor(orig, startR, startC, curR, curC, captured, effPiece));
   }
 }
 
-function captureSuccessors(pos: RefPos, manPromotesStop: boolean): RefPos[] {
+function captureSuccessors(pos: RefPos, manPromotesStop: boolean, midPromote: boolean): RefPos[] {
   const succ: RefPos[] = [];
   const { grid, turn } = pos;
   for (let r = 0; r < N; r++) {
@@ -235,6 +248,7 @@ function captureSuccessors(pos: RefPos, manPromotesStop: boolean): RefPos[] {
         [],
         succ,
         manPromotesStop,
+        midPromote,
       );
     }
   }
@@ -284,24 +298,34 @@ function simpleSuccessors(pos: RefPos): RefPos[] {
 /**
  * Legální následnické pozice: povinné braní má přednost, jinak prosté tahy.
  * `manPromotesStop` (default `true` = pool) řídí, zda muž braním na dámské řadě
- * končí; `false` je jen měřicí režim (viz `dfsCapture`).
+ * končí; `false` je jen měřicí režim (viz `dfsCapture`). `midPromote` (default
+ * `false`) zapíná RUSKÉ chování: muž na dámské řadě se hned mění na dámu a bere
+ * dál (přebíjí `manPromotesStop`). Prostý tah je pro pool i ruskou stejný.
  */
-export function legalSuccessors(pos: RefPos, manPromotesStop = true): RefPos[] {
-  const captures = captureSuccessors(pos, manPromotesStop);
+export function legalSuccessors(pos: RefPos, manPromotesStop = true, midPromote = false): RefPos[] {
+  const captures = captureSuccessors(pos, manPromotesStop, midPromote);
   if (captures.length > 0) {
     return captures;
   }
   return simpleSuccessors(pos);
 }
 
-/** Perft nezávislé implementace: počet listů stromu legálních tahů v hloubce `depth`. */
-export function perftRef(pos: RefPos, depth: number, manPromotesStop = true): number {
+/**
+ * Perft nezávislé implementace: počet listů stromu legálních tahů v hloubce
+ * `depth`. `midPromote=true` počítá RUSKOU variantu (proměna uprostřed braní).
+ */
+export function perftRef(
+  pos: RefPos,
+  depth: number,
+  manPromotesStop = true,
+  midPromote = false,
+): number {
   if (depth === 0) {
     return 1;
   }
   let nodes = 0;
-  for (const next of legalSuccessors(pos, manPromotesStop)) {
-    nodes += perftRef(next, depth - 1, manPromotesStop);
+  for (const next of legalSuccessors(pos, manPromotesStop, midPromote)) {
+    nodes += perftRef(next, depth - 1, manPromotesStop, midPromote);
   }
   return nodes;
 }

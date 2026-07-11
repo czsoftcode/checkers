@@ -16,7 +16,7 @@ const BLACK_MAN: Cell = { color: 'black', kind: 'man' };
 const WHITE_MAN: Cell = { color: 'white', kind: 'man' };
 const BLACK_KING: Cell = { color: 'black', kind: 'king' };
 
-const FLYING: Ruleset = { manCaptureBackward: false, king: 'flying' };
+const FLYING: Ruleset = { manCaptureBackward: false, king: 'flying', promoteMidCapture: false };
 
 describe('applyMove – klouzavý prostý tah létavé dámy', () => {
   it('dlouhý prostý tah dámy projde a přesune kámen na vzdálené pole', () => {

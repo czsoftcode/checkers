@@ -1,0 +1,44 @@
+{
+  "id": 98,
+  "title": "Ruská: proměna uprostřed braní",
+  "goal": "Přidat promoteMidCapture do Ruleset + RUSSIAN_RULESET prod const; v generátoru braní: muž, který během skokové sekvence dopadne na proměnnou řadu, se HNED stává létavou dámou a pokračuje v braní letmo (přechod z krok-2 cesty na klouzavou uprostřed sekvence, přepočítat legální pokračování z nové role); apply.ts proměnu časuje zrcadlově. Interaguje s tureckým úderem z fáze 95 (brané kameny blokují do konce sekvence). Brána: ruská perft proti zafixovanému ruskému zdroji z fáze 96 do PLNÉ hloubky (uzavírá otázku hranice divergence pool<->ruská z fáze 96) + golden testy mid-capture promotion; americká i pool beze změny čísel. Nezávislý sub-agent review před reportem (stejně riziková jako 95). Řez z todo 58 (fáze C); 58 zůstává otevřené (česká priorita + pool prod config).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ruleset promoteMidCapture + RUSSIAN_RULESET",
+      "status": "done",
+      "detail": "Přidat promoteMidCapture: boolean do Ruleset; RUSSIAN_RULESET (manCaptureBackward:true, king:'flying', promoteMidCapture:true) prod const + export. AMERICAN i pool mají false."
+    },
+    {
+      "title": "Generátor: ruský muž (turecký úder + promoce)",
+      "status": "done",
+      "detail": "Nová extendRussianManJumps (staré extendJumps/extendFlyingKingJumps NEDOTČENY); routing v jumpMovesFrom: man + promoteMidCapture -> sem. Krok-2 braní muže (captureDirs, obousměr) s keep-as-blocker (captures membership, nenulovat). Na dopadu na proměnnou řadu: přechod na extendFlyingKingJumps (piece jako king) pro zbytek, žádné další man-pokračování z toho pole; leaf/continuation delegovat tam (nevytvořit dvojitý list). Pool muž i americká na staré cestě."
+    },
+    {
+      "title": "apply.ts: ruský replay (deferred removal + promoce)",
+      "status": "done",
+      "detail": "Pro promoteMidCapture man: odložené mazání braných (celá sekvence), validace segmentů zprvu krok-2 (jumpedSquareBetween), po dopadu na proměnnou řadu přepnout na klouzavou (raySquares) a označit promoted; finální kámen = DÁMA podle toho, zda muž během sekvence šlápl na proměnnou řadu (NE z finálního pole). Krátká/pool/americká cesta beze změny."
+    },
+    {
+      "title": "Golden testy mid-capture (obě strany)",
+      "status": "done",
+      "detail": "Ručně postavené pozice: muž promuje uprostřed a bere letmo dál; i případ promuje a končí. Ověřit legalMoves(pos, russian) -> applyMove(pos, move, russian) -> deska: brané pryč, na cíli DÁMA i když cíl NENÍ na proměnné řadě. Zub: rozbití přechodu -> test padne."
+    },
+    {
+      "title": "Perft ruská: otevírací + hloubková brána",
+      "status": "done",
+      "detail": "Ruská otevírací perft proti zafixovanému ruskému zdroji z fáze 96 (mašinérie) a do PLNÉ hloubky (uzavírá divergence pool<->ruská z 96). Crafted promo pozice cross-check druhou implementací (rozšířenou o mid-capture) nebo ručními počty. Americká i pool perft beze změny čísel."
+    },
+    {
+      "title": "Nezávislý sub-agent review",
+      "status": "done",
+      "detail": "Čerstvý kontext na přechod muž->dáma uprostřed rekurze, konzistenci turecký úder generátor<->apply, dvojitý-list riziko, promoci NE z finálního pole, hrany (promuje a nemůže dál / promuje a musí dál). CLAUDE.md."
+    }
+  ],
+  "startedAt": "2026-07-11T17:38:16.323Z",
+  "completedAt": "2026-07-11T18:11:13.171Z",
+  "autoCommit": {
+    "preSha": "cd45ec677e46ec89d102df6e2a0b13ef1fb0c400",
+    "subject": "Phase 98: Ruská: proměna uprostřed braní"
+  }
+}

@@ -24,7 +24,7 @@ const WHITE_MAN: Cell = { color: 'white', kind: 'man' };
 const BLACK_KING: Cell = { color: 'black', kind: 'king' };
 
 /** Létavá varianta (ruská/česká/pool) – jen dosah dámy, braní muže neřeší. */
-const FLYING: Ruleset = { manCaptureBackward: false, king: 'flying' };
+const FLYING: Ruleset = { manCaptureBackward: false, king: 'flying', promoteMidCapture: false };
 
 describe('simpleMovesFrom – létavá dáma (klouzání)', () => {
   it('na prázdné desce klouže po všech 4 diagonálách až k okraji', () => {

@@ -19,6 +19,15 @@ export interface Ruleset {
    * (ruská, česká, pool). Braní létavé dámy je zatím MIMO řez (fáze B2).
    */
   readonly king: 'short' | 'flying';
+  /**
+   * Proměna UPROSTŘED braní: muž, který během skokové sekvence DOPADNE na
+   * proměnnou (poslední) řadu, se v tom okamžiku stává létavou dámou a MUSÍ,
+   * může-li, pokračovat v braní letmo (ruská dáma). `false` = muž braním na
+   * proměnné řadě KONČÍ (americká, pool). Vyžaduje `king: 'flying'`, jinak
+   * by po proměně neměl kam klouzat – kombinace `promoteMidCapture` bez
+   * létavé dámy nemá v této vlně variant smysl a generátor ji nepoužívá.
+   */
+  readonly promoteMidCapture: boolean;
 }
 
 /**
@@ -29,6 +38,7 @@ export interface Ruleset {
 export const AMERICAN_RULESET: Ruleset = {
   manCaptureBackward: false,
   king: 'short',
+  promoteMidCapture: false,
 };
 
 /**
@@ -43,4 +53,19 @@ export const AMERICAN_RULESET: Ruleset = {
 export const POOL_RULESET: Ruleset = {
   manCaptureBackward: true,
   king: 'flying',
+  promoteMidCapture: false,
+};
+
+/**
+ * Ruská dáma (Russian draughts, „шашки"): jako pool (muž bere vpřed i VZAD,
+ * dáma LÉTAVÁ, turecký úder), ale s PROMĚNOU UPROSTŘED BRANÍ – muž, který
+ * během skokové sekvence dopadne na proměnnou řadu, se HNED stává létavou
+ * dámou a pokračuje v braní letmo. Tím jediným polem (`promoteMidCapture`)
+ * se ruská liší od pool; do proměny (hloubka < 7 z otevírací pozice) jsou
+ * stromy tahů pool a ruské PROKAZATELNĚ shodné (viz perft-russian.test.ts).
+ */
+export const RUSSIAN_RULESET: Ruleset = {
+  manCaptureBackward: true,
+  king: 'flying',
+  promoteMidCapture: true,
 };

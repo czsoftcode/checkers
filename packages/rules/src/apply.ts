@@ -13,8 +13,15 @@ import type { Cell, Move, Position, Square } from './types.js';
 /**
  * Aplikuje tah a vrátí NOVOU pozici (vstup se nemutuje): kámen se posune na
  * konec `path`, brané kameny zmizí, na tah jde soupeř. Muž končící na zadní
- * řadě soupeře se stává dámou; tah, který proměnu způsobil, se aplikuje
- * celý jako tah muže (proměna tah ukončuje – hlídá už generátor).
+ * řadě soupeře se stává dámou; u americké/pool proměna tah ukončuje (hlídá
+ * generátor) a aplikuje se celý jako tah muže.
+ *
+ * RUSKÁ proměna uprostřed braní (`ruleset.promoteMidCapture`): muž, který
+ * během skokové sekvence DOPADNE na proměnnou řadu, se od té chvíle chová
+ * jako létavá dáma (zbývající segmenty se validují klouzavě) a finální kámen
+ * je DÁMA i když sekvence skončí jinde než na proměnné řadě. Braní se přitom
+ * odkládají (turecký úder) po celou souvislou sekvenci. Generátor a apply
+ * MUSÍ sdílet identické pravidlo přechodu (viz `extendRussianManJumps`).
  *
  * Validuje se STRUKTURA tahu, při porušení RangeError (žádná tichá korupce):
  * na `from` kámen strany na tahu, geometrie kroků (prostý tah krátké figury =
@@ -35,10 +42,13 @@ import type { Cell, Move, Position, Square } from './types.js';
  * z právě vygenerovaného seznamu. Vědomé rozhodnutí z diskuse fáze.
  *
  * DŮSLEDEK: strukturálně korektní nelegální tah projde a poškodí partii
- * pravidlově (ne datově) – např. „pokračování po proměně" {from: 21,
- * path: [30, 23], captures: [25, 26]} vyrobí na 23 MUŽE (proměna se
- * vyhodnocuje z finálního pole). Každý tah zvenčí MUSÍ projít bránou
- * členství v `legalMoves`; applyMove sám korupci pravidel nezastaví.
+ * pravidlově (ne datově) – např. u `promoteMidCapture=false` (americká, pool)
+ * „pokračování po proměně" {from: 21, path: [30, 23], captures: [25, 26]}
+ * vyrobí na 23 MUŽE (proměna se u těchto variant vyhodnocuje z finálního pole).
+ * POZOR: u ruské (`promoteMidCapture=true`) by TÝŽ tah udělal na 23 DÁMU –
+ * proměna se tam řídí průchodem proměnnou řadou, ne finálním polem. Každý tah
+ * zvenčí MUSÍ projít bránou členství v `legalMoves`; applyMove sám korupci
+ * pravidel nezastaví.
  */
 export function applyMove(
   position: Position,
@@ -72,9 +82,22 @@ export function applyMove(
   board[move.from - 1] = null;
 
   const flyingKing = fromCell.kind === 'king' && ruleset.king === 'flying';
+  // Ruský muž během braní: proměna UPROSTŘED sekvence. Zprvu validuje krok-2
+  // (jako pool muž), ale brané kameny drží jako blokery (turecký úder, odložené
+  // mazání) a po dopadu na proměnnou řadu přepne na klouzavou validaci a označí
+  // proměnu. Jen pro braní (`captures.length > 0`) – prostý tah muže proměnu
+  // řeší finálním polem jako dřív.
+  const russianManCapture =
+    fromCell.kind === 'man' && ruleset.promoteMidCapture && captures.length > 0;
+  // Muž během sekvence šlápl na proměnnou řadu → od té chvíle je DÁMA (klouže).
+  // Finální kámen se určuje z tohoto příznaku, NE z finálního pole (dáma může
+  // po proměně doskočit jinam než na proměnnou řadu).
+  let promotedMid = false;
   // Brané kameny létavé dámy (turecký úder): drží se na desce jako blokery
   // po celou dobu path a smažou se naráz až po dokončení sekvence. Krátká
   // dáma / muž maže průběžně ve smyčce jako dřív – tento seznam zůstane prázdný.
+  // Ruský muž (`russianManCapture`) sem odkládá VŠECHNA braní (i krok-2 před
+  // proměnou), aby držela jako blokery po celou souvislou tureckou sekvenci.
   const capturedSquares: Square[] = [];
   let current = move.from;
   for (let i = 0; i < path.length; i++) {
@@ -91,6 +114,9 @@ export function applyMove(
     if (landingCell !== null) {
       throw new RangeError(`Neplatný tah: pole dopadu ${String(landing)} je obsazené`);
     }
+    // Klouzavé (paprskové) braní: pravá létavá dáma, nebo ruský muž PO proměně
+    // uprostřed sekvence (od dopadu na proměnnou řadu se chová jako dáma).
+    const sliding = flyingKing || (russianManCapture && promotedMid);
     if (captures.length === 0) {
       if (flyingKing) {
         // Létavá dáma: dopad musí ležet na diagonále z `current` a všechna
@@ -114,7 +140,7 @@ export function applyMove(
           `Neplatný tah: ${String(landing)} nesousedí s ${String(current)} (teleport)`,
         );
       }
-    } else if (flyingKing) {
+    } else if (sliding) {
       // Létavá dáma – klouzavé braní (turecký úder). Segment current->landing
       // je paprsek diagonály, na němž smí ležet PRÁVĚ JEDEN obsazený kámen =
       // deklarovaný capture (soupeřův, v tomto tahu ještě nebraný). Ostatní
@@ -184,9 +210,26 @@ export function applyMove(
           `Neplatný tah: na braném poli ${String(expectedCapture)} stojí vlastní kámen`,
         );
       }
-      board[expectedCapture - 1] = null;
+      if (russianManCapture) {
+        // Odložené mazání: braný kámen drží jako bloker po celou tureckou
+        // sekvenci (i pro pozdější klouzavý segment po proměně). Smaže se
+        // naráz po smyčce, jako u létavé dámy.
+        capturedSquares.push(expectedCapture);
+      } else {
+        board[expectedCapture - 1] = null;
+      }
     }
     current = landing;
+    // Ruský muž: dopad na proměnnou řadu UPROSTŘED braní z něj dělá dámu –
+    // od DALŠÍHO segmentu se validuje klouzavě (`sliding`) a finální kámen
+    // bude dáma bez ohledu na to, kde sekvence skončí.
+    if (
+      russianManCapture &&
+      !promotedMid &&
+      squareToCoords(current).row === PROMOTION_ROW[fromCell.color]
+    ) {
+      promotedMid = true;
+    }
   }
 
   // Turecký úder: brané kameny létavé dámy se odeberou naráz až po dokončení
@@ -195,7 +238,12 @@ export function applyMove(
     board[captured - 1] = null;
   }
 
-  const promotes = fromCell.kind === 'man' && squareToCoords(current).row === PROMOTION_ROW[fromCell.color];
+  // Proměna: buď muž SKONČIL na proměnné řadě (americká, pool, prostý tah),
+  // nebo ruský muž na ni šlápl UPROSTŘED braní (`promotedMid`) a doskočil
+  // klidně jinam. Proto NEstačí číst finální pole – u ruské se sleduje průchod.
+  const promotes =
+    fromCell.kind === 'man' &&
+    (promotedMid || squareToCoords(current).row === PROMOTION_ROW[fromCell.color]);
   board[current - 1] = promotes ? { color: fromCell.color, kind: 'king' } : fromCell;
 
   return { board, turn: position.turn === 'black' ? 'white' : 'black' };
