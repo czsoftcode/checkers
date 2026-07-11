@@ -23,7 +23,7 @@
  */
 
 import type { Color, GameResult, Position, Square } from '@checkers/rules';
-import { applyMove, initialPosition } from '@checkers/rules';
+import { applyMove, initialPosition, rulesetForVariant } from '@checkers/rules';
 
 import { createBoardView } from './board-view.js';
 import type { DropOutcome, RenderState } from './board-view.js';
@@ -177,6 +177,11 @@ export function createBoardController(
   // s výchozím `'black'` když chybí (zpětná kompatibilita). Řídí turn-checky,
   // detekci tahu enginu, orientaci desky i mapování výsledku na výhru/prohru.
   const humanColor: Color = game.humanColor ?? 'black';
+  // Ruleset VARIANTY partie – čte se Z HRY (`game.variant`), jediný zdroj. Řídí
+  // zvýrazňování legálních tahů (výběr kamene, dopady, dokončení řetězu) i
+  // rekonstrukci ballotu, aby UI počítalo tytéž tahy jako engine. Chybí-li varianta
+  // v DTO (HTTP cesta serveru bez varianty), spadne na 'american' = dnešní chování.
+  const ruleset = rulesetForVariant(game.variant ?? 'american');
   let selection: Selection | null = null;
   // `true`, dokud běží nějaký request (POST tahu / GET poll / vzdání). Drží
   // single-flight i zámek proti klikání během odesílání tahu.
@@ -300,7 +305,7 @@ export function createBoardController(
 
   /** `true`, pokud `square` je jedním z aktuálně nabízených dalších dopadů. */
   function isTarget(square: Square): boolean {
-    return selection !== null && nextTargets(position, selection.from, selection.path).includes(square);
+    return selection !== null && nextTargets(position, selection.from, selection.path, ruleset).includes(square);
   }
 
   function isSelectedFrom(square: Square): boolean {
@@ -313,7 +318,7 @@ export function createBoardController(
       return;
     }
     const path = [...selection.path, square];
-    if (nextTargets(position, selection.from, path).length > 0) {
+    if (nextTargets(position, selection.from, path, ruleset).length > 0) {
       selection = { from: selection.from, path }; // ještě pokračuje (další dopad/větvení)
       renderStatic(); // kámen doskočí na tento dopad (bez animace), sebrané zmizí
       return;
@@ -708,7 +713,7 @@ export function createBoardController(
     if (moving === null) {
       return position;
     }
-    const captured = capturesForPrefix(position, sel.from, sel.path);
+    const captured = capturesForPrefix(position, sel.from, sel.path, ruleset);
     const landing = lastHopOf(sel);
     const board = position.board.slice();
     board[sel.from - 1] = null;
@@ -753,14 +758,14 @@ export function createBoardController(
         position,
         selected: selection.from,
         path: [],
-        targets: nextTargets(position, selection.from, []),
+        targets: nextTargets(position, selection.from, [], ruleset),
       };
     }
     return {
       position: effectivePosition(selection),
       selected: lastHopOf(selection),
       path: [selection.from, ...selection.path.slice(0, -1)],
-      targets: nextTargets(position, selection.from, selection.path),
+      targets: nextTargets(position, selection.from, selection.path, ruleset),
     };
   }
 
@@ -826,12 +831,12 @@ export function createBoardController(
     const positions: Position[] = [];
     let pos = initialPosition();
     for (const move of moves) {
-      const resolved = resolveMove(pos, move.from, move.path);
+      const resolved = resolveMove(pos, move.from, move.path, ruleset);
       if (resolved === null) {
         console.error('Ballot tah nejde odehrát z výchozí pozice, animace zahájení se přeskočí:', move);
         return null;
       }
-      pos = applyMove(pos, resolved);
+      pos = applyMove(pos, resolved, ruleset);
       positions.push(pos);
     }
     return positions;
@@ -919,10 +924,10 @@ export function createBoardController(
     }
     const from = selection.from;
     const prefix = selection.path;
-    if (nextTargets(position, from, prefix).includes(to)) {
+    if (nextTargets(position, from, prefix, ruleset).includes(to)) {
       const newPath = [...prefix, to];
-      const captured = capturedOnHop(position, from, prefix, to);
-      if (nextTargets(position, from, newPath).length > 0) {
+      const captured = capturedOnHop(position, from, prefix, to, ruleset);
+      if (nextTargets(position, from, newPath, ruleset).length > 0) {
         // Meziskok: kámen ZŮSTANE na `to` a čeká na další skok. Výběr se posune,
         // zvýraznění se srovná; kámen na dopad usadí deska (`hop` níže). Další
         // překreslení (poll/tap) odvodí totéž zobrazení z výběru (effectivePosition),
@@ -932,7 +937,7 @@ export function createBoardController(
         return { kind: 'hop', landing: to, captured };
       }
       // Tento dopad tah dokončí.
-      const move = resolveMove(position, from, newPath);
+      const move = resolveMove(position, from, newPath, ruleset);
       if (move === null) {
         return { kind: 'return' }; // obrana: nemělo by nastat (dopad bez pokračování = hotový tah)
       }
@@ -940,7 +945,7 @@ export function createBoardController(
       return { kind: 'commit', landing: to, captured };
     }
     // `to` není bezprostřední dopad → zkus celý řetěz končící v `to` (souvislé tažení).
-    const chain = resolveChainTo(position, from, prefix, to);
+    const chain = resolveChainTo(position, from, prefix, to, ruleset);
     if (chain !== null) {
       submitMove(chain.from, chain.path, false);
       return { kind: 'commit', landing: to, captured: chain.captures.slice(prefix.length) };

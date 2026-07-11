@@ -9,13 +9,19 @@
  * Vícenásobný skok se doklikává po dopadech: model drží **předponu cesty**
  * (naklikaná pole dopadu, bez výchozího pole) a ptá se `rules`, které tahy touto
  * předponou začínají. Nikdy sám nepočítá „už není kam skočit“ – to plyne z toho,
- * že v americké dámě je každý skokový řetězec maximální, takže se předpona buď
- * rovná `path` právě jednoho tahu (hotovo), nebo z ní vede aspoň jeden další
- * dopad.
+ * že v každé podporované variantě je skokový řetězec z `legalMoves` MAXIMÁLNÍ,
+ * takže se předpona buď rovná `path` právě jednoho tahu (hotovo), nebo z ní vede
+ * aspoň jeden další dopad. Platí i pro létavou dámu (pool/ruská/česká) – paprskové
+ * braní vrací rules taky jako úplné cesty.
+ *
+ * Ruleset varianty je VOLITELNÝ argument každé funkce (default {@link AMERICAN_RULESET}
+ * = dnešní chování). Controller ho odvodí z varianty HRY a předává ho sem, aby UI
+ * zvýrazňovalo tytéž tahy, jaké engine reálně počítá – jinak by se pro ne-americkou
+ * partii nabídly tahy jiné varianty.
  */
 
-import { legalMoves } from '@checkers/rules';
-import type { Cell, Move, Position, Square } from '@checkers/rules';
+import { AMERICAN_RULESET, legalMoves } from '@checkers/rules';
+import type { Cell, Move, Position, Ruleset, Square } from '@checkers/rules';
 
 /** Obsah pole `square` (1–32), nebo `null` mimo rozsah i pro prázdné pole. */
 function cellAt(position: Position, square: Square): Cell {
@@ -57,9 +63,14 @@ function pathStartsWith(path: readonly Square[], prefix: readonly Square[]): boo
  * kamene). Vrací prázdné pole, když z `from` po této předponě žádný legální tah
  * nepokračuje (včetně povinného braní jiným kamenem).
  */
-export function nextTargets(position: Position, from: Square, prefix: readonly Square[]): Square[] {
+export function nextTargets(
+  position: Position,
+  from: Square,
+  prefix: readonly Square[],
+  ruleset: Ruleset = AMERICAN_RULESET,
+): Square[] {
   const targets: Square[] = [];
-  for (const move of legalMoves(position)) {
+  for (const move of legalMoves(position, ruleset)) {
     if (move.from !== from || !pathStartsWith(move.path, prefix)) {
       continue;
     }
@@ -78,8 +89,13 @@ export function nextTargets(position: Position, from: Square, prefix: readonly S
  * ničemu legálnímu. Kontroler dokončení pozná podle prázdného `nextTargets`;
  * tato funkce pak vydá konkrétní `Move` k provedení.
  */
-export function resolveMove(position: Position, from: Square, prefix: readonly Square[]): Move | null {
-  for (const move of legalMoves(position)) {
+export function resolveMove(
+  position: Position,
+  from: Square,
+  prefix: readonly Square[],
+  ruleset: Ruleset = AMERICAN_RULESET,
+): Move | null {
+  for (const move of legalMoves(position, ruleset)) {
     if (move.from !== from || move.path.length !== prefix.length) {
       continue;
     }
@@ -95,8 +111,12 @@ export function resolveMove(position: Position, from: Square, prefix: readonly S
  * Tenká obálka nad {@link nextTargets} – zachována pro výběr kamene bez
  * rozpracované sekvence.
  */
-export function targetsFor(position: Position, square: Square): Square[] {
-  return nextTargets(position, square, []);
+export function targetsFor(
+  position: Position,
+  square: Square,
+  ruleset: Ruleset = AMERICAN_RULESET,
+): Square[] {
+  return nextTargets(position, square, [], ruleset);
 }
 
 /**
@@ -105,9 +125,13 @@ export function targetsFor(position: Position, square: Square): Square[] {
  * řetězu (ne mezidopady). Slouží zvýraznění cílů při TAŽENÍ, kdy hráč pouští kámen rovnou
  * na koncové pole (na rozdíl od klikání hop-po-hopu, které bere {@link nextTargets}).
  */
-export function endpointsFor(position: Position, from: Square): Square[] {
+export function endpointsFor(
+  position: Position,
+  from: Square,
+  ruleset: Ruleset = AMERICAN_RULESET,
+): Square[] {
   const ends: Square[] = [];
-  for (const move of legalMoves(position)) {
+  for (const move of legalMoves(position, ruleset)) {
     if (move.from !== from) {
       continue;
     }
@@ -136,9 +160,10 @@ export function resolveChainTo(
   from: Square,
   prefix: readonly Square[],
   endpoint: Square,
+  ruleset: Ruleset = AMERICAN_RULESET,
 ): Move | null {
   let found: Move | null = null;
-  for (const move of legalMoves(position)) {
+  for (const move of legalMoves(position, ruleset)) {
     if (move.from !== from || move.path.length <= prefix.length) {
       continue;
     }
@@ -171,9 +196,10 @@ export function capturedOnHop(
   from: Square,
   prefix: readonly Square[],
   to: Square,
+  ruleset: Ruleset = AMERICAN_RULESET,
 ): Square[] {
   const path = [...prefix, to];
-  for (const move of legalMoves(position)) {
+  for (const move of legalMoves(position, ruleset)) {
     if (move.from !== from || !pathStartsWith(move.path, path)) {
       continue;
     }
@@ -198,8 +224,9 @@ export function capturesForPrefix(
   position: Position,
   from: Square,
   prefix: readonly Square[],
+  ruleset: Ruleset = AMERICAN_RULESET,
 ): Square[] {
-  for (const move of legalMoves(position)) {
+  for (const move of legalMoves(position, ruleset)) {
     if (move.from !== from || !pathStartsWith(move.path, prefix)) {
       continue;
     }

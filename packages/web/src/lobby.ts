@@ -23,6 +23,9 @@
  */
 
 import { t, LOCALES, isLocale, getLocale, setLocale, saveLocale } from './i18n.js';
+import type { MessageKey } from './i18n.js';
+import { VARIANT_IDS, isVariantId } from '@checkers/rules';
+import type { VariantId } from '@checkers/rules';
 import { createRoomClient } from './room-client.js';
 import type {
   ChallengeAcceptedInfo,
@@ -42,6 +45,75 @@ import introMobileUrl from './assets/intro_mobile.webp?url';
 
 /** Klíč v LocalStorage pro zapamatovanou přezdívku (přežije reload, jako úroveň). */
 const NICK_STORAGE_KEY = 'checkers.roomNick';
+
+/** Klíč v LocalStorage pro zapamatovanou volbu varianty sólo hry (fáze 102). */
+const VARIANT_STORAGE_KEY = 'checkers.variant';
+
+/**
+ * Zobrazovací i18n klíče názvů variant pro picker. `Record<VariantId, MessageKey>`
+ * vynutí klíč pro KAŽDÉ id – přidání varianty do `VariantId` bez klíče sem shodí
+ * typecheck (jediný zdroj id je registr `@checkers/rules`). Vzor jako `LEVEL_LABEL_KEYS`.
+ */
+const VARIANT_LABEL_KEYS: Record<VariantId, MessageKey> = {
+  american: 'variant.american',
+  pool: 'variant.pool',
+  russian: 'variant.russian',
+  czech: 'variant.czech',
+};
+
+/**
+ * Načte zapamatovanou variantu z LocalStorage. Výchozí `'american'` (vize projektu),
+ * když nic uloženo není, hodnota není známé id (`isVariantId` ji odmítne – stará/cizí),
+ * nebo úložiště není dostupné (privátní režim). Slepě nedůvěřuje obsahu úložiště, ať se
+ * do hry nedostane neznámá varianta, na které by `rulesetForVariant` spadl.
+ */
+function loadSavedVariant(): VariantId {
+  try {
+    const raw = localStorage.getItem(VARIANT_STORAGE_KEY);
+    if (raw !== null && isVariantId(raw)) {
+      return raw;
+    }
+  } catch {
+    // LocalStorage nedostupný → tichý fallback na výchozí variantu.
+  }
+  return 'american';
+}
+
+/** Uloží zvolenou variantu. Selhání zápisu (kvóta/privátní režim) je neškodné → spolknout. */
+function saveVariant(variant: VariantId): void {
+  try {
+    localStorage.setItem(VARIANT_STORAGE_KEY, variant);
+  } catch {
+    // Nejde uložit → volba se příště nepředvyplní, appka běží dál.
+  }
+}
+
+/**
+ * Postaví picker varianty pro sólo hru (řízený registrem `VARIANT_IDS`): `<select>`
+ * s naposledy zvolenou variantou předvybranou (LocalStorage). Vrací prvek k vložení
+ * a `read()`, které z aktuálního výběru vydá `VariantId` (guard je pojistka proti
+ * cizímu zásahu do DOM). Sdílené místností i itch vstupem – jeden zdroj pravdy
+ * picker → hra. Popisky přes `t()`, žádný natvrdo zadaný řetězec.
+ */
+function buildVariantPicker(): { element: HTMLSelectElement; read: () => VariantId } {
+  const select = document.createElement('select');
+  select.className = 'lobby-variant';
+  select.setAttribute('aria-label', t('lobby.variantAria'));
+  const saved = loadSavedVariant();
+  for (const id of VARIANT_IDS) {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = t(VARIANT_LABEL_KEYS[id]);
+    option.selected = id === saved;
+    select.append(option);
+  }
+  return {
+    element: select,
+    // Hodnoty `<option>` pocházejí z `VARIANT_IDS`; guard zúží `string` na `VariantId`
+    // a odchytí cizí zásah do DOM (spadne na 'american' místo neznámé varianty).
+    read: () => (isVariantId(select.value) ? select.value : 'american'),
+  };
+}
 
 /**
  * Max délka přezdívky v UI. Musí sedět na serverový `NICK_MAX_LENGTH` (server je
@@ -115,8 +187,13 @@ export interface GameLink {
 }
 
 export interface LobbyOptions {
-  /** Přepnutí na sólo hru proti počítači (dnešní deska). Řídí ho caller (`main.ts`). */
-  readonly onPlayVsComputer: () => void;
+  /**
+   * Přepnutí na sólo hru proti počítači (dnešní deska) ve ZVOLENÉ variantě. Variantu
+   * bere z pickeru v lobby (fáze 102) a předává ji caller (`main.ts`) do `showSolo`,
+   * který podle ní založí klienta i skořápku. Jediný zdroj pravdy o variantě partie
+   * = tenhle picker (LocalStorage je jen jeho odraz).
+   */
+  readonly onPlayVsComputer: (variant: VariantId) => void;
   /**
    * Přijata výzva → přechod do PvP hry se svým gameId a barvou. Řídí ho caller
    * (`main.ts`), který lobby při přechodu NEzavírá (room WS musí žít – fáze 70).
@@ -312,13 +389,18 @@ export function createLobby(options: LobbyOptions): Lobby {
   reconnectBtn.textContent = t('lobby.reconnectBtn');
   disconnected.append(disconnectedMsg, reconnectBtn);
 
-  // Sólo cesta (proti počítači) – nezávislá na místnosti, bez přezdívky.
+  // Sólo cesta (proti počítači) – nezávislá na místnosti, bez přezdívky. Vedle
+  // tlačítka picker varianty (fáze 102): zvolená varianta se předá do `onPlayVsComputer`.
+  const soloVariant = buildVariantPicker();
   const soloBtn = document.createElement('button');
   soloBtn.type = 'button';
   soloBtn.className = 'lobby-solo-btn';
   soloBtn.textContent = t('lobby.soloBtn');
+  const soloRow = document.createElement('div');
+  soloRow.className = 'lobby-solo';
+  soloRow.append(soloVariant.element, soloBtn);
 
-  card.append(header, form, message, room, disconnected, soloBtn);
+  card.append(header, form, message, room, disconnected, soloRow);
   element.append(card);
 
   // Přezdívka posledního úspěšného/pokusného vstupu – pro „Připojit znovu".
@@ -640,7 +722,11 @@ export function createLobby(options: LobbyOptions): Lobby {
     room_client.join(lastNick);
   });
   soloBtn.addEventListener('click', () => {
-    options.onPlayVsComputer();
+    // Jediný zdroj varianty = picker; LocalStorage je jen jeho odraz (ulož TEĎ, ať
+    // se příště předvyplní), a hodnota jde rovnou do hry přes onPlayVsComputer.
+    const variant = soloVariant.read();
+    saveVariant(variant);
+    options.onPlayVsComputer(variant);
   });
 
   setView('entry');
@@ -731,13 +817,18 @@ function createItchEntry(options: LobbyOptions): Lobby {
   humanBtn.className = 'lobby-human-btn';
   humanBtn.textContent = t('itch.humanBtn');
 
-  // Sólo cesta (proti počítači) – shodná s místností: řídí ji caller přes `onPlayVsComputer`.
+  // Sólo cesta (proti počítači) – shodná s místností: picker varianty + tlačítko,
+  // řídí ji caller přes `onPlayVsComputer(variant)`.
+  const soloVariant = buildVariantPicker();
   const soloBtn = document.createElement('button');
   soloBtn.type = 'button';
   soloBtn.className = 'lobby-solo-btn';
   soloBtn.textContent = t('lobby.soloBtn');
+  const soloRow = document.createElement('div');
+  soloRow.className = 'lobby-solo';
+  soloRow.append(soloVariant.element, soloBtn);
 
-  card.append(header, humanBtn, soloBtn);
+  card.append(header, humanBtn, soloRow);
   element.append(card);
 
   // Modal (skrytý). Znovupoužívá CSP-bezpečné třídy `.modal-overlay`/`.modal-dialog`
@@ -805,7 +896,9 @@ function createItchEntry(options: LobbyOptions): Lobby {
     }
   });
   soloBtn.addEventListener('click', () => {
-    options.onPlayVsComputer();
+    const variant = soloVariant.read();
+    saveVariant(variant);
+    options.onPlayVsComputer(variant);
   });
 
   return {

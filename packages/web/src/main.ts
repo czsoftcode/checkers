@@ -21,7 +21,8 @@ import { createLobby } from './lobby.js';
 import { createGameScreen } from './game-screen.js';
 import { createLocalClient } from './local-client.js';
 import { createWebWorkerEngineWorker } from './local/engine-worker.js';
-import type { ServerClient } from './server-client.js';
+import type { EngineWorker } from './local/engine-worker.js';
+import type { VariantId } from '@checkers/rules';
 import type { GameLink, Lobby } from './lobby.js';
 import type { ChallengeAcceptedInfo } from './room-client.js';
 import './analytics.js';
@@ -43,18 +44,21 @@ if (!(rootEl instanceof HTMLElement)) {
 const root: HTMLElement = rootEl;
 
 // Sólo deska (hra proti AI) jede CELÁ v prohlížeči přes LocalClient + reálný Web
-// Worker (fáze 87/88): server AI nepočítá. JEDNA instance workeru i klienta na
-// život stránky (drží se, NE per-mount+dispose), ale vytvořená LÍNĚ až při prvním
-// vstupu do sóla: hráč, který jde jen do lobby nebo do PvP (worker nepoužívají),
-// tak zbytečně nespouští vlákno enginu ani nenačítá jeho bundle, a kdyby konstrukce
-// workeru selhala, neshodí to boot celé appky (lobby/PvP) na prázdnou stránku, jen
-// sólo desku. PvP se tohohle klienta NEDOTÝKÁ: jede přes game-screen/game-socket/
-// room-client (autoritativní server). `createHttpClient` tím zůstává z webu
-// nevolané (jeho odstranění je mimo řez, #52).
-let soloClientInstance: ServerClient | null = null;
-function soloClient(): ServerClient {
-  soloClientInstance ??= createLocalClient(createWebWorkerEngineWorker());
-  return soloClientInstance;
+// Worker (fáze 87/88): server AI nepočítá. WORKER je JEDNA instance na život stránky
+// (drží se, NE per-mount+dispose), vytvořená LÍNĚ až při prvním vstupu do sóla: hráč,
+// který jde jen do lobby nebo do PvP (worker nepoužívají), tak zbytečně nespouští
+// vlákno enginu ani nenačítá jeho bundle, a kdyby konstrukce workeru selhala, neshodí
+// to boot celé appky (lobby/PvP), jen sólo desku. PvP se tohohle NEDOTÝKÁ (jede přes
+// game-screen/room-client). `createHttpClient` tím zůstává z webu nevolané (#52).
+//
+// KLIENT je naopak per-vstup do sóla: `LocalClient` je pevně vázaný na VARIANTU
+// zvolenou v lobby (fáze 102), takže se pro každou variantu zakládá čerstvý (worker
+// se sdílí). „Přepnutí varianty zahodí partii a začne novou" tím plyne z výměny
+// klienta – žádné přepínání varianty za běhu.
+let soloWorkerInstance: EngineWorker | null = null;
+function soloWorker(): EngineWorker {
+  soloWorkerInstance ??= createWebWorkerEngineWorker();
+  return soloWorkerInstance;
 }
 
 // Trvalé lobby v rámci multiplayer toku. Přežívá přechod do PvP hry (jen se odpojí
@@ -95,11 +99,17 @@ function showLobby(): void {
   root.replaceChildren(mounted.element);
 }
 
-/** Namontuje sólo desku proti počítači. Odchod z místnosti → zavřít room WS. */
-function showSolo(): void {
+/**
+ * Namontuje sólo desku proti počítači ve zvolené VARIANTĚ (z lobby). Odchod
+ * z místnosti → zavřít room WS. Klient se zakládá čerstvý pro tuhle variantu
+ * (worker sdílený), skořápka variantu dostane kvůli filtru úrovní (Mistrovství
+ * jen americké).
+ */
+function showSolo(variant: VariantId): void {
   clearTransient();
   disposeLobby(); // sólo je mimo místnost → zavři room WS
-  const shell = createAppShell(soloClient(), { onExit: showLobby });
+  const client = createLocalClient(soloWorker(), { variant });
+  const shell = createAppShell(client, { onExit: showLobby, variant });
   transientDispose = () => {
     shell.dispose();
   };

@@ -22,6 +22,7 @@ import type {
 import { preloadImages } from './image-preload.js';
 import { GAME_LEVELS } from './server-client.js';
 import type { GameDto, GameLevel, ServerClient } from './server-client.js';
+import type { VariantId } from '@checkers/rules';
 import { createSoundPlayer } from './sound.js';
 import type { SoundPlayer } from './sound.js';
 import blackStoneUrl from './assets/black.webp?url';
@@ -152,6 +153,15 @@ export interface AppShellOptions {
    * nevyvolá → fallback drží). Mimo test se nezadává.
    */
   readonly createStoneImage?: (() => HTMLImageElement) | null;
+  /**
+   * Varianta partií této skořápky (přišla z lobby přes `main.ts`). Řídí DVĚ věci:
+   * (a) partie se založí v této variantě – klient (`LocalClient`) je jí pevně vázaný,
+   * takže se do `createGame` nepředává; (b) filtr úrovní – Mistrovství (championship)
+   * je JEN pro americkou (vize projektu), takže pro ne-americkou variantu se z výběru
+   * úrovní vůbec nenabídne a uložená úroveň championship spadne na Profesionála.
+   * Chybí → 'american' (výchozí, dnešní chování: všechny úrovně včetně Mistrovství).
+   */
+  readonly variant?: VariantId;
 }
 
 /** Ovládaná aplikace. `dispose` uklidí i běžící controller (polling). */
@@ -167,6 +177,14 @@ export interface AppShell {
  */
 export function createAppShell(client: ServerClient, options: AppShellOptions = {}): AppShell {
   const makeController = options.createController ?? createBoardController;
+  // Varianta partie (z lobby). Mistrovství je JEN americké → pro ostatní varianty
+  // ho z nabídky úrovní vyřízneme. Klient je variantě vázaný (main.ts), takže sem
+  // stačí kvůli filtru úrovní; do createGame se varianta nepředává.
+  const variant: VariantId = options.variant ?? 'american';
+  // Úrovně nabídnuté v této variantě: americká má všechny (včetně championship),
+  // ostatní varianty championship vynechají (jediný zdroj = GAME_LEVELS, jen filtr).
+  const availableLevels: readonly GameLevel[] =
+    variant === 'american' ? GAME_LEVELS : GAME_LEVELS.filter((l) => l !== 'championship');
   // Sdílený přehrávač: jedna instance na celou appku, předávaná každému controlleru.
   // Odemyká se na gestu (viz `unlockAudio`), takže odemčení přežije i výměnu partie
   // za „Nová hra" – kdyby si player vytvářel každý controller sám, gesto by odemklo
@@ -210,7 +228,7 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // Pořadí = pořadí v `GAME_LEVELS` (Profesionál → Mistrovství → Pokročilý →
   // Začátečník → Výuka); první je výchozí. Jediný zdroj hodnot i pořadí, žádná
   // druhá kopie seznamu.
-  for (const value of GAME_LEVELS) {
+  for (const value of availableLevels) {
     const opt = document.createElement('option');
     opt.value = value;
     opt.textContent = t(LEVEL_LABEL_KEYS[value]);
@@ -218,9 +236,12 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   }
   // Předvyplň naposledy zvolenou úrovní z LocalStorage (přežije reload). Musí být
   // PŘED prvním `startNewGame()` (na konci funkce), který hodnotu selectu čte.
-  // Neplatná/chybějící → necháme výchozí (první <option> = Profesionál).
+  // Neplatná/chybějící → necháme výchozí (první <option> = Profesionál). Uloženou
+  // úroveň dosadíme JEN když je v této variantě dostupná: ne-americká + uložené
+  // championship (které tu není mezi <option>) tak spadne na Profesionála (fallback
+  // z discuss), místo aby `value` zůstalo prázdné a do createGame šla neplatná úroveň.
   const savedLevel = loadSavedLevel();
-  if (savedLevel !== null) {
+  if (savedLevel !== null && availableLevels.includes(savedLevel)) {
     levelSelect.value = savedLevel;
   }
 
@@ -674,7 +695,16 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
     // nezmění. `value` je vždy jedna z `<option>` (uživatel nemůže vložit jiné);
     // přetypování na GameLevel je tím kryté, server navíc neznámou úroveň odmítne.
     const level = levelSelect.value as GameLevel;
-    saveLevel(level); // zapamatuj volbu na příští reload (přežije zavření stránky)
+    // Preferenci úrovně (`checkers.level`) ukládá JEN americká varianta. Klíč je
+    // sdílený mezi variantami a Mistrovství je americké: kdyby ho přepsala ne-americká
+    // partie (kde championship není v nabídce a `level` spadl na professional), tiše by
+    // smázla uloženou volbu Mistrovství z americké cesty. Ne-americká varianta tak čte
+    // americkou preferenci jako rozumný default, ale nikdy ji nekontaminuje (americká
+    // cesta beze změny). Trade-off: ne-americká úroveň se mezi spuštěními nepamatuje –
+    // vědomé, není to požadavek fáze (úroveň per-varianta by byl vlastní klíč navíc).
+    if (variant === 'american') {
+      saveLevel(level); // zapamatuj volbu na příští reload (přežije zavření stránky)
+    }
     // Barva a případný fixní ballot pro TUHLE partii:
     // - Mistrovství: barva je FIXNÍ podle kola (NE z alternace nextColor). 2. kolo =
     //   owed přes `matchBallotIndex` → přehraj stejné zahájení, člověk bílý. 1. kolo

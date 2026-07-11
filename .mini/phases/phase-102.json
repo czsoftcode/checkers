@@ -1,0 +1,54 @@
+{
+  "id": 102,
+  "title": "AIvP: výběr varianty v lobby",
+  "goal": "Přidat do lobby (AI větev) picker čtyř variant řízený registrem, preference do LocalStorage (default americká); protáhnout zvolenou variantu do local-client + worker-protokolu (pole variant) + selection/controller (legalMoves/applyMove dané varianty) + computeAiMove + lokální /hint; Mistrovství dostupné JEN pro americkou (ovlivnění pickeru úrovní); přepnutí varianty zahodí rozehranou partii a začne novou. i18n: názvy variant a všechny nové texty přes i18n (cs/en), žádné natvrdo řetězce. Brána: v lobby zvolím pool/ruskou/českou a odehraju kompletní partii proti AI CELÉ v prohlížeči (bez serveru); americká cesta beze změny; i18n testy zelené. Uzavírá WEB část todo 56 (server dto zůstává -> D3). Řez z todo 59 (fáze D); 56 i 59 zůstávají otevřené. Největší UI fáze vlny - v discuss zvážit rozdělení.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Worker + local-client nesou variantu",
+      "status": "done",
+      "detail": "Web worker-protokol (local/engine-worker-protocol.ts) + compute-move.ts pole variant (default american, zpětně kompat.); local-client createGame nese variantu -> computeAiMove(variant) + legalMoves/applyMove s ruleset varianty; lokální /hint taky s variantou. Test: pool AI partie projde programově přes local-client (legální tahy + AI odpoví)."
+    },
+    {
+      "title": "Controller/selection čtou variantu z hry",
+      "status": "done",
+      "detail": "controller.ts + selection.ts používají ruleset varianty AKTUÁLNÍ hry (legalMoves/applyMove/zvýraznění) - variantu čtou z herního stavu, ne z odděleného propu. Test: controller s ne-americkou hrou zvýrazní tahy té varianty."
+    },
+    {
+      "title": "app-shell: variantu partie + filtr Mistrovství",
+      "status": "done",
+      "detail": "createAppShell(variant) (+ main.ts showSolo(variant) glue); partie se založí v té variantě; level select skryje championship, když varianta != american; uložená úroveň championship + ne-americká -> fallback professional. Test: app-shell ne-americká nemá championship; hra se založí s variantou."
+    },
+    {
+      "title": "Lobby: picker varianty + LocalStorage",
+      "status": "done",
+      "detail": "V lobby (u 'Hrát proti počítači') select čtyř variant řízený registrem; preference do LocalStorage (nový klíč, default american); onPlayVsComputer předá zvolenou variantu. Jediný zdroj = picker -> hra. Test: picker persistuje, předává správnou variantu."
+    },
+    {
+      "title": "i18n: názvy variant + aria (cs/en)",
+      "status": "done",
+      "detail": "Klíče názvů 4 variant + aria-label pickeru v cs i en (vzor LEVEL_LABELS); žádné natvrdo řetězce. Pool ponechat 'Pool'. Test: i18n testy zelené, klíče v obou locale."
+    },
+    {
+      "title": "Brána: end-to-end + americká beze změny",
+      "status": "done",
+      "detail": "V lobby zvolím pool/ruskou/českou a odehraju kompletní AI partii v prohlížeči (bez serveru); americká cesta beze změny (default american, stávající AI hra + testy zelené); všechny web + i18n testy zelené."
+    },
+    {
+      "title": "Nezávislý sub-agent review",
+      "status": "done",
+      "detail": "Čerstvý kontext na: jediný zdroj varianty (picker -> hra vs LocalStorage odraz, ať se nerozejdou), Mistrovství×varianta přes dvě obrazovky (championship skrytý když varianta != american, fallback), varianta čtená z herního stavu v controller/selection (ne oddělený prop), worker-protokol default american (zpětná kompat.), americká cesta beze změny. CLAUDE.md (kontrakty mezi moduly + UI stav)."
+    }
+  ],
+  "startedAt": "2026-07-11T20:40:38.196Z",
+  "resolvedVerify": [
+    "Odehrát v prohlížeči kompletní AI partii v pool/ruské/české variantě (bez serveru)",
+    "Vizuální kontrola pickeru varianty v lobby (layout, aria, mobil)",
+    "Americká cesta vypadá a chová se stejně jako dřív"
+  ],
+  "completedAt": "2026-07-11T21:29:17.570Z",
+  "autoCommit": {
+    "preSha": "6d62d32eb0e21f1998b3fcea396bdc32f80e00d4",
+    "subject": "Phase 102: AIvP: výběr varianty v lobby"
+  }
+}

@@ -171,6 +171,15 @@ const cs = {
   'lobby.disconnectedBefore': 'K místnosti se nepodařilo připojit (server neodpovídá).',
   'lobby.nickTaken': 'Přezdívka je obsazená. Zkus třeba „{suggestion}".',
   'lobby.langAria': 'Jazyk',
+  'lobby.variantAria': 'Varianta hry proti počítači',
+
+  // Názvy variant pravidel (fáze 102) – zobrazovací popisky pickeru v lobby (u „Hrát
+  // proti počítači"). Interní id (american/pool/russian/czech) jde po drátě/kódu
+  // anglicky, tady je JEN překlad. Pool nemá zavedený český název → v obou jazycích „Pool".
+  'variant.american': 'Americká',
+  'variant.pool': 'Pool',
+  'variant.russian': 'Ruská',
+  'variant.czech': 'Česká',
 
   // Itch build (fáze 89): AI-only publikace. Hra s člověkem tady neběží (server je
   // cross-origin, mrtvý WS) → tlačítko místo místnosti otevře modal s odkazem na
@@ -287,6 +296,12 @@ const en = {
   'lobby.disconnectedBefore': 'Could not connect to the room (server not responding).',
   'lobby.nickTaken': 'That nickname is taken. Try “{suggestion}”.',
   'lobby.langAria': 'Language',
+  'lobby.variantAria': 'Game variant against the computer',
+
+  'variant.american': 'American',
+  'variant.pool': 'Pool',
+  'variant.russian': 'Russian',
+  'variant.czech': 'Czech',
 
   'itch.humanBtn': 'Play against a human',
   'itch.modalTitle': 'Human vs human is on the full version',

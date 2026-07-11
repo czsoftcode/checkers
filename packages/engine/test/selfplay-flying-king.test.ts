@@ -43,7 +43,7 @@ import { makePosition } from './support/position.js';
 function blackKings(board: Position['board']): number {
   let n = 0;
   for (const cell of board) {
-    if (cell !== null && cell !== undefined && cell.kind === 'king' && cell.color === 'black') {
+    if (cell?.kind === 'king' && cell.color === 'black') {
       n++;
     }
   }
@@ -108,7 +108,7 @@ describe('cílený search: cena dámy (izolovaně) mění výběr tahu', () => {
   const evalShort: EvalFn = (p) => evaluate(p, AMERICAN_RULESET);
   const evalFlying: EvalFn = (p) => evaluate(p, POOL_RULESET);
 
-  const flyingMoveGen: ReadonlyArray<readonly [string, Ruleset]> = [
+  const flyingMoveGen: readonly (readonly [string, Ruleset])[] = [
     ['pool', POOL_RULESET],
     ['ruská', RUSSIAN_RULESET],
     ['česká', CZECH_RULESET],

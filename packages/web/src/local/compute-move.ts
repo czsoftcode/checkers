@@ -12,7 +12,7 @@
  * pro deterministický test se předávají zvlášť (parametr `now`), ne v requestu.
  */
 
-import type { Move, Position } from '@checkers/rules';
+import type { Move, Position, VariantId } from '@checkers/rules';
 import type { Strength } from '@checkers/engine';
 import {
   OPENING_BOOK,
@@ -60,6 +60,14 @@ export interface EngineMoveRequest {
    * knižní. Serializovatelný boolean → projde `postMessage` reálného workeru.
    */
   readonly useBook?: boolean;
+  /**
+   * Varianta pravidel (id). Chybí → 'american' (zpětná kompatibilita: dnešní
+   * requesty bez pole hrají americky – přesně jako server i dosavadní offline
+   * klient). Teče do `computeAiMove`, kde určuje ruleset předaný searchi i váhy
+   * evaluace (létavá dáma je řádově cennější). Serializovatelný řetězec → projde
+   * `postMessage` reálného workeru.
+   */
+  readonly variant?: VariantId;
 }
 
 /**
@@ -103,6 +111,10 @@ export function computeEngineMove(req: EngineMoveRequest, now?: () => number): M
     {
       strength: strengthFor(req.level),
       timeMs: req.timeMs,
+      // Variantu předáváme JEN když je zadaná – `computeAiMove` si chybějící
+      // dosadí na 'american' (zpětná kompatibilita). Ruleset varianty pak řídí
+      // generování tahů v searchi i cenu dámy v evaluaci.
+      ...(req.variant !== undefined ? { variant: req.variant } : {}),
       ...(book !== undefined ? { book } : {}),
       ...(now !== undefined ? { now } : {}),
     },

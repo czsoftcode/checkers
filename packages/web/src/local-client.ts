@@ -27,10 +27,21 @@ import {
   advanceState,
   gameResultFromState,
   initialGameState,
+  initialPosition,
   legalMoves,
   playBallot,
+  rulesetForVariant,
 } from '@checkers/rules';
-import type { Color, GameResult, GameState, Move, Position, Square } from '@checkers/rules';
+import type {
+  Color,
+  GameResult,
+  GameState,
+  Move,
+  Position,
+  Ruleset,
+  Square,
+  VariantId,
+} from '@checkers/rules';
 import { searchTimed } from '@checkers/engine';
 
 import { ServerError } from './server-client.js';
@@ -115,6 +126,16 @@ export interface LocalClientOptions {
    * nechá výchozí `performance.now`. Tah enginu má vlastní hodiny uvnitř workeru.
    */
   readonly now?: () => number;
+  /**
+   * Varianta pravidel pro VŠECHNY partie tohoto klienta. Klient je variantě
+   * pevně vázaný (jedna instance = jedna varianta): `main.ts` zakládá čerstvý
+   * `LocalClient` při každém vstupu do sóla podle volby z lobby, takže „přepnutí
+   * varianty zahodí partii a začne novou" plyne z výměny klienta. Chybí → 'american'
+   * (zpětná kompatibilita: dnešní volání bez varianty i všechny stávající testy
+   * hrají americky). Ruleset varianty teče do legalMoves/applyMove/searchTimed i do
+   * requestů workeru (computeAiMove), variantu nese i `GameState` a `GameDto`.
+   */
+  readonly variant?: VariantId;
 }
 
 /** Opačná barva. Barva enginu je vždy `opposite(humanColor)`. */
@@ -152,18 +173,24 @@ function moveToDto(move: Move): MoveDto {
   return { from: move.from, path: [...move.path], captures: [...move.captures] };
 }
 
-/** Legální tahy pozice v drátovém tvaru. */
-function legalMoveDtos(position: Position): MoveDto[] {
-  return legalMoves(position).map(moveToDto);
+/** Legální tahy pozice v drátovém tvaru (v rulesetu varianty partie). */
+function legalMoveDtos(position: Position, ruleset: Ruleset): MoveDto[] {
+  return legalMoves(position, ruleset).map(moveToDto);
 }
 
 /**
  * Najde legální tah odpovídající zadání (výchozí pole + cesta). Shoda = stejné
  * `from` a hluboká shoda CELÉHO `path` v pořadí (duplicity v path povoleny –
- * kruhový skok dámy), stejný kontrakt jako serverový `findLegalMove`.
+ * kruhový skok dámy), stejný kontrakt jako serverový `findLegalMove`. Legalitu
+ * počítá v rulesetu VARIANTY – jinak by neamerická partie odmítala legální tahy.
  */
-function findLegalMove(position: Position, from: number, path: readonly number[]): Move | undefined {
-  return legalMoves(position).find((move) => move.from === from && pathsEqual(move.path, path));
+function findLegalMove(
+  position: Position,
+  from: number,
+  path: readonly number[],
+  ruleset: Ruleset,
+): Move | undefined {
+  return legalMoves(position, ruleset).find((move) => move.from === from && pathsEqual(move.path, path));
 }
 
 function pathsEqual(a: readonly number[], b: readonly number[]): boolean {
@@ -189,9 +216,12 @@ function seedInitial(
   level: GameLevel,
   ballotIndex: number | undefined,
   rng: () => number,
+  variant: VariantId,
 ): { state: GameState; moves: Move[]; ballotIndex: number | null } {
   if (level !== 'championship') {
-    return { state: initialGameState(), moves: [], ballotIndex: null };
+    // `variant` do GameState → advanceState/gameResultFromState pak berou ruleset
+    // varianty automaticky (variantu čtou ze stavu, ne z odděleného argumentu).
+    return { state: initialGameState(initialPosition(), variant), moves: [], ballotIndex: null };
   }
   const index = ballotIndex ?? Math.floor(rng() * THREE_MOVE_BALLOTS.length);
   const ballot = THREE_MOVE_BALLOTS[index];
@@ -203,7 +233,9 @@ function seedInitial(
     );
   }
   const { moves } = playBallot(ballot);
-  let state = initialGameState();
+  // Mistrovství je JEN americké (varianta tu bude 'american'), ale variantu
+  // stejně protáhneme do stavu, ať je advanceState konzistentní s ne-Mistrovstvím.
+  let state = initialGameState(initialPosition(), variant);
   for (const move of moves) {
     state = advanceState(state, move);
   }
@@ -221,6 +253,12 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
   const nextSeed = options.seed ?? (() => Math.floor(Math.random() * 0x1_0000_0000));
   const timeMs = options.timeMs ?? DEFAULT_SEARCH_TIME_MS;
   const now = options.now;
+  // Varianta partií tohoto klienta a její ruleset. Ruleset se derivuje JEDNOU
+  // (registr je čistá mapa) a používá se na všechny position-level rules volání
+  // (legalMoves/searchTimed); GameState navíc nese `variant` sám, takže
+  // advanceState/gameResultFromState ruleset dohledají přes stav.
+  const variant: VariantId = options.variant ?? 'american';
+  const ruleset = rulesetForVariant(variant);
 
   /** Efektivní výsledek: vynucený (vzdání/remíza) > výsledek z pozice. */
   function effectiveResult(game: LocalGame): GameResult {
@@ -239,12 +277,15 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
       id: game.id,
       position: game.state.position,
       result: effectiveResult(game),
-      legalMoves: legalMoveDtos(game.state.position),
+      legalMoves: legalMoveDtos(game.state.position, ruleset),
       engineStatus: game.engineStatus,
       level: game.level,
       ballotMoves,
       humanColor: game.humanColor,
       ballotIndex: game.ballotIndex,
+      // Variantu partie nese DTO, aby ji controller/selection přečetly Z HRY
+      // (jediný zdroj) a zvýrazňovaly tahy pravidly téže varianty, jakou engine počítá.
+      variant: game.state.variant,
     };
   }
 
@@ -295,6 +336,7 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
         level: game.level,
         seed: game.pendingSeed,
         timeMs,
+        variant,
       });
 
       // Po awaitu se stav znovu načte: tah enginu se aplikuje VÝHRADNĚ proti
@@ -312,7 +354,7 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
         current.pendingSeed = null;
         return;
       }
-      const legal = findLegalMove(current.state.position, move.from, move.path);
+      const legal = findLegalMove(current.state.position, move.from, move.path, ruleset);
       if (legal === undefined) {
         // Engine vrátil nelegální tah (nemělo by nastat – computeAiMove bere tahy
         // z legalMoves). Obranně: 'error', partie stojí na tahu člověka.
@@ -347,7 +389,7 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
       }
       let seeded: { state: GameState; moves: Move[]; ballotIndex: number | null };
       try {
-        seeded = seedInitial(level, ballotIndex, rng);
+        seeded = seedInitial(level, ballotIndex, rng, variant);
       } catch (error) {
         return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
@@ -394,7 +436,7 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
       if (game.state.position.turn === engineColorOf(game)) {
         return Promise.reject(new ServerError(409, CODES.notYourTurn, 'Na tahu je počítač, počkej na jeho tah.'));
       }
-      const move = findLegalMove(game.state.position, from, path);
+      const move = findLegalMove(game.state.position, from, path, ruleset);
       if (move === undefined) {
         return Promise.reject(new ServerError(409, CODES.illegalMove, 'Nelegální tah'));
       }
@@ -449,7 +491,12 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
       const position = game.state.position;
       let engineScore: number;
       try {
-        const { score } = searchTimed(position, now === undefined ? { timeMs } : { timeMs, now });
+        // Ruleset varianty: hodnocení pozice (a generování tahů v searchi) musí jet
+        // pravidly téže varianty jako partie, jinak by remízu posoudil americky.
+        const { score } = searchTimed(
+          position,
+          now === undefined ? { timeMs, ruleset } : { timeMs, ruleset, now },
+        );
         engineScore = position.turn === engineColorOf(game) ? score : -score;
       } catch (error) {
         console.error(`Vyhodnocení nabídky remízy selhalo pro partii ${id}:`, error);
@@ -495,6 +542,7 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
           seed: nextSeed(),
           timeMs,
           useBook: false,
+          variant,
         });
       } catch (error) {
         console.error(`Nápověda selhala pro partii ${id}:`, error);
@@ -503,7 +551,7 @@ export function createLocalClient(worker: EngineWorker, options: LocalClientOpti
       // Engine je nedůvěryhodný i když radí: tah PROVĚŘ proti legálním tahům.
       // Pozici zachyť PŘED awaitem není třeba – getHint běží jen na tahu člověka a
       // stav se pod ním nemění (žádný souběžný trigger enginu), ale re-validace je levná pojistka.
-      const legal = findLegalMove(game.state.position, suggested.from, suggested.path);
+      const legal = findLegalMove(game.state.position, suggested.from, suggested.path, ruleset);
       if (legal === undefined) {
         console.error(`Engine vrátil nelegální nápovědu pro partii ${id}, odmítám.`);
         throw new ServerError(503, CODES.engineUnavailable, 'Počítač teď nedokáže poradit, zkus to prosím znovu.');

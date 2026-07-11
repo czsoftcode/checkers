@@ -694,6 +694,31 @@ body {
   cursor: default;
 }
 
+/* Sólo řádek (fáze 102): picker varianty vlevo, tlačítko „Hrát proti počítači"
+   vpravo. Tlačítko zabere zbytek šířky, picker si drží svou (flex-shrink: 0).
+   Na úzkém displeji se zalomí pod sebe (flex-wrap). */
+.lobby-solo {
+  display: flex;
+  align-items: stretch;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.lobby-solo .lobby-solo-btn {
+  flex: 1 1 auto;
+}
+
+.lobby-variant {
+  flex-shrink: 0;
+  padding: 0.55rem 0.7rem;
+  font-size: 1rem;
+  border: 1px solid #666;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
+}
+
 .lobby-msg {
   margin: 0;
   font-size: 0.95rem;

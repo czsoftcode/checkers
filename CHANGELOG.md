@@ -7,8 +7,19 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.74.0] - 2026-07-11
+
 ### Added
 
+- **Výběr varianty pro hru proti počítači.** V úvodní místnosti je u tlačítka „Hrát
+  proti počítači" nově výběr čtyř variant (americká, pool, ruská, česká) – zvolenou
+  variantu si aplikace pamatuje mezi spuštěními (výchozí je americká). Vybranou variantu
+  pak odehrajete proti AI kompletně v prohlížeči, bez herního serveru: pravidla, výběr
+  tahu AI i nápověda běží lokálně v té variantě, a deska zvýrazňuje tahy podle ní (včetně
+  klouzavého braní létavé dámy). Mistrovství a losované zahájení zůstávají jen pro
+  americkou – u ostatních variant se v nabídce úrovní nezobrazí. Přepnutí varianty (návrat
+  do místnosti a nový vstup do hry) rozehranou partii zahodí a začne novou. Americká hra
+  zůstává beze změny.
 - **AI cení létavou dámu podle varianty.** Evaluace AI teď rozlišuje cenu dámy: krátká
   (americká) dáma zůstává na 130, létavá (pool/ruská/česká) je řádově dražší (~300, tedy
   zhruba 3× muž) – létavá dáma ovládá celou diagonálu, proto ji AI ve flying variantách

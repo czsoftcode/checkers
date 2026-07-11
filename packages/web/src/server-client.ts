@@ -12,7 +12,8 @@
  * `dto.test.ts` (web na balíček server nezávisí, aby se nesvázal build graf).
  */
 
-import type { Color, GameResult, Position, Square } from '@checkers/rules';
+import { isVariantId } from '@checkers/rules';
+import type { Color, GameResult, Position, Square, VariantId } from '@checkers/rules';
 import type { GameLevel } from '@checkers/ai';
 
 /** Stav tahu enginu na pozadí (kontrakt se serverem). */
@@ -95,6 +96,16 @@ export interface GameDto {
    * hodnota musí být nezáporné celé číslo; jiná = drift → `isGameDto` odmítne.
    */
   readonly ballotIndex?: number | null;
+  /**
+   * Varianta pravidel partie (id). Řídí, jaká pravidla klient použije na
+   * zvýrazňování legálních tahů (controller/selection čtou variantu Z HRY, aby UI
+   * počítalo tytéž tahy jako engine). VOLITELNÉ na drátě: HTTP cesta serveru ho
+   * (v tomto řezu) NEnese – server DTO zůstává beze změny (WEB část todo 56), takže
+   * chybějící / `undefined` bere volající jako výchozí `'american'` (dnešní chování).
+   * `LocalClient` (offline AI) ho nastavuje vždy podle varianty partie. Přítomná
+   * neplatná hodnota (neznámé id) je drift kontraktu → `isGameDto` ji odmítne.
+   */
+  readonly variant?: VariantId;
 }
 
 /**
@@ -481,6 +492,14 @@ export function isGameDto(value: unknown): value is GameDto {
       !Number.isInteger(record.ballotIndex) ||
       record.ballotIndex < 0)
   ) {
+    return false;
+  }
+  // `variant`: VOLITELNÉ (aditivní pole, zpětná kompatibilita). Chybějící /
+  // `undefined` = HTTP cesta bez varianty → volající si dosadí výchozí 'american'.
+  // Když PŘIJDE, musí to být známé id varianty (`isVariantId`); jiná hodnota je
+  // drift → odmítni, ať se do controlleru/selection nedostane neznámá varianta
+  // (a `rulesetForVariant` na ní nespadne RangeError).
+  if (record.variant !== undefined && !isVariantId(record.variant)) {
     return false;
   }
   const position = record.position;

@@ -507,6 +507,11 @@
       "id": 101,
       "title": "Per-varianta váhy: létavá dáma",
       "status": "done"
+    },
+    {
+      "id": 102,
+      "title": "AIvP: výběr varianty v lobby",
+      "status": "done"
     }
   ]
 }
