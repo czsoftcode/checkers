@@ -28,11 +28,12 @@ export { moveToDto, legalMoveDtos, pvpGameToDto, findLegalMove } from './dto.js'
 export type { MoveDto, PvpGameDto, GameStateMessage } from './dto.js';
 export { GameHub } from './hub.js';
 export type { HubSocket } from './hub.js';
-export { RoomPresence, NICK_MAX_LENGTH } from './presence.js';
+export { RoomPresence, Lobbies, NICK_MAX_LENGTH } from './presence.js';
 export type {
   RoomSocket,
   RoomPlayer,
   JoinResult,
+  SwitchLobbyResult,
   RoomServerMessage,
   RosterMessage,
   JoinedMessage,

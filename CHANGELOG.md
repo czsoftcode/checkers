@@ -7,6 +7,26 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+
+- **Server: čtyři PvP varianta-lobby (jádro).** Multiplayer server nově rozlišuje
+  variantu: přezdívka je jedna na celý server (globální identita, příprava na budoucí
+  login) a hráč je vždy v právě jedné ze čtyř lobby (americká, pool, ruská, česká).
+  Hráči téže lobby se vidí, vyzvou a odehrají partii; výzva na hráče z jiné lobby se
+  přirozeně odmítne. Partie nese svoji variantu a odveta ji dědí. Server umí přechod
+  mezi lobby bez ztráty přezdívky (odmítnutý během rozehrané partie). Stávající klient,
+  který variantu neposílá, se zpětně kompatibilně přihlásí do americké lobby a hraje
+  beze změny. Klientské UI čtyř místností přijde samostatně; tohle je serverové jádro.
+- **Server je autorita nad legalitou v každé variantě.** Server ověřuje každý tah
+  pravidly varianty dané partie – nepřijme tah, který je v té variantě nelegální (např.
+  americké „braní jen vpřed" v ruské partii, kde muž bere i dozadu a braní se řetězí).
+
+### Changed
+
+- **PDN archiv zapisuje variantu.** Do PDN dokončené PvP partie se nově ukládá tag
+  `[Variant]` (strojové id) a odpovídající `[Event]` (např. „Russian Draughts"); dlouhé
+  tahy létavé dámy se do PDN zapíšou správně podle varianty.
+
 ## [0.74.0] - 2026-07-11
 
 ### Added

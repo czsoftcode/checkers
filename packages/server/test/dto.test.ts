@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { initialGameState, legalMoves } from '@checkers/rules';
+import { AMERICAN_RULESET, initialGameState, legalMoves, rulesetForVariant } from '@checkers/rules';
 import type { Cell, Color, Position } from '@checkers/rules';
 import { findLegalMove, moveToDto, pvpGameToDto } from '../src/index.js';
 
@@ -122,5 +122,26 @@ describe('findLegalMove – match zadání klienta proti reálným legalMoves', 
 
     // Neúplná cesta (jen část kruhu) legální není – nesmí se strefit do plné.
     expect(findLegalMove(position, 18, [9, 2, 11])).toBeUndefined();
+  });
+});
+
+describe('findLegalMove – bezpečnostní hranice podle varianty (todo 56 / fáze 103)', () => {
+  // Bílý muž na 14 je ZA ZÁDY černého muže na 18 → braní vzad (18x9). Americká
+  // pravidla ho nedovolí, ruská ano. `findLegalMove` MUSÍ dostat ruleset varianty
+  // záznamu – jinak by server (autorita) přijal nelegální tah v dané variantě.
+  const backward = positionWith([[18, BLACK_MAN], [14, WHITE_MAN]], 'black');
+
+  it('americká pravidla: braní vzad NENÍ legální tah (undefined)', () => {
+    expect(findLegalMove(backward, 18, [9], AMERICAN_RULESET)).toBeUndefined();
+    // Default parametru se chová jako americká (zpětná kompat volajících bez varianty).
+    expect(findLegalMove(backward, 18, [9])).toBeUndefined();
+  });
+
+  it('ruská pravidla: braní vzad JE legální a server si odvodí braného soupeře', () => {
+    const move = findLegalMove(backward, 18, [9], rulesetForVariant('russian'));
+    expect(move).toBeDefined();
+    expect(move?.from).toBe(18);
+    expect(move?.path).toEqual([9]);
+    expect(move?.captures).toEqual([14]);
   });
 });

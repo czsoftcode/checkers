@@ -95,3 +95,35 @@ describe('formatGamePdn – hranice', () => {
     expect(() => formatGamePdn([B1], 'ongoing', DATE)).toThrow(RangeError);
   });
 });
+
+describe('formatGamePdn – varianta (fáze 103)', () => {
+  it('default (bez varianty) = americká: Event American Checkers + Variant american', () => {
+    const pdn = formatGamePdn([B1], 'black-wins', DATE);
+    expect(pdn).toContain('[Event "American Checkers"]');
+    expect(pdn).toContain('[Variant "american"]');
+  });
+
+  it('každá varianta zapíše svůj tag Variant i lidský Event', () => {
+    const cases = [
+      ['pool', 'Pool Checkers'],
+      ['russian', 'Russian Draughts'],
+      ['czech', 'Czech Draughts'],
+    ] as const;
+    for (const [variant, event] of cases) {
+      const pdn = formatGamePdn([B1], 'draw', DATE, variant);
+      expect(pdn).toContain(`[Variant "${variant}"]`);
+      expect(pdn).toContain(`[Event "${event}"]`);
+    }
+  });
+
+  it('létavá dáma: dlouhý tah dámy se ve flying variantě zapíše (bez pádu na „teleport")', () => {
+    // 18-5 je dlouhý (nesousední) tah po diagonále. V americké notaci je to teleport
+    // a `formatMove` by padl – server proto MUSÍ dát `formatMove` ruleset varianty.
+    const longKingMove: Move = { from: 18, path: [5], captures: [] };
+    expect(() => formatGamePdn([longKingMove], 'black-wins', DATE, 'russian')).not.toThrow();
+    expect(formatGamePdn([longKingMove], 'black-wins', DATE, 'russian')).toContain('18-5');
+    // Bez varianty (american, krátká dáma) je to naopak programová chyba → RangeError,
+    // což potvrzuje, že ruleset varianty se opravdu propisuje do formátování.
+    expect(() => formatGamePdn([longKingMove], 'black-wins', DATE)).toThrow(RangeError);
+  });
+});

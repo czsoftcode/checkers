@@ -6,8 +6,8 @@
  * na který se navěsí web klient, proto ho fixují testy.
  */
 
-import { legalMoves } from '@checkers/rules';
-import type { GameResult, GameState, Move, Position, Square } from '@checkers/rules';
+import { AMERICAN_RULESET, legalMoves, rulesetForVariant } from '@checkers/rules';
+import type { GameResult, GameState, Move, Position, Ruleset, Square } from '@checkers/rules';
 import type { EndReason } from './store.js';
 
 /** Tah ve tvaru pro drát: prostá, JSON-serializovatelná data (čísla 1–32). */
@@ -60,9 +60,13 @@ export function moveToDto(move: Move): MoveDto {
   return { from: move.from, path: [...move.path], captures: [...move.captures] };
 }
 
-/** Seznam legálních tahů dané pozice v drátovém tvaru. */
-export function legalMoveDtos(position: Position): MoveDto[] {
-  return legalMoves(position).map(moveToDto);
+/**
+ * Seznam legálních tahů dané pozice v drátovém tvaru. `ruleset` MUSÍ odpovídat
+ * variantě partie (viz {@link findLegalMove}) – default american je jen pro
+ * volající bez varianty (dosavadní testy). Server ho odvozuje z `state.variant`.
+ */
+export function legalMoveDtos(position: Position, ruleset: Ruleset = AMERICAN_RULESET): MoveDto[] {
+  return legalMoves(position, ruleset).map(moveToDto);
 }
 
 /**
@@ -83,7 +87,9 @@ export function pvpGameToDto(
     id,
     position: state.position,
     result,
-    legalMoves: legalMoveDtos(state.position),
+    // Ruleset z varianty STAVU – jinak by DTO ruské/české partie nabídlo americké
+    // (krátká dáma) legální tahy a autorita by tiše hrála jinou hru.
+    legalMoves: legalMoveDtos(state.position, rulesetForVariant(state.variant)),
     reason,
   };
 }
@@ -100,13 +106,23 @@ export function pvpGameToDto(
  * `path` SMÍ obsahovat duplicity (kruhový vícenásobný skok dámy může dopadnout
  * na už navštívené pole i zpět na `from`), proto se porovnává prvek po prvku,
  * nikdy ne přes `Set`.
+ *
+ * BEZPEČNOSTNÍ HRANICE (uzavírá todo 56): `ruleset` MUSÍ být ruleset varianty
+ * záznamu (server ho bere z `record.state.variant` → `rulesetForVariant`). Bez
+ * toho by se legalita ověřovala americkými pravidly i pro ruskou/českou/pool
+ * partii – server (jediná autorita) by pak přijal nelegální tah v dané variantě
+ * (klient je nedůvěryhodný). Default american je jen pro volající bez varianty
+ * (dosavadní testy jádra), NE pro autoritativní cestu.
  */
 export function findLegalMove(
   position: Position,
   from: number,
   path: readonly number[],
+  ruleset: Ruleset = AMERICAN_RULESET,
 ): Move | undefined {
-  return legalMoves(position).find((move) => move.from === from && pathsEqual(move.path, path));
+  return legalMoves(position, ruleset).find(
+    (move) => move.from === from && pathsEqual(move.path, path),
+  );
 }
 
 function pathsEqual(a: readonly Square[], b: readonly number[]): boolean {

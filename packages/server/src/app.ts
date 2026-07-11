@@ -10,13 +10,14 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import { z } from 'zod';
-import type { Color } from '@checkers/rules';
+import { isVariantId, rulesetForVariant } from '@checkers/rules';
+import type { Color, VariantId } from '@checkers/rules';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { findLegalMove, legalMoveDtos, pvpGameToDto } from './dto.js';
 import type { GameStateMessage, MoveDto, PvpGameDto } from './dto.js';
 import { formatGamePdn, writeGamePdn } from './archive.js';
 import { GameHub } from './hub.js';
-import { RoomPresence } from './presence.js';
+import { Lobbies } from './presence.js';
 import type { RoomServerMessage } from './presence.js';
 import { ChallengeRegistry } from './challenges.js';
 import { ERROR_CODES, sendError } from './errors.js';
@@ -115,12 +116,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   // do budoucna i případné metriky. Není to veřejný HTTP kontrakt.
   app.decorate('gameHub', hub);
 
-  // Registr přítomných hráčů v jedné společné místnosti (fáze 67) – globální
-  // real-time vrstva vedle per-partie hubu. Dekorace zpřístupní počet přítomných
-  // integračnímu testu (deterministické čekání na zápis hráče, bez sleepu);
-  // není to veřejný HTTP kontrakt.
-  const presence = new RoomPresence();
-  app.decorate('roomPresence', presence);
+  // Registr ČTYŘ varianta-lobby + globální identita (fáze 103, dřív jedna místnost
+  // fáze 67). Dekorace `lobbies` zpřístupní registr novým testům; `roomPresence`
+  // ukazuje na AMERICKOU lobby (default), aby dosavadní testy sahající na
+  // `app.roomPresence.count()` zůstaly beze změny (bez varianty → americká lobby).
+  // Není to veřejný HTTP kontrakt.
+  const lobbies = new Lobbies();
+  app.decorate('lobbies', lobbies);
+  app.decorate('roomPresence', lobbies.room('american'));
 
   // Registr čekajících výzev + busy stav párování (fáze 68). Logika mimo route
   // (viz challenges.ts); route jen serializuje a rozesílá. Dekorace zpřístupní
@@ -174,7 +177,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!store.markArchived(record.id)) {
       return; // už archivováno (nebo partie mezitím zmizela) – žádný druhý zápis
     }
-    const pdn = formatGamePdn(record.moves, result, now());
+    const pdn = formatGamePdn(record.moves, result, now(), record.state.variant);
     void writeGamePdn(pdnDir, record.id, pdn);
   }
 
@@ -192,9 +195,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (effectiveResult(record) !== 'ongoing') {
       return { kind: 'game-over' };
     }
-    const move = findLegalMove(record.state.position, from, path);
+    // BEZPEČNOSTNÍ HRANICE (todo 56): legalita se ověřuje pravidly VARIANTY záznamu,
+    // ne americkými. Bez toho by server přijal nelegální tah v ruské/české/pool partii
+    // (klient je nedůvěryhodný). `advanceState` ve store čte tutéž variantu ze stavu.
+    const ruleset = rulesetForVariant(record.state.variant);
+    const move = findLegalMove(record.state.position, from, path, ruleset);
     if (move === undefined) {
-      return { kind: 'illegal', legalMoves: legalMoveDtos(record.state.position) };
+      return { kind: 'illegal', legalMoves: legalMoveDtos(record.state.position, ruleset) };
     }
     const next = store.applyMove(record.id, move);
     if (next === undefined) {
@@ -241,7 +248,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       // Referencí na zapsaného hráče se drží stav spojení: null = ještě nevstoupil
       // (nebo dostal nick-taken/error a zkouší znovu). Autorita nad tímto socketem.
       // Nick držíme kvůli výzvám (fáze 68): `challenged` nese přezdívku vyzyvatele.
-      let me: { id: string; nick: string } | null = null;
+      // `variant` = lobby, ve které hráč je (fáze 103) – rozhoduje o rosteru,
+      // broadcastu a scope výzev; drží se tu, ať se při `close` ví, kam poslat `left`.
+      let me: { id: string; nick: string; variant: VariantId } | null = null;
 
       const send = (message: RoomServerMessage): void => {
         try {
@@ -251,8 +260,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         }
       };
 
-      // Vstup pod přezdívkou (fáze 67). Set `me` = zapsaný hráč (vč. nicku).
-      const handleJoin = (nick: unknown): void => {
+      // Vstup pod přezdívkou do zvolené varianta-lobby (fáze 103). `variant` je
+      // volitelná: chybí / není platné `VariantId` → americká lobby (zpětná
+      // kompatibilita se stávajícím klientem, který variantu neposílá). Set `me` =
+      // zapsaný hráč (vč. nicku a lobby).
+      const handleJoin = (nick: unknown, variant: unknown): void => {
         if (typeof nick !== 'string') {
           send({ type: 'error', message: 'Chybí přezdívka.' });
           return;
@@ -261,7 +273,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: 'Už jsi v místnosti.' });
           return;
         }
-        const result = presence.join(nick, socket);
+        // Neznámá/chybějící varianta → american (default). Neplatný cizí string
+        // se NEodmítá, jen degraduje na american – stávající klient bez varianty
+        // tak hraje beze změny a nový klient dostane echo skutečné lobby v `roster`.
+        const lobby: VariantId = isVariantId(variant) ? variant : 'american';
+        const result = lobbies.join(nick, lobby, socket);
         if (result.status === 'invalid') {
           send({ type: 'error', message: result.reason });
           return;
@@ -270,15 +286,70 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'nick-taken', suggestion: result.suggestion });
           return;
         }
-        // Úspěch. Pořadí: hráč už je v rosteru (join ho zapsal) → pošli `roster`
-        // JEN jemu (vč. sebe), teprve pak `joined` VŠEM OSTATNÍM (except = já),
-        // ať nedostane vlastní příchod dvakrát.
-        me = { id: result.player.id, nick: result.player.nick };
-        send({ type: 'roster', players: presence.roster() });
-        presence.broadcast(
-          JSON.stringify({ type: 'joined', player: result.player }),
-          result.player.id,
-        );
+        // Úspěch. Pořadí: hráč už je v rosteru své lobby (join ho zapsal) → pošli
+        // `roster` JEN jemu (vč. sebe a echo varianty lobby), teprve pak `joined`
+        // OSTATNÍM V TÉŽE lobby (except = já), ať nedostane vlastní příchod dvakrát.
+        me = { id: result.player.id, nick: result.player.nick, variant: lobby };
+        send({ type: 'roster', players: lobbies.room(lobby).roster(), variant: lobby });
+        lobbies
+          .room(lobby)
+          .broadcast(JSON.stringify({ type: 'joined', player: result.player }), result.player.id);
+      };
+
+      // Přechod do jiné varianta-lobby BEZ ztráty identity (fáze 103). Server op –
+      // klientské UI ho zavolá v D3b. Odmítnut, když hráč PRÁVĚ HRAJE (busy): jako
+      // se nemění varianta uprostřed partie, nesmí se přejít do jiné lobby v běžící
+      // hře. Úspěch: stará lobby dostane `left`, nová `joined`, přecházející čerstvý
+      // `roster` cílové lobby (echo varianty). `same` = už tam je (jen echo rosteru).
+      const handleSwitchLobby = (variant: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        if (!isVariantId(variant)) {
+          send({ type: 'error', message: 'Neznámá varianta lobby.' });
+          return;
+        }
+        if (challenges.isBusy(me.id)) {
+          send({ type: 'error', message: 'Nelze přejít do jiné lobby během partie.' });
+          return;
+        }
+        const from = me.variant;
+        const result = lobbies.switchLobby(me.id, variant);
+        if (result.status === 'not-joined') {
+          // Nedosažitelné: `me !== null` znamená přihlášený. Backstop pro úplnost.
+          send({ type: 'error', message: 'Nejsi přihlášen.' });
+          return;
+        }
+        if (result.status === 'same') {
+          // Už v cílové lobby – jen znovu pošli roster (echo), nic nepřesouvej.
+          send({ type: 'roster', players: lobbies.room(variant).roster(), variant });
+          return;
+        }
+        // Přechod ruší VŠECHNY jeho čekající výzvy (vyzyvatele i vyzvaného) – jinak
+        // by výzva z PŮVODNÍ lobby přežila přechod a její pozdější přijetí by založilo
+        // CROSS-VARIANT partii (hráč se mezitím přesunul jinam) a obešlo hranici „výzva
+        // jen v téže lobby". Hráč není busy (guard výš), takže `removePlayer` jen
+        // zahodí pending; protějšek každé zaniklé výzvy dostane `challenge-cancelled`
+        // (jako při `close`), ať nevisí na mrtvé výzvě.
+        const cancelled = challenges.removePlayer(me.id);
+        for (const c of cancelled) {
+          const counterpart = c.challengerId === me.id ? c.challengedId : c.challengerId;
+          lobbies.sendTo(
+            counterpart,
+            JSON.stringify({ type: 'challenge-cancelled', challengeId: c.id }),
+          );
+        }
+        me = { id: me.id, nick: me.nick, variant };
+        // Stará lobby: hráč odešel. Nová lobby: přišel. Přecházejícímu roster cílové.
+        lobbies.room(from).broadcast(JSON.stringify({ type: 'left', player: { id: me.id } }));
+        send({ type: 'roster', players: lobbies.room(variant).roster(), variant });
+        lobbies
+          .room(variant)
+          .broadcast(
+            JSON.stringify({ type: 'joined', player: { id: me.id, nick: me.nick } }),
+            me.id,
+          );
       };
 
       // Výzva na partii (fáze 68). Jen zapsaný hráč smí vyzývat; cíl musí být v
@@ -293,7 +364,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: 'Chybí id vyzvaného hráče.' });
           return;
         }
-        if (!presence.has(targetId)) {
+        // Vyzvat lze JEN hráče v TÉŽE lobby (fáze 103). Cross-variant výzva padne
+        // přirozeně: cíl v jiné lobby → `has` je false → „není v místnosti".
+        if (!lobbies.room(me.variant).has(targetId)) {
           send({ type: 'error', message: 'Vyzvaný hráč není v místnosti.' });
           return;
         }
@@ -302,7 +375,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: result.reason });
           return;
         }
-        presence.sendTo(
+        lobbies.sendTo(
           targetId,
           JSON.stringify({
             type: 'challenged',
@@ -333,8 +406,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           return;
         }
         const { challengerId, challengedId } = result.challenge;
-        const game = store.createPvp(challengerId, challengedId);
-        presence.sendTo(
+        // Partie nese variantu LOBBY, ve které se dvojice spárovala (fáze 103).
+        // Přijímající (`me`) i vyzyvatel jsou v téže lobby (výzva jen v rámci lobby),
+        // takže `me.variant` je varianta obou. Rematch pak variantu dědí (viz níž).
+        const game = store.createPvp(challengerId, challengedId, me.variant);
+        lobbies.sendTo(
           challengerId,
           JSON.stringify({
             type: 'challenge-accepted',
@@ -343,7 +419,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
             opponentId: challengedId,
           }),
         );
-        presence.sendTo(
+        lobbies.sendTo(
           challengedId,
           JSON.stringify({
             type: 'challenge-accepted',
@@ -356,7 +432,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         const paired = new Set([challengerId, challengedId]);
         for (const c of result.cancelled) {
           const counterpart = paired.has(c.challengerId) ? c.challengedId : c.challengerId;
-          presence.sendTo(
+          lobbies.sendTo(
             counterpart,
             JSON.stringify({ type: 'challenge-cancelled', challengeId: c.id }),
           );
@@ -379,7 +455,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: 'Výzva už neplatí.' });
           return;
         }
-        presence.sendTo(
+        lobbies.sendTo(
           result.challenge.challengerId,
           JSON.stringify({ type: 'challenge-rejected', challengedId: result.challenge.challengedId }),
         );
@@ -541,7 +617,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: 'Remíza už je nabídnutá.' });
           return;
         }
-        presence.sendTo(
+        lobbies.sendTo(
           opponentIn(outcome, me.id),
           JSON.stringify({ type: 'draw-offered', gameId: outcome.id }),
         );
@@ -608,7 +684,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: 'Není co odmítnout: remíza není nabídnutá.' });
           return;
         }
-        presence.sendTo(
+        lobbies.sendTo(
           opponentIn(outcome, me.id),
           JSON.stringify({ type: 'draw-rejected', gameId: outcome.id }),
         );
@@ -653,7 +729,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           challenges.release(game.players.white);
           // „Konec" ukončuje partii pro OBA: dej soupeři vědět, ať se taky přesune do
           // místnosti (jinak visí na výsledku / dotazu odvety a neví, co se děje).
-          presence.sendTo(
+          lobbies.sendTo(
             opponentIn(game, me.id),
             JSON.stringify({ type: 'game-closed', gameId: game.id }),
           );
@@ -694,7 +770,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: 'Odveta už je nabídnutá.' });
           return;
         }
-        presence.sendTo(
+        lobbies.sendTo(
           opponentIn(outcome, me.id),
           JSON.stringify({ type: 'rematch-offered', gameId: outcome.id }),
         );
@@ -738,12 +814,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         // Prohoď barvy: nová černá = původní bílý, nová bílá = původní černý.
         const oldBlack = outcome.players.black;
         const oldWhite = outcome.players.white;
-        const fresh = store.createPvp(oldWhite, oldBlack);
+        // Rematch DĚDÍ variantu staré partie – jinak by odveta v ruské/české lobby
+        // tiše spadla do americké (default createPvp).
+        const fresh = store.createPvp(oldWhite, oldBlack, outcome.state.variant);
         // Zapečeť starou partii: budoucí leave-game(stará) už neuvolní busy (oba jsou
         // teď v `fresh`). Bez toho by podvržený leave-game na starou partii uvolnil
         // hráče z běžící nové → dvojité spárování.
         store.markPvpLeft(outcome.id);
-        presence.sendTo(
+        lobbies.sendTo(
           oldWhite,
           JSON.stringify({
             type: 'challenge-accepted',
@@ -752,7 +830,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
             opponentId: oldBlack,
           }),
         );
-        presence.sendTo(
+        lobbies.sendTo(
           oldBlack,
           JSON.stringify({
             type: 'challenge-accepted',
@@ -795,7 +873,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: 'Není co odmítnout: odveta není nabídnutá.' });
           return;
         }
-        presence.sendTo(
+        lobbies.sendTo(
           opponentIn(outcome, me.id),
           JSON.stringify({ type: 'rematch-declined', gameId: outcome.id }),
         );
@@ -820,6 +898,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         const msg = parsed as {
           type?: unknown;
           nick?: unknown;
+          variant?: unknown;
           targetId?: unknown;
           challengeId?: unknown;
           gameId?: unknown;
@@ -828,7 +907,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         };
         switch (msg.type) {
           case 'join':
-            handleJoin(msg.nick);
+            handleJoin(msg.nick, msg.variant);
+            return;
+          case 'switch-lobby':
+            handleSwitchLobby(msg.variant);
             return;
           case 'challenge':
             handleChallenge(msg.targetId);
@@ -877,16 +959,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           return; // nikdy nevstoupil → nic neodhlašuj ani nerozesílej
         }
         const id = me.id;
-        presence.remove(id);
-        // `left` všem zbylým – hráč už je odebraný, except není třeba.
-        presence.broadcast(JSON.stringify({ type: 'left', player: { id } }));
+        const lobby = me.variant;
+        lobbies.remove(id);
+        // `left` zbylým V JEHO lobby – hráč už je odebraný, except není třeba.
+        lobbies.room(lobby).broadcast(JSON.stringify({ type: 'left', player: { id } }));
         // Odchod ruší jeho čekající výzvy (vyzyvatele i vyzvaného) a jeho busy stav.
         // Každý protějšek zaniklé výzvy dostane `challenge-cancelled` (fire-and-forget;
         // sendTo hlídá otevřenost socketu). Bez toho by protějšek čekal na mrtvou výzvu.
         const cancelled = challenges.removePlayer(id);
         for (const c of cancelled) {
           const counterpart = c.challengerId === id ? c.challengedId : c.challengerId;
-          presence.sendTo(
+          lobbies.sendTo(
             counterpart,
             JSON.stringify({ type: 'challenge-cancelled', challengeId: c.id }),
           );

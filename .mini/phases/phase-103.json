@@ -1,0 +1,49 @@
+{
+  "id": 103,
+  "title": "Server: PvP varianta-lobby (jádro)",
+  "goal": "Rozdělit na serveru prezenci, výzvy a PvP partii podle varianty: WS join/výzva nesou variantu (default american, zpětně kompat. se stávajícím klientem); hráči se vidí a vyzvat můžou JEN v téže variantě (cross-variant výzva odmítnuta); PvpGameRecord nese variantu; server validuje KAŽDÝ tah přes rulesetForVariant(record.variant) - nepřijme nelegální tah v dané variantě; PDN archiv zapisuje variantu (vize: do PDN se zapisuje i varianta). Klientské UI čtyř místností je MIMO řez (D3b). Brána: server testy - hráči téže varianty se vidí/vyzvou/odehrají partii, cross-variant výzva odmítnuta, nelegální tah v dané variantě odmítnut; stávající americký klient beze změny hraje v american lobby (žádná regrese). UZAVÍRÁ server část todo 56 (poslední zbytek = server dto/store validace). Todo 59 se zavře až po D3b (klientské UI). Řez z todo 59 (fáze D).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Validace + createPvp podle varianty",
+      "status": "done",
+      "detail": "dto findLegalMove/legalMoveDtos přijmou variantu ze záznamu -> rulesetForVariant -> legalMoves(position, ruleset); createPvp(challenger, challenged, variant) nastaví GameState.variant; rematch (app.ts:741) dědí variantu STARÉ partie; store.applyMove už správný přes advanceState. Bezpečnostní hranice = uzavírá todo 56. Test: nelegální tah v pool partii odmítnut, legální přijat; americká beze změny."
+    },
+    {
+      "title": "Globální registr identit + 4 členství",
+      "status": "done",
+      "detail": "Vytáhnout nick-uniqueness do JEDNOHO globálního registru (identita nick->session id, unikátní přes celý server); prezence = Map<VariantId, RoomPresence> (4 členství), vnitřek RoomPresence skoro beze změny. Test: Karel nejde zaregistrovat dvakrát ani do různých lobby; hráč je v jedné lobby."
+    },
+    {
+      "title": "join nese variantu + switchLobby",
+      "status": "done",
+      "detail": "WS join přijme variantu (default american, zpětně kompat.) -> globální identita + členství v té lobby; server op switchLobby (přechod BEZ ztráty identity), odmítnut když je hráč v aktivní partii; join odpověď echo variantu. Test: join do pool -> v pool rosteru; switch do ruské; switch za běhu partie odmítnut; bez varianty -> american."
+    },
+    {
+      "title": "Výzva a partie jen v téže lobby",
+      "status": "done",
+      "detail": "challenge/accept jen mezi hráči v TÉŽE lobby (cross-variant výzva odmítnuta - vyzývaný není v instanci vyzyvatele); vzniklá partie nese variantu lobby; hub/WS směruje v rámci lobby. Test: hráči v pool se vyzvou a odehrají pool partii; cross-variant výzva odmítnuta."
+    },
+    {
+      "title": "PDN zapíše variantu",
+      "status": "done",
+      "detail": "PvP konec -> PDN archiv zapíše variantu (tag Event/Variant). Test: dokončená pool partie má v PDN variantu."
+    },
+    {
+      "title": "Brána: server testy + zpětná kompatibilita",
+      "status": "done",
+      "detail": "Nové server testy (partition, cross-variant reject, nelegální tah v dané variantě); stávající PvP/room-ws testy (challenge-ws, room-ws, pvp-*-ws) zelené BEZE ZMĚNY (americká cesta); všechny balíčky zelené."
+    },
+    {
+      "title": "Nezávislý sub-agent review",
+      "status": "done",
+      "detail": "Bezpečnostní hranice validace podle varianty, globální identita vs členství, zpětná kompat. join bez varianty, rematch dědí variantu, switchLobby za běhu partie, cross-variant výzva. CLAUDE.md (kontrakty mezi moduly + trust boundary)."
+    }
+  ],
+  "startedAt": "2026-07-11T21:57:27.030Z",
+  "completedAt": "2026-07-11T22:30:26.801Z",
+  "autoCommit": {
+    "preSha": "a1709bb750ee90f44ac40e64d93e28fce8db1275",
+    "subject": "Phase 103: Server: PvP varianta-lobby (jádro)"
+  }
+}

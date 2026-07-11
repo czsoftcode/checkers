@@ -18,8 +18,21 @@
 
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { formatMove } from '@checkers/rules';
-import type { GameResult, Move } from '@checkers/rules';
+import { formatMove, rulesetForVariant } from '@checkers/rules';
+import type { GameResult, Move, VariantId } from '@checkers/rules';
+
+/**
+ * Lidský název varianty pro tag `[Event]` (fáze 103). `[Variant]` nese strojové
+ * id (viz {@link formatGamePdn}); Event je čitelný titulek pro vnější PDN nástroje.
+ * Úplná mapa přes `Record<VariantId, string>` – přidání varianty bez názvu tu je
+ * chyba překladu, ne tichá díra.
+ */
+const EVENT_NAME: Record<VariantId, string> = {
+  american: 'American Checkers',
+  pool: 'Pool Checkers',
+  russian: 'Russian Draughts',
+  czech: 'Czech Draughts',
+};
 
 /**
  * Výsledkový token PDN. Černý začíná a je v movetextu první; standardní PDN
@@ -59,30 +72,45 @@ function formatUtcTime(date: Date): string {
  * `result === 'ongoing'` je NEplatný vstup (archivuje se jen dokončená partie)
  * a vyhodí RangeError – tiše zapsat rozehranou partii jako „hotovou" by byla
  * horší chyba než hlasitý pád.
+ *
+ * `variant` (fáze 103) rozhoduje o DVOU věcech: (1) do PDN se zapíše tag
+ * `[Variant "<id>"]` + odpovídající `[Event]` (vize „do PDN se zapisuje i
+ * varianta"); (2) `formatMove` dostane RULESET té varianty – u létavé dámy
+ * (ruská/česká/pool) je dlouhý tah dámy `26-10` legální a bez správného rulesetu
+ * by ho `formatMove` odmítl jako teleport (RangeError). Default 'american' drží
+ * zpětnou kompatibilitu volajících bez varianty.
  */
-export function formatGamePdn(moves: readonly Move[], result: GameResult, date: Date): string {
+export function formatGamePdn(
+  moves: readonly Move[],
+  result: GameResult,
+  date: Date,
+  variant: VariantId = 'american',
+): string {
   if (result === 'ongoing') {
     throw new RangeError('formatGamePdn: nelze archivovat rozehranou partii (result "ongoing")');
   }
   const token = RESULT_TOKEN[result];
+  const ruleset = rulesetForVariant(variant);
   const tags = [
-    '[Event "American Checkers"]',
+    `[Event "${EVENT_NAME[variant]}"]`,
     '[Site "local"]',
     `[UTCDate "${formatUtcDate(date)}"]`,
     `[UTCTime "${formatUtcTime(date)}"]`,
     '[Round "-"]',
     '[White "?"]',
     '[Black "?"]',
+    `[Variant "${variant}"]`,
     `[Result "${token}"]`,
   ].join('\n');
 
   // Jeden číslovaný tah (pár půltahů) na řádek. Výsledkový token na vlastním
-  // posledním řádku movetextu.
+  // posledním řádku movetextu. `formatMove` s rulesetem varianty – jinak by
+  // létavý tah dámy spadl na „teleport".
   const lines: string[] = [];
   for (let i = 0; i < moves.length; i += 2) {
     const moveNo = i / 2 + 1;
-    const black = formatMove(moves[i]!);
-    const white = i + 1 < moves.length ? formatMove(moves[i + 1]!) : undefined;
+    const black = formatMove(moves[i]!, ruleset);
+    const white = i + 1 < moves.length ? formatMove(moves[i + 1]!, ruleset) : undefined;
     lines.push(white === undefined ? `${String(moveNo)}. ${black}` : `${String(moveNo)}. ${black} ${white}`);
   }
   lines.push(token);

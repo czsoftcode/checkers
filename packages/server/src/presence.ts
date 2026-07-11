@@ -1,27 +1,28 @@
 /**
- * Registr přítomných hráčů v JEDNÉ společné místnosti – globální real-time
- * vrstva V3 (fáze 67). Na rozdíl od `GameHub` (mapa `gameId → sockety`,
- * per-partie) je tu JEDNA globální množina hráčů `{ id, nick, socket }`.
+ * Prezence hráčů ve ČTYŘECH varianta-lobby (fáze 103). Dvě vrstvy:
  *
- * Modul je autorita nad obsazeností místnosti: přiděluje skryté session `id`
- * (autoritní klíč hráče – přezdívka je jen jmenovka, na kterou se pak navěsí
- * párování v todo 38), řeší case-insensitive unikátnost přezdívky, navrhuje
- * volnou variantu při kolizi a validuje přezdívku. Transport (WS route,
- * serializace drátových zpráv) je MIMO modul: route dostane výsledek `join`
- * a rozhodne, co komu poslat.
+ *  - {@link RoomPresence} = transport JEDNÉ lobby: množina `{ id, nick, socket }`,
+ *    roster, broadcast a směrované `sendTo`. NEřeší unikátnost přezdívky ani
+ *    přidělování id – to je nově globální (viz níž). Vnitřek se od fáze 67 skoro
+ *    nezměnil, jen se z něj VYTÁHLA identita.
+ *  - {@link Lobbies} = registr 4 lobby + GLOBÁLNÍ identita. Přezdívka je jedna na
+ *    CELÝ server (jeden registr nicků, ne 4× per-lobby), příprava na budoucí login.
+ *    Hráč (identita) je v PRÁVĚ JEDNÉ lobby a smí PŘEJÍT do jiné (`switchLobby`)
+ *    bez ztráty přezdívky/session. Cross-variant výzva pak padne přirozeně:
+ *    `Lobbies.room(mojeVarianta).has(cíl)` je false, když cíl je v jiné lobby.
  *
  * Fire-and-forget vedlejší efekt (jako u `GameHub`): jeden vadný socket NESMÍ
- * shodit ostatní. `broadcast` posílá po jednom, v try/catch a jen do OTEVŘENÝCH
+ * shodit ostatní. `broadcast`/`sendTo` posílají v try/catch a jen do OTEVŘENÝCH
  * spojení (readyState).
  *
- * VĚDOMĚ mimo tento řez (fáze 67): stav volný/hraje (naplní párování, todo 38),
- * stabilní identita/reconnection (todo 42), úklid nečinných/zombie spojení a
- * limity zpráv (todo 45). Základní odhlášení hráče při `close` řeší WS route
- * voláním {@link RoomPresence.remove} – bez něj by roster i broadcast rostly
- * o mrtvá spojení.
+ * VĚDOMĚ mimo tento řez: stabilní identita/reconnection (todo 42), úklid
+ * nečinných/zombie spojení a limity zpráv (todo 45), KLIENTSKÉ UI čtyř místností
+ * (D3b). Odhlášení hráče při `close` řeší WS route voláním {@link Lobbies.remove}.
  */
 
 import { randomUUID } from 'node:crypto';
+import { VARIANT_IDS } from '@checkers/rules';
+import type { VariantId } from '@checkers/rules';
 
 /**
  * Minimální rozhraní socketu, které registr potřebuje. Reálně ho splňuje
@@ -41,15 +42,26 @@ export interface RoomPlayer {
 }
 
 /**
- * Výsledek pokusu o vstup do místnosti. `ok` = hráč zapsán (a je v rosteru);
- * `nick-taken` = přezdívka obsazená, hráč NEzapsán, `suggestion` je volná
- * varianta k opakování; `invalid` = přezdívka neprošla validací (prázdná /
- * příliš dlouhá), hráč NEzapsán, `reason` je lidský důvod.
+ * Výsledek pokusu o vstup do lobby. `ok` = hráč zapsán (a je v rosteru své
+ * lobby); `nick-taken` = přezdívka obsazená GLOBÁLNĚ (v libovolné lobby), hráč
+ * NEzapsán, `suggestion` je volná varianta k opakování; `invalid` = přezdívka
+ * neprošla validací (prázdná / příliš dlouhá), hráč NEzapsán, `reason` je důvod.
  */
 export type JoinResult =
   | { readonly status: 'ok'; readonly player: RoomPlayer }
   | { readonly status: 'nick-taken'; readonly suggestion: string }
   | { readonly status: 'invalid'; readonly reason: string };
+
+/**
+ * Výsledek přechodu do jiné lobby ({@link Lobbies.switchLobby}). `ok` nese cílovou
+ * variantu; `not-joined` = hráč vůbec není přihlášen (neznámé id); `same` = už je
+ * v cílové lobby (no-op, ale route to nemá hlásit jako přechod). Autoritu „hráč
+ * není v aktivní partii" hlídá route PŘED voláním (registr hry nezná).
+ */
+export type SwitchLobbyResult =
+  | { readonly status: 'ok'; readonly variant: VariantId }
+  | { readonly status: 'not-joined' }
+  | { readonly status: 'same' };
 
 /**
  * Maximální délka přezdívky (po `trim`). Konstanta (ne magické číslo): sdílí ji
@@ -61,9 +73,10 @@ export const NICK_MAX_LENGTH = 24;
 /**
  * Drátové zprávy SERVER → klient (obálky s `type`). Route je jediné místo, kde
  * se serializují; klient (zatím jen test) je čte podle `type`.
- *  - `roster`     – JEN příchozímu, celý seznam přítomných (vč. sebe),
- *  - `joined`     – VŠEM ostatním, nový hráč,
- *  - `left`       – VŠEM zbylým, odchozí hráč (jen `id`),
+ *  - `roster`     – JEN příchozímu, celý seznam přítomných v JEHO lobby (vč. sebe)
+ *                   + `variant` (echo lobby, do které vstoupil / přešel – fáze 103),
+ *  - `joined`     – ostatním V TÉŽE lobby, nový hráč,
+ *  - `left`       – zbylým V TÉŽE lobby, odchozí hráč (jen `id`),
  *  - `nick-taken` – příchozímu, přezdívka obsazená + návrh volné varianty,
  *  - `error`      – příchozímu, lidský důvod (prázdná/dlouhá přezdívka, dvojí
  *                   join, nevalidní zpráva); socket zůstává otevřený.
@@ -71,6 +84,8 @@ export const NICK_MAX_LENGTH = 24;
 export interface RosterMessage {
   readonly type: 'roster';
   readonly players: RoomPlayer[];
+  /** Varianta lobby, do které hráč vstoupil (echo pro klienta – fáze 103). */
+  readonly variant: VariantId;
 }
 export interface JoinedMessage {
   readonly type: 'joined';
@@ -189,19 +204,136 @@ interface PlayerEntry {
   readonly socket: RoomSocket;
 }
 
+/**
+ * Transport JEDNÉ lobby (fáze 103, dřív celá „místnost" fáze 67). Drží množinu
+ * přítomných `{ id, nick, socket }` a umí roster, broadcast a směrované `sendTo`.
+ *
+ * NEřeší unikátnost přezdívky ani přidělování id – hráče sem vkládá {@link Lobbies}
+ * přes {@link RoomPresence.add} s už přidělenou identitou (id je globálně unikátní).
+ * Tím zůstává jedna přezdívka na CELÝ server, ne 4× per-lobby.
+ */
 export class RoomPresence {
   private readonly players = new Map<string, PlayerEntry>();
 
   /**
-   * Pokus o vstup pod přezdívkou. Trim → validace (prázdná / >{@link NICK_MAX_LENGTH})
-   * → kontrola obsazenosti (case-insensitive). Při úspěchu přidělí session `id`,
-   * hráče ZAPÍŠE (roster ho hned obsahuje) a vrátí `ok`. Jinak NIC nemění a vrátí
-   * `nick-taken` (s návrhem) nebo `invalid` (s důvodem).
-   *
-   * Dvojí `join` na tomtéž socketu registr NEřeší – to je stav spojení, hlídá ho
-   * route (drží referenci na už zapsaného hráče).
+   * Vloží hráče s UŽ přidělenou identitou (id, nick) a jeho socketem. Volá
+   * výhradně {@link Lobbies} (po globální kontrole unikátnosti a validaci) –
+   * proto tu žádná kontrola není. Duplicitní id přepíše (nenastává: id je UUID).
    */
-  join(rawNick: string, socket: RoomSocket): JoinResult {
+  add(player: RoomPlayer, socket: RoomSocket): void {
+    this.players.set(player.id, { id: player.id, nick: player.nick, socket });
+  }
+
+  /** Odhlásí hráče podle `id`. Neznámé `id` = no-op (idempotentní na `close`). */
+  remove(id: string): void {
+    this.players.delete(id);
+  }
+
+  /** Aktuální seznam přítomných (drátový tvar, bez socketů). */
+  roster(): RoomPlayer[] {
+    return [...this.players.values()].map(({ id, nick }) => ({ id, nick }));
+  }
+
+  /**
+   * Rozešle `payload` VŠEM otevřeným hráčům lobby, volitelně kromě `exceptId`
+   * (typicky sám příchozí, který dostal `roster` a nemá dostat i vlastní `joined`).
+   * Zavřené sockety (readyState !== OPEN) přeskočí; výjimku z jednoho `send`
+   * spolkne a zaloguje, aby nezablokovala ostatní.
+   */
+  broadcast(payload: string, exceptId?: string): void {
+    for (const entry of this.players.values()) {
+      if (entry.id === exceptId || entry.socket.readyState !== WS_OPEN) {
+        continue;
+      }
+      try {
+        entry.socket.send(payload);
+      } catch (error) {
+        console.error(`Lobby: odeslání hráči ${entry.id} selhalo:`, error);
+      }
+    }
+  }
+
+  /** Je hráč `id` v TÉTO lobby? Pro směrované zprávy (výzva na přítomného v lobby). */
+  has(id: string): boolean {
+    return this.players.has(id);
+  }
+
+  /**
+   * Pošle `payload` JEDNOMU hráči lobby podle `id` (směrovaná zpráva – výzva,
+   * přijetí, odmítnutí, zrušení). No-op, když hráč není v lobby nebo má zavřený
+   * socket. Fire-and-forget jako {@link broadcast}: výjimku z `send` spolkne a
+   * zaloguje, ať jeden vadný socket nezhodí volající cestu. Vrací `true`, když
+   * se doručilo.
+   */
+  sendTo(id: string, payload: string): boolean {
+    const entry = this.players.get(id);
+    if (entry?.socket.readyState !== WS_OPEN) {
+      return false;
+    }
+    try {
+      entry.socket.send(payload);
+      return true;
+    } catch (error) {
+      console.error(`Lobby: směrované odeslání hráči ${id} selhalo:`, error);
+      return false;
+    }
+  }
+
+  /** Počet přítomných v této lobby – pro testy a diagnostiku (deterministické čekání). */
+  count(): number {
+    return this.players.size;
+  }
+}
+
+/** Globální identita hráče: přezdívka + lobby (varianta), ve které je + socket. */
+interface Identity {
+  readonly nick: string;
+  readonly variant: VariantId;
+  readonly socket: RoomSocket;
+}
+
+/**
+ * Registr ČTYŘ varianta-lobby + GLOBÁLNÍ identita (fáze 103). Jeden zdroj pravdy
+ * o tom, kdo je přihlášen (nick→lobby) a je autorita nad unikátností přezdívky
+ * přes CELÝ server. Přezdívka je jedna na program (příprava na budoucí login),
+ * NE na místnost: „Karel" nejde zaregistrovat dvakrát ani do různých lobby.
+ *
+ * Členství per lobby drží čtyři {@link RoomPresence} (transport). Route (app.ts)
+ * dostane výsledek operace a rozhodne, komu co poslat.
+ */
+export class Lobbies {
+  private readonly rooms = new Map<VariantId, RoomPresence>();
+  /** id → identita (nick + lobby + socket). Klíč unikátnosti nicku je globální. */
+  private readonly identities = new Map<string, Identity>();
+
+  constructor() {
+    // Všechny 4 lobby eagerly – registr je úplný, `room()` nikdy nevrátí undefined.
+    for (const variant of VARIANT_IDS) {
+      this.rooms.set(variant, new RoomPresence());
+    }
+  }
+
+  /**
+   * Transport dané lobby. Registr je úplný (4 varianty), takže pro platné
+   * `VariantId` nikdy nevrátí undefined; neznámá varianta (cizí cast) → RangeError,
+   * ne tiché defaultnutí (stejná zásada jako `rulesetForVariant`).
+   */
+  room(variant: VariantId): RoomPresence {
+    const room = this.rooms.get(variant);
+    if (room === undefined) {
+      throw new RangeError(`Neznámá lobby: ${String(variant)}`);
+    }
+    return room;
+  }
+
+  /**
+   * Pokus o vstup do lobby `variant` pod přezdívkou. Trim → validace (prázdná /
+   * >{@link NICK_MAX_LENGTH}) → GLOBÁLNÍ kontrola obsazenosti (case-insensitive,
+   * přes všechny lobby). Při úspěchu přidělí session `id`, zapíše identitu i
+   * členství v lobby a vrátí `ok`. Jinak NIC nemění a vrátí `nick-taken` (s
+   * návrhem) nebo `invalid` (s důvodem).
+   */
+  join(rawNick: string, variant: VariantId, socket: RoomSocket): JoinResult {
     const nick = rawNick.trim();
     if (nick.length === 0) {
       return { status: 'invalid', reason: 'Přezdívka nesmí být prázdná.' };
@@ -216,74 +348,76 @@ export class RoomPresence {
       return { status: 'nick-taken', suggestion: this.suggestFreeNick(nick) };
     }
     const id = randomUUID();
-    this.players.set(id, { id, nick, socket });
+    this.identities.set(id, { nick, variant, socket });
+    this.room(variant).add({ id, nick }, socket);
     return { status: 'ok', player: { id, nick } };
   }
 
-  /** Odhlásí hráče podle `id`. Neznámé `id` = no-op (idempotentní na `close`). */
-  remove(id: string): void {
-    this.players.delete(id);
-  }
-
-  /** Aktuální seznam přítomných (drátový tvar, bez socketů). */
-  roster(): RoomPlayer[] {
-    return [...this.players.values()].map(({ id, nick }) => ({ id, nick }));
-  }
-
   /**
-   * Rozešle `payload` VŠEM otevřeným hráčům, volitelně kromě `exceptId` (typicky
-   * sám příchozí, který dostal `roster` a nemá dostat i vlastní `joined`).
-   * Zavřené sockety (readyState !== OPEN) přeskočí; výjimku z jednoho `send`
-   * spolkne a zaloguje, aby nezablokovala ostatní.
+   * Odhlásí hráče (uvolní identitu i členství v jeho lobby). Neznámé `id` = no-op
+   * (idempotentní na `close`). Přezdívka se tím GLOBÁLNĚ uvolní.
    */
-  broadcast(payload: string, exceptId?: string): void {
-    for (const entry of this.players.values()) {
-      if (entry.id === exceptId || entry.socket.readyState !== WS_OPEN) {
-        continue;
-      }
-      try {
-        entry.socket.send(payload);
-      } catch (error) {
-        console.error(`Místnost: odeslání hráči ${entry.id} selhalo:`, error);
-      }
+  remove(id: string): void {
+    const identity = this.identities.get(id);
+    if (identity === undefined) {
+      return;
     }
+    this.identities.delete(id);
+    this.room(identity.variant).remove(id);
   }
 
-  /** Je hráč `id` v místnosti? Pro směrované zprávy (výzva na přítomného). */
-  has(id: string): boolean {
-    return this.players.has(id);
+  /** Varianta (lobby) hráče `id`, nebo `undefined` když není přihlášen. */
+  variantOf(id: string): VariantId | undefined {
+    return this.identities.get(id)?.variant;
   }
 
   /**
-   * Pošle `payload` JEDNOMU hráči podle `id` (směrovaná zpráva – výzva, přijetí,
-   * odmítnutí, zrušení). No-op, když hráč není v místnosti nebo má zavřený socket.
-   * Fire-and-forget jako {@link broadcast}: výjimku z `send` spolkne a zaloguje,
-   * ať jeden vadný socket nezhodí volající cestu. Vrací `true`, když se doručilo.
+   * Přechod hráče `id` do lobby `target` BEZ ztráty identity (fáze 103). Přesune
+   * členství (socket) mezi lobby, přezdívka/session zůstává. `not-joined` když
+   * hráč není přihlášen; `same` když už v cílové lobby je (route to nehlásí jako
+   * přechod). Autoritu „hráč není v aktivní partii" hlídá route PŘED voláním –
+   * registr hry nezná (proto sem přechod za běhu partie vůbec nesmí dorazit).
+   */
+  switchLobby(id: string, target: VariantId): SwitchLobbyResult {
+    const identity = this.identities.get(id);
+    if (identity === undefined) {
+      return { status: 'not-joined' };
+    }
+    if (identity.variant === target) {
+      return { status: 'same' };
+    }
+    this.room(identity.variant).remove(id);
+    this.identities.set(id, { nick: identity.nick, variant: target, socket: identity.socket });
+    this.room(target).add({ id, nick: identity.nick }, identity.socket);
+    return { status: 'ok', variant: target };
+  }
+
+  /**
+   * Pošle `payload` hráči `id` do JEHO lobby (najde ji přes identitu). Konvence
+   * pro směrované zprávy, kde je příjemce jednoznačný (session id je globálně
+   * unikátní). No-op, když hráč není přihlášen / má zavřený socket.
    */
   sendTo(id: string, payload: string): boolean {
-    const entry = this.players.get(id);
-    if (entry?.socket.readyState !== WS_OPEN) {
+    const identity = this.identities.get(id);
+    if (identity === undefined) {
       return false;
     }
-    try {
-      entry.socket.send(payload);
-      return true;
-    } catch (error) {
-      console.error(`Místnost: směrované odeslání hráči ${id} selhalo:`, error);
-      return false;
-    }
+    return this.room(identity.variant).sendTo(id, payload);
   }
 
-  /** Počet přítomných – pro testy a diagnostiku (deterministické čekání). */
-  count(): number {
-    return this.players.size;
+  /** Počet přihlášených (napříč všemi lobby) – pro testy/diagnostiku. */
+  totalCount(): number {
+    return this.identities.size;
   }
 
-  /** Je přezdívka obsazená? Porovnání case-insensitive (`honza` == `Honza`). */
+  /**
+   * Je přezdívka obsazená GLOBÁLNĚ (v libovolné lobby)? Porovnání case-insensitive
+   * (`honza` == `Honza`). Jádro „jedna přezdívka na program".
+   */
   private isNickTaken(nick: string): boolean {
     const lower = nick.toLowerCase();
-    for (const entry of this.players.values()) {
-      if (entry.nick.toLowerCase() === lower) {
+    for (const identity of this.identities.values()) {
+      if (identity.nick.toLowerCase() === lower) {
         return true;
       }
     }
@@ -291,9 +425,9 @@ export class RoomPresence {
   }
 
   /**
-   * Nejnižší volná varianta `nick_1`, `nick_2`, … (case-insensitive). Kdyby
-   * návrh přesáhl {@link NICK_MAX_LENGTH}, základ se zkrátí, ať návrh projde
-   * validací při opakovaném `join`. Smyčka je konečná: přítomných je konečně,
+   * Nejnižší volná varianta `nick_1`, `nick_2`, … (case-insensitive, GLOBÁLNĚ).
+   * Kdyby návrh přesáhl {@link NICK_MAX_LENGTH}, základ se zkrátí, ať návrh projde
+   * validací při opakovaném `join`. Smyčka je konečná: přihlášených je konečně,
    * takže nějaké `n` je vždy volné.
    */
   private suggestFreeNick(nick: string): string {

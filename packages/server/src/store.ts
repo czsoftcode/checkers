@@ -9,7 +9,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { advanceState, gameResultFromState, initialGameState } from '@checkers/rules';
-import type { Color, GameResult, GameState, Move } from '@checkers/rules';
+import type { Color, GameResult, GameState, Move, VariantId } from '@checkers/rules';
 
 /**
  * Opačná barva. Čistá funkce (`Color` je jen `'black' | 'white'`), ne do
@@ -193,12 +193,21 @@ export class GameStore {
    * diskuse fáze 68, deterministické (žádný los). `players` váže barvu na session
    * id, což je substrát pro autoritu tahů. `id` se vrací volajícímu (párovací WS),
    * aby ho poslal oběma.
+   *
+   * `variant` je varianta LOBBY, ve které dvojice hraje (fáze 103) – zapíše se do
+   * `GameState.variant`, takže `advanceState`/`findLegalMove` dál validují tah
+   * pravidly té varianty. Default 'american' drží zpětnou kompatibilitu volajících
+   * bez varianty (dosavadní testy). Rematch dědí variantu STARÉ partie (viz app).
    */
-  createPvp(challengerId: string, challengedId: string): PvpGameRecord {
+  createPvp(
+    challengerId: string,
+    challengedId: string,
+    variant: VariantId = 'american',
+  ): PvpGameRecord {
     const id = randomUUID();
     const game: PvpStoredGame = {
       mode: 'pvp',
-      state: initialGameState(),
+      state: initialGameState(undefined, variant),
       moves: [],
       archived: false,
       forcedResult: null,
