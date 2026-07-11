@@ -1,10 +1,11 @@
 /**
  * Ruleset – parametry varianty, které mění chování generátoru tahů.
  *
- * Záměrně MINIMÁLNÍ: obsahuje jen to, co reálně čte generátor / apply / notace.
- * Další pole (proměna uprostřed braní `promoteMidCapture`, priorita/maximum
- * braní) se dolijí, až je bude číst reálný kód – ne dřív, ať nevznikne dead
- * config.
+ * Záměrně MINIMÁLNÍ: každé pole reálně čte generátor / apply / legalMoves –
+ * žádný dead config. Nové pole se přidává teprve, až je čte kód (tak přibylo
+ * `promoteMidCapture` pro ruskou a `kingCapturePriority` pro českou). Pravidlo
+ * MAXIMA braní (musí brát nejvíc) záměrně chybí – žádná varianta této vlny ho
+ * nepoužívá; dolije se, až bude na řadě mezinárodní dáma.
  *
  * Varianta patří do GameState / metadat místnosti, NE do hashované Position
  * (Zobrist zůstává position-only) – Ruleset se proto protahuje parametrem,
@@ -28,6 +29,15 @@ export interface Ruleset {
    * létavé dámy nemá v této vlně variant smysl a generátor ji nepoužívá.
    */
   readonly promoteMidCapture: boolean;
+  /**
+   * Kvalitativní PŘEDNOST braní dámou (česká varianta): existuje-li mezi
+   * legálními skoky aspoň jeden, kde bere DÁMA, MUSÍ hráč brát dámou – všechny
+   * skoky mužem se vypustí. Jde jen o kvalitu (dáma > muž), NE o maximum
+   * (nemusí brát nejvíc kamenů). `false` = žádná přednost, skoky muže i dámy
+   * jsou rovnocenné (americká, pool, ruská). Filtr žije v `legalMoves`
+   * (public gate), ne v generátoru – stavební bloky zůstávají beze změny.
+   */
+  readonly kingCapturePriority: boolean;
 }
 
 /**
@@ -39,6 +49,7 @@ export const AMERICAN_RULESET: Ruleset = {
   manCaptureBackward: false,
   king: 'short',
   promoteMidCapture: false,
+  kingCapturePriority: false,
 };
 
 /**
@@ -54,6 +65,7 @@ export const POOL_RULESET: Ruleset = {
   manCaptureBackward: true,
   king: 'flying',
   promoteMidCapture: false,
+  kingCapturePriority: false,
 };
 
 /**
@@ -68,4 +80,24 @@ export const RUSSIAN_RULESET: Ruleset = {
   manCaptureBackward: true,
   king: 'flying',
   promoteMidCapture: true,
+  kingCapturePriority: false,
+};
+
+/**
+ * Česká dáma (Czech draughts, „dáma"): muž bere JEN VPŘED (na rozdíl od pool a
+ * ruské – `manCaptureBackward: false`), dáma je LÉTAVÁ (`king: 'flying'`),
+ * proměna až NA KONCI tahu (`promoteMidCapture: false`, jako pool – NE ruská
+ * proměna uprostřed braní) a platí KVALITATIVNÍ PŘEDNOST braní dámou
+ * (`kingCapturePriority: true`): může-li v pozici brát dáma, hráč MUSÍ brát
+ * dámou. Žádné pravidlo maxima – jen kvalita dámy nad mužem.
+ *
+ * Otevírací perft se v mělkých hloubkách kryje s americkou (muž jen vpřed,
+ * dámy ještě nejsou) – to je zadarmo cross-check bitu `manCaptureBackward`.
+ * Zdroj pravidel potvrzen uživatelem (český hráč) + brainking.com.
+ */
+export const CZECH_RULESET: Ruleset = {
+  manCaptureBackward: false,
+  king: 'flying',
+  promoteMidCapture: false,
+  kingCapturePriority: true,
 };

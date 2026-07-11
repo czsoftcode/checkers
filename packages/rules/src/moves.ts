@@ -389,6 +389,14 @@ function extendRussianManJumps(
  * vrací se jen skoky (všech figur, které je mají) a žádný prostý tah.
  * Teprve když žádný skok neexistuje, vrací se prosté tahy. Skoky jsou
  * úplné sekvence (vícenásobné braní) – viz `jumpMovesFrom`.
+ *
+ * KVALITATIVNÍ PŘEDNOST DÁMY (`ruleset.kingCapturePriority`, česká varianta):
+ * existuje-li mezi skoky aspoň jeden, kde bere DÁMA, vypustí se všechny skoky
+ * mužem – hráč musí brát dámou. Druh táhnoucího kamene určuje políčko
+ * `move.from`: česká NEmá proměnu uprostřed braní, takže kámen je po celou
+ * sekvenci konstantní a stačí jeho `kind` na výchozím poli. Filtr žije JEN tady
+ * (public gate), stavební bloky zůstávají beze změny; pro ostatní varianty
+ * (priorita `false`) se nespustí.
  */
 export function legalMoves(position: Position, ruleset: Ruleset = AMERICAN_RULESET): Move[] {
   const jumps: Move[] = [];
@@ -396,6 +404,12 @@ export function legalMoves(position: Position, ruleset: Ruleset = AMERICAN_RULES
     jumps.push(...jumpMovesFrom(position, square, ruleset));
   }
   if (jumps.length > 0) {
+    if (ruleset.kingCapturePriority) {
+      const kingJumps = jumps.filter((move) => position.board[move.from - 1]?.kind === 'king');
+      if (kingJumps.length > 0) {
+        return kingJumps;
+      }
+    }
     return jumps;
   }
   return generateSimpleMoves(position, ruleset);

@@ -9,6 +9,14 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ### Added
 
+- **Česká varianta pravidel (zatím jen v knihovně).** Přidána česká dáma: kámen (muž)
+  bere jen vpřed, dáma je létavá (bere kdekoli po diagonále) a platí přednost braní
+  dámou – může-li v pozici brát dáma, hráč musí brát dámou (skoky mužem se vynechají;
+  jde jen o kvalitu dámy nad mužem, ne o pravidlo „musí brát nejvíc"). Proměna nastává
+  až na konci tahu. Tím je dokončena rodina připravovaných variant (americká, pool,
+  ruská, česká). Korektnost je ověřená perftem (otevírací pozice se kryje s americkými
+  čísly, protože muž bere jen vpřed) i ručně postavenými pozicemi na přednost dámy pro
+  obě strany. Česká varianta se zatím nedá hrát v aplikaci, jde o přípravu.
 - **Ruská proměna uprostřed braní (zatím jen v knihovně).** Přidána ruská pravidla:
   muž, který během skokové sekvence dojde na dámskou řadu, se v tom okamžiku stává
   létavou dámou a – může-li – musí v braní pokračovat letmo (dřív takové pokračování

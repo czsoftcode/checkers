@@ -1,0 +1,34 @@
+{
+  "id": 99,
+  "title": "Česká: priorita braní dámou",
+  "goal": "Přidat kingCapturePriority do Ruleset + CZECH_RULESET prod const (létavá dáma + priorita braní dámou); filtr v legalMoves - existuje-li legální skok dámou, vypustit všechny skoky mužem. Přesná česká pravidla (bere muž dozadu? manCaptureBackward + přesná definice priority) ZAFIXOVAT proti JEDNOMU zdroji, NEpřebírat 'totéž jako pool' z todo (může být špatně - řada zdrojů uvádí, že český muž bere jen vpřed). Brána: česká perft proti zafixovanému zdroji + golden testy priority; americká/pool/ruská beze změny čísel. Dokončuje fázi C. Řez z todo 58.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ruleset kingCapturePriority + CZECH_RULESET",
+      "status": "done",
+      "detail": "Přidat kingCapturePriority: boolean do Ruleset; CZECH_RULESET (manCaptureBackward:false, king:'flying', promoteMidCapture:false, kingCapturePriority:true) prod const + export z index. Ostatní rulesety mají kingCapturePriority:false."
+    },
+    {
+      "title": "legalMoves: filtr priority dámy",
+      "status": "done",
+      "detail": "Po nasbírání skoků (uvnitř větve jumps.length > 0): je-li ruleset.kingCapturePriority a existuje-li skok, jehož kámen na move.from je DÁMA, ponechat jen skoky dámou; jinak beze změny. Filtr v public legalMoves, NE ve stavebních blocích. Ostatní varianty (priority false) nedotčeny."
+    },
+    {
+      "title": "Golden testy priority (obě strany)",
+      "status": "done",
+      "detail": "Ručně postavené pozice, kde bere dáma i muž: s CZECH_RULESET legalMoves vrátí JEN skoky dámou (muž-braní vypuštěno). Kontrola i pozice, kde dáma brát nemůže -> muž bere normálně. Ověřit applyMove obou stran (výsledná deska)."
+    },
+    {
+      "title": "Perft brána: česká == americká + neměnnost ostatních",
+      "status": "done",
+      "detail": "Česká otevírací perft 1-6 == americká čísla (7/49/302/1469/7361/36768) = zadarmo potvrzení forward-only muže; test, že se NErovná pool. Americká/pool/ruská perft beze změny čísel. Priorita samotná pokrytá golden krokem 3; hlubší crafted cross-check jen pokud levný přes rozšířený perftRef."
+    }
+  ],
+  "startedAt": "2026-07-11T18:27:52.838Z",
+  "completedAt": "2026-07-11T18:47:42.321Z",
+  "autoCommit": {
+    "preSha": "cc19ea8b1701407ee0faa58d4d21bc0883da3bb6",
+    "subject": "Phase 99: Česká: priorita braní dámou"
+  }
+}

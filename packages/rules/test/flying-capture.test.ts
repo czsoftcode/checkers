@@ -40,7 +40,12 @@ const BLACK_MAN: Cell = { color: 'black', kind: 'man' };
 const WHITE_MAN: Cell = { color: 'white', kind: 'man' };
 
 /** Pool ruleset = zdroj pravdy fáze: létavá dáma, muž bere i dozadu. */
-const POOL_RULESET: Ruleset = { manCaptureBackward: true, king: 'flying', promoteMidCapture: false };
+const POOL_RULESET: Ruleset = {
+  manCaptureBackward: true,
+  king: 'flying',
+  promoteMidCapture: false,
+  kingCapturePriority: false,
+};
 
 describe('flying braní – volba dopadu', () => {
   it('dáma sebere jeden kámen a smí dopadnout na KTERÉKOLI prázdné pole za ním', () => {

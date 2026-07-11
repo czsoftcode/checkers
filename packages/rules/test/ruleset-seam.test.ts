@@ -17,7 +17,12 @@ const BLACK_MAN: Cell = { color: 'black', kind: 'man' };
 const WHITE_MAN: Cell = { color: 'white', kind: 'man' };
 
 /** Ne-výchozí varianta: muž smí brát i dozadu (jako ruská/česká dáma). */
-const BACKWARD_CAPTURE: Ruleset = { manCaptureBackward: true, king: 'short', promoteMidCapture: false };
+const BACKWARD_CAPTURE: Ruleset = {
+  manCaptureBackward: true,
+  king: 'short',
+  promoteMidCapture: false,
+  kingCapturePriority: false,
+};
 
 describe('Ruleset seam – braní muže dozadu', () => {
   // Bílý na 14 je SEVERNĚ (za zády) od černého muže na 18 – braní vzad.
