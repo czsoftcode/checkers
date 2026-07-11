@@ -472,6 +472,11 @@
       "id": 94,
       "title": "Létavá dáma: prostý tah (klouzání)",
       "status": "done"
+    },
+    {
+      "id": 95,
+      "title": "Létavá dáma: braní (generátor + apply)",
+      "status": "done"
     }
   ]
 }

@@ -8,7 +8,7 @@ import { isNeighbor, jumpedSquareBetween, raySquares, squareToCoords } from './b
 import { cellAt } from './moves.js';
 import { AMERICAN_RULESET } from './ruleset.js';
 import type { Ruleset } from './ruleset.js';
-import type { Cell, Color, Move, Position } from './types.js';
+import type { Cell, Color, Move, Position, Square } from './types.js';
 
 /** Řada proměny = zadní řada soupeře: černý končí dole (řada 7), bílý nahoře (řada 0). */
 const PROMOTION_ROW: Record<Color, number> = { black: 7, white: 0 };
@@ -26,9 +26,12 @@ const PROMOTION_ROW: Record<Color, number> = { black: 7, white: 0 };
  * nést soupeřův kámen), volná pole dopadu v okamžiku dopadu (origin se
  * uvolňuje – kruhový návrat na `from` je legální), captures bez duplicit.
  *
- * `ruleset` řídí jen dosah prostého tahu dámy (`king: 'flying'` → paprsek);
- * default AMERICAN zachová dosavadní chování (dáma o 1 pole). Braní létavé
- * dámy je zatím MIMO řez – skok se pořád validuje jako krok o 2 pole.
+ * `ruleset` řídí dosah prostého tahu i braní dámy (`king: 'flying'` → paprsek).
+ * Létavá dáma bere KLOUZAVĚ: segment je paprsek diagonály s právě jedním
+ * soupeřovým kamenem, dopad libovolné prázdné pole za ním. Turecký úder –
+ * brané kameny drží na desce jako blokery po celou path a smažou se naráz na
+ * konci (zrcadlo generátoru `extendFlyingKingJumps`). Default AMERICAN i krátká
+ * dáma / muž validují skok dál jako krok o 2 pole (okamžité odebrání), beze změny.
  *
  * NEvaliduje se plná legalita (povinnost braní, směr muže, úplnost
  * sekvence) – tu si drží server členstvím v `legalMoves`; engine tahá tahy
@@ -72,6 +75,10 @@ export function applyMove(
   board[move.from - 1] = null;
 
   const flyingKing = fromCell.kind === 'king' && ruleset.king === 'flying';
+  // Brané kameny létavé dámy (turecký úder): drží se na desce jako blokery
+  // po celou dobu path a smažou se naráz až po dokončení sekvence. Krátká
+  // dáma / muž maže průběžně ve smyčce jako dřív – tento seznam zůstane prázdný.
+  const capturedSquares: Square[] = [];
   let current = move.from;
   for (let i = 0; i < path.length; i++) {
     const landing = path[i];
@@ -110,6 +117,59 @@ export function applyMove(
           `Neplatný tah: ${String(landing)} nesousedí s ${String(current)} (teleport)`,
         );
       }
+    } else if (flyingKing) {
+      // Létavá dáma – klouzavé braní (turecký úder). Segment current->landing
+      // je paprsek diagonály, na němž smí ležet PRÁVĚ JEDEN obsazený kámen =
+      // deklarovaný capture (soupeřův, v tomto tahu ještě nebraný). Ostatní
+      // mezipole i landing musí být prázdná. Brané kameny se NEMAŽOU průběžně –
+      // dřív braný (stále na desce) blokuje pozdější segment i dopad, čímž
+      // padne pokus přejet ho podruhé. Skutečné mazání až po smyčce.
+      const declaredCapture = captures[i];
+      if (declaredCapture === undefined) {
+        throw new RangeError('Neplatný tah: díra v captures');
+      }
+      const ray = raySquares(current, landing);
+      if (ray === null) {
+        throw new RangeError(
+          `Neplatný tah: ${String(landing)} neleží na diagonále z ${String(current)} (teleport)`,
+        );
+      }
+      let overSquare: Square | null = null;
+      for (const passed of ray) {
+        if (passed === landing) {
+          continue; // landing už ověřen jako prázdný výše
+        }
+        const passedCell = board[passed - 1];
+        if (passedCell === null || passedCell === undefined) {
+          continue; // prázdné mezipole
+        }
+        if (overSquare !== null) {
+          throw new RangeError(
+            `Neplatný tah: segment z ${String(current)} na ${String(landing)} přeskakuje víc než jeden kámen`,
+          );
+        }
+        overSquare = passed;
+      }
+      if (overSquare === null) {
+        throw new RangeError(
+          `Neplatný tah: segment z ${String(current)} na ${String(landing)} nebere žádný kámen`,
+        );
+      }
+      if (overSquare !== declaredCapture) {
+        throw new RangeError(
+          `Neplatný tah: z ${String(current)} na ${String(landing)} se bere ${String(overSquare)}, ne deklarované ${String(declaredCapture)}`,
+        );
+      }
+      const capturedCell = board[overSquare - 1];
+      if (capturedCell === null || capturedCell === undefined) {
+        throw new RangeError(`Neplatný tah: na braném poli ${String(overSquare)} nic nestojí`);
+      }
+      if (capturedCell.color === fromCell.color) {
+        throw new RangeError(
+          `Neplatný tah: na braném poli ${String(overSquare)} stojí vlastní kámen`,
+        );
+      }
+      capturedSquares.push(overSquare);
     } else {
       const expectedCapture = jumpedSquareBetween(current, landing);
       const declaredCapture = captures[i];
@@ -130,6 +190,12 @@ export function applyMove(
       board[expectedCapture - 1] = null;
     }
     current = landing;
+  }
+
+  // Turecký úder: brané kameny létavé dámy se odeberou naráz až po dokončení
+  // celé path (během ní blokovaly jako překážky). Krátká cesta sem nic nedá.
+  for (const captured of capturedSquares) {
+    board[captured - 1] = null;
   }
 
   const promotes = fromCell.kind === 'man' && squareToCoords(current).row === PROMOTION_ROW[fromCell.color];

@@ -136,6 +136,13 @@ export function simpleMovesFrom(
  * nemění: dopadová a přeskakovaná pole se nikdy nepotkají (dopady jsou od
  * startu o sudý počet řad i sloupců, přeskočené kameny o lichý).
  *
+ * VÝJIMKA – létavá dáma (`ruleset.king === 'flying'`): tato krok-2 cesta
+ * s okamžitým odebráním pro ni NEPLATÍ (paritní argument drží jen pro krok-2
+ * skok, ne pro klouzání – pozdější dlouhý segment by přejel přes dřív brané
+ * pole). Létavá dáma se proto routuje do `extendFlyingKingJumps`, které drží
+ * brané kameny na desce jako blokery (turecký úder). Muž i krátká dáma jedou
+ * touto starou cestou beze změny.
+ *
  * Proměna (todo 6): muž, který skokem dosáhne dámské řady, tahem KONČÍ –
  * tady to platí přirozeně (muž nemá z poslední řady skok vpřed); fáze
  * proměny to učiní explicitním v applyMove.
@@ -158,8 +165,80 @@ export function jumpMovesFrom(
   // Kámen je „ve vzduchu" – origin se uvolní pro případný kruhový návrat.
   board[square - 1] = null;
   const moves: Move[] = [];
-  extendJumps(board, cell, square, square, [], [], moves, ruleset);
+  const flying = cell.kind === 'king' && ruleset.king === 'flying';
+  if (flying) {
+    // Létavá dáma má vlastní klouzavou cestu s tureckým úderem (brané kameny
+    // zůstávají na desce jako blokery až do konce sekvence). Stará cesta se
+    // NEDOTÝKÁ, aby americká čísla i pořadí tahů zůstala bajt-identická.
+    extendFlyingKingJumps(board, cell, square, square, [], [], moves);
+  } else {
+    extendJumps(board, cell, square, square, [], [], moves, ruleset);
+  }
   return moves;
+}
+
+/**
+ * DFS klouzavého braní létavé dámy z pole `current` (turecký úder).
+ *
+ * V každém ze čtyř směrů dáma KLOUŽE přes prázdná pole až k PRVNÍMU obsazenému.
+ * Je-li to soupeřův kámen, který v TOMTO tahu ještě nebyl brán (není v
+ * `captures`), a je za ním aspoň jedno prázdné pole, vzniká větev pro KAŽDÉ
+ * takové prázdné pole dopadu (dokud nenarazí na další obsazené pole nebo okraj);
+ * z každého dopadu se rekurzivně pokračuje.
+ *
+ * TURECKÝ ÚDER: brané kameny se NEODEBÍRAJÍ z pracovní desky – zůstávají jako
+ * překážky, takže je nelze přeskočit ani přes ně dopadnout znovu a členství
+ * v `captures` brání jejich dvojímu braní. Skutečné odebrání dělá až apply.ts
+ * na konci celé sekvence (zrcadlově). Origin je uvolněn (v `jumpMovesFrom`),
+ * proto se dáma smí kruhově vrátit i na výchozí pole.
+ *
+ * Terminace: každá větev přidá do `captures` nový kámen (monotónně roste),
+ * dřív braný kámen blokuje, takže hloubka je shora omezená počtem soupeřových
+ * kamenů – cyklus se uzavřít nemůže.
+ */
+function extendFlyingKingJumps(
+  board: Cell[],
+  piece: Piece,
+  from: Square,
+  current: Square,
+  path: Square[],
+  captures: Square[],
+  out: Move[],
+): void {
+  let extended = false;
+  for (const dir of ALL_DIRS) {
+    // Klouzej k prvnímu obsazenému poli v tomto směru.
+    let over: Square | null = current;
+    while ((over = neighborOf(over, dir)) !== null && board[over - 1] === null) {
+      // prázdné pole – pokračuj v klouzání
+    }
+    if (over === null) {
+      continue; // došli jsme na okraj, žádný kámen k braní
+    }
+    const overCell = board[over - 1];
+    // overCell tu nemůže být null (smyčka končí až na obsazeném poli); guard
+    // drží i pro řídkou desku (undefined) – ta se chová jako neprůchodná.
+    if (overCell === null || overCell === undefined || overCell.color === piece.color) {
+      continue; // vlastní kámen (nebo díra) blokuje – v tomto směru nic
+    }
+    if (captures.includes(over)) {
+      continue; // už braný kámen (turecký úder) blokuje a nebere se dvakrát
+    }
+    // Za soupeřem: každé prázdné pole je samostatný dopad, dokud další
+    // obsazené pole nebo okraj klouzání neukončí.
+    let landing: Square | null = over;
+    while ((landing = neighborOf(landing, dir)) !== null && board[landing - 1] === null) {
+      extended = true;
+      path.push(landing);
+      captures.push(over);
+      extendFlyingKingJumps(board, piece, from, landing, path, captures, out);
+      captures.pop();
+      path.pop();
+    }
+  }
+  if (!extended && path.length > 0) {
+    out.push({ from, path: [...path], captures: [...captures] });
+  }
 }
 
 /**

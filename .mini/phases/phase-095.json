@@ -1,0 +1,39 @@
+{
+  "id": 95,
+  "title": "Létavá dáma: braní (generátor + apply)",
+  "goal": "V moves.ts (extendJumps) implementovat klouzavé braní létavé dámy - dojeď po diagonále k PRVNÍMU soupeřovu kameni (prázdná pole před ním), dopad na LIBOVOLNÉ prázdné pole za ním (každý dopad je větev), pokračování vícenásobného braní z dopadu - s odebráním na KONCI sekvence (turecký úder: brané kameny blokují a nelze je brát dvakrát), což nahrazuje dnešní chybné okamžité odebrání pro flying; plus ray-aware validace braní v apply.ts. Notace flying braní a perft jsou MIMO řez (fáze B2b/B3). Brána: golden testy klouzavého braní včetně tureckého úderu (pozdější segment nesmí přejet dřív braný kámen) a volby dopadu; americké braní beze změny (perft 1-6 a všechny testy zelené). Řez z todo 57 (fáze B), 57 zůstává otevřené.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Generátor: klouzavé braní létavé dámy",
+      "status": "done",
+      "detail": "Nová funkce extendFlyingKingJumps (stará extendJumps NEDOTČENA); jumpMovesFrom routuje létavou dámu sem, ostatní na starou cestu. V každém směru klouzat přes prázdná pole k prvnímu obsazenému; je-li to soupeř, NENÍ už v captures (spent blocker) a je za ním >=1 prázdné pole -> větev pro KAŽDÉ prázdné pole dopadu (dokud další obsazené/okraj), rekurze z dopadu. Turecký úder: brané kameny se NENULUJÍ (zůstávají blokery), membership v captures brání dvojímu braní."
+    },
+    {
+      "title": "apply.ts: validace klouzavého braní (turecký úder)",
+      "status": "done",
+      "detail": "Ve větvi captures.length !== 0 pro flyingKing ověřit každý segment current->landing přes raySquares: přesně jedno obsazené pole = deklarovaný capture (soupeřův, ještě nebraný v tomto tahu), ostatní mezipole i landing prázdné. Brané kameny NEmazat průběžně - smazat všechny až po dokončení path (zrcadlo generátoru). Krátká dáma/muž beze změny."
+    },
+    {
+      "title": "Golden testy braní (pool reference)",
+      "status": "done",
+      "detail": "Test-lokální POOL_RULESET (manCaptureBackward:true, king:'flying') jako zdroj pravdy. Jednoznačné pozice: volba dopadu (víc dopadů = víc tahů), vícenásobné braní, turecký úder (pozdější segment nepřejede dřív braný kámen; nebere tentýž dvakrát; nedopadne na spent pole). Ověřit REÁLNÝ kód obou stran: legalMoves(pos, pool) -> applyMove(pos, move, pool) -> zkontrolovat výslednou desku."
+    },
+    {
+      "title": "Americká brána: krátká cesta beze změny",
+      "status": "done",
+      "detail": "Ověřit, že stará extendJumps i short-king/muž braní jsou nedotčené - perft 1-6, POŘADÍ tahů, capture testy, selfplay/opening zelené beze změny čísel."
+    },
+    {
+      "title": "Nezávislý adversarial sub-agent review",
+      "status": "done",
+      "detail": "Před reportem pustit sub-agenta (čerstvý kontext) na turecký úder generátor vs apply a hrany: spent blocker, cyklický návrat, dopad na uvolněný origin, žádný dopad za soupeřem = žádný skok, vlastní kámen blokuje. Vyžaduje CLAUDE.md (chybové/geometrické cesty + kontrakt mezi moduly)."
+    }
+  ],
+  "startedAt": "2026-07-11T15:09:41.961Z",
+  "completedAt": "2026-07-11T15:34:54.676Z",
+  "autoCommit": {
+    "preSha": "dca0956c4266a2a96f9fc9513f4c14999c8b362a",
+    "subject": "Phase 95: Létavá dáma: braní (generátor + apply)"
+  }
+}
