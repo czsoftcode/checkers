@@ -61,17 +61,39 @@ export function formatMove(move: Move, ruleset: Ruleset = AMERICAN_RULESET): str
   if (new Set(move.captures).size !== move.captures.length) {
     throw new RangeError('Neplatný tah: duplicitní pole v captures');
   }
+  const flying = ruleset.king === 'flying';
   let current = move.from;
   for (let i = 0; i < move.path.length; i++) {
     const landing = move.path[i];
     if (landing === undefined) {
       throw new RangeError('Neplatný tah: díra v path');
     }
-    const jumped = jumpedSquareBetween(current, landing);
-    if (jumped === null || jumped !== move.captures[i]) {
-      throw new RangeError(
-        `Neplatný tah: z ${String(current)} na ${String(landing)} se nepřeskakuje pole ${String(move.captures[i])}`,
-      );
+    const captured = move.captures[i];
+    if (flying) {
+      // Létavá dáma klouže: braný kámen leží KDEKOLI na diagonálním segmentu
+      // z `current` na `landing` (mezipole nebo těsně před dopadem), ne nutně
+      // hned před dopadem. Ověřujeme jen členství na segmentu – na jednom
+      // paprsku smí stát víc kamenů (turecký úder), který z nich je braný nese
+      // move.captures a notace to nevidí. Krátké braní muže projde stejnou
+      // větví (segment délky 2). Pole dopadu samo brané být nesmí.
+      const segment = raySquares(current, landing);
+      if (segment === null) {
+        throw new RangeError(
+          `Neplatný tah: z ${String(current)} na ${String(landing)} nevede diagonála`,
+        );
+      }
+      if (captured === undefined || captured === landing || !segment.includes(captured)) {
+        throw new RangeError(
+          `Neplatný tah: braný kámen ${String(captured)} neleží na segmentu z ${String(current)} na ${String(landing)}`,
+        );
+      }
+    } else {
+      const jumped = jumpedSquareBetween(current, landing);
+      if (jumped === null || jumped !== captured) {
+        throw new RangeError(
+          `Neplatný tah: z ${String(current)} na ${String(landing)} se nepřeskakuje pole ${String(captured)}`,
+        );
+      }
     }
     current = landing;
   }

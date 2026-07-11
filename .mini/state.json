@@ -482,6 +482,11 @@
       "id": 96,
       "title": "Perft pro pool + externí ověření",
       "status": "done"
+    },
+    {
+      "id": 97,
+      "title": "Notace létavého braní (formatMove)",
+      "status": "done"
     }
   ]
 }

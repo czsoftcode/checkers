@@ -7,6 +7,15 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+
+- **Zápis braní létavé dámy do PDN (zatím jen v knihovně).** Notace tahů (`formatMove`)
+  teď umí zapsat klouzavé braní létavé dámy – bere kámen kdekoli na diagonále, ne jen
+  o jedno pole. Výstup je standardní PDN (jen pole dopadu, brané kameny se nepíšou).
+  Zpětné čtení takového zápisu je vědomě mimo záběr: z textu nejde bez znalosti desky
+  určit, který kámen na diagonále byl sebraný. Týká se jen připravované varianty pool
+  checkers, hratelné varianty to neovlivňuje.
+
 ### Fixed
 
 - **Pravidla braní pro pool checkers (zatím jen v knihovně, neovlivňuje hratelné

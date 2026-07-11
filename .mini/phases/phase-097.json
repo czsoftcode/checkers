@@ -1,0 +1,34 @@
+{
+  "id": 97,
+  "title": "Notace létavého braní (formatMove)",
+  "goal": "Rozšířit formatMove na klouzavé braní létavé dámy: každý braný kámen ověřit na diagonálním segmentu přes raySquares místo jumpedSquareBetween, důvěřovat move.captures (Move je nese). parseMove pro flying braní VĚDOMĚ mimo řez - notace nevidí desku a z textu jako 26x10 nejdou u létavé dámy brané kameny rekonstruovat (na segmentu může stát víc kamenů); PDN se nenačítá zpět (non-goal projektu), takže nikde nechybí. Americká notace beze změny čísel (roundtrip i format testy zelené). formatMove ruleset param už existuje z B1 (prostý tah). Uzavírá notační zbytek todo 56 a DOKONČUJE fázi B (todo 57); todo 56 zůstává otevřené (state/GameState + ~8 call sites -> D).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "formatMove: flying braní přes raySquares",
+      "status": "done",
+      "detail": "V capture větvi formatMove přidat větev pro ruleset.king === 'flying': každý captures[i] ověřit, že leží na segmentu raySquares(current, landing) a není to landing; americká (short) zůstává na jumpedSquareBetween. Výstupní řetězec beze změny ([from, ...path].join('x'), brané pole se nepíšou). Import raySquares."
+    },
+    {
+      "title": "Golden testy formatMove flying braní",
+      "status": "done",
+      "detail": "Test-lokální pool ruleset. formatMove dlouhého i vícenásobného létavého braní vrátí správný PDN (jen pole dopadu). Ověřit i to, že ray větev přijme krátké braní muže v poolu (segment délky 2)."
+    },
+    {
+      "title": "parseMove flying: doložit vědomou mezeru testem",
+      "status": "done",
+      "detail": "Test, že parseMove s pool ruleset na text dlouhého létavého braní VYHODÍ RangeError - dokumentuje záměrnou mezeru (bez desky nejdou brané kameny rekonstruovat, PDN se nečte zpět). Žádná změna kódu parseMove."
+    },
+    {
+      "title": "Americká brána: notace beze změny čísel",
+      "status": "done",
+      "detail": "formatMove/parseMove pro americkou (default ruleset) beze změny - stávající notation + notation-roundtrip testy zelené beze změny čísel."
+    }
+  ],
+  "startedAt": "2026-07-11T17:00:00.263Z",
+  "completedAt": "2026-07-11T17:16:45.476Z",
+  "autoCommit": {
+    "preSha": "db0af3a365588c9d9b2cae5a5c2383dabb22d240",
+    "subject": "Phase 97: Notace létavého braní (formatMove)"
+  }
+}
