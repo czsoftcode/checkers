@@ -1,0 +1,39 @@
+{
+  "id": 93,
+  "title": "Ruleset abstrakce (jádro rules)",
+  "goal": "Zavést typ Ruleset s americkým defaultem a protáhnout ho volitelným parametrem do legalMoves/applyMove uvnitř balíčku rules (výběr směrů muže/dámy a proměna čtou z Ruleset místo natvrdo), bez nové varianty a beze změny volajících. Brána: všechny dosavadní testy včetně perft 1-6 zelené BEZE ZMĚNY čísel = důkaz, že refaktor nezměnil americkou variantu. Threading do ~8 call sites (engine/web/ai/server) je mimo řez, přijde ve fázi B/D - todo 56 zůstává otevřené.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Definovat typ Ruleset + AMERICAN default",
+      "status": "done",
+      "detail": "V balíčku rules nový Ruleset { manCaptureBackward: boolean; king: 'short' } a konstanta AMERICAN_RULESET (false, 'short'), export z index. Minimální typ; 'flying' a promoteMidCapture se dolijí ve fázi B."
+    },
+    {
+      "title": "moves.ts: směry čtené z Ruleset",
+      "status": "done",
+      "detail": "Oddělit směry prostého tahu muže (vždy vpřed) od směrů braní (řízené manCaptureBackward); dáma 'short' = ALL_DIRS o 1 krok jako dnes. Nahradit natvrdo moveDirs čtením z ruleset. Pro AMERICAN identické chování."
+    },
+    {
+      "title": "Volitelný parametr ruleset do generátoru",
+      "status": "done",
+      "detail": "legalMoves a stavební bloky (simpleMovesFrom, jumpMovesFrom, generateSimpleMoves, extendJumps) přijmou ruleset s defaultem AMERICAN_RULESET; žádný volající se nemění."
+    },
+    {
+      "title": "Seam test: braní vzad při manCaptureBackward:true",
+      "status": "done",
+      "detail": "Nový unit test - ne-default ruleset -> muž bere i dozadu; s AMERICAN nebere. Dělá true-větev dosažitelnou a otestovanou, ne dead code."
+    },
+    {
+      "title": "Brána: lint + celý test suite zelené beze změny čísel",
+      "status": "done",
+      "detail": "Spustit lint a všechny testy (perft 1-6, invarianty, notace, engine, web přes default). Potvrdí, že refaktor nezměnil americkou variantu."
+    }
+  ],
+  "startedAt": "2026-07-11T13:04:34.125Z",
+  "completedAt": "2026-07-11T14:02:16.824Z",
+  "autoCommit": {
+    "preSha": "9948c4ec1a661178bd5e77f1ac5f23f006333ac1",
+    "subject": "Phase 93: Ruleset abstrakce (jádro rules)"
+  }
+}

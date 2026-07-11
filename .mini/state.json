@@ -462,6 +462,11 @@
       "id": 92,
       "title": "PvP partie do PDN archivu",
       "status": "done"
+    },
+    {
+      "id": 93,
+      "title": "Ruleset abstrakce (jádro rules)",
+      "status": "done"
     }
   ]
 }

@@ -11,6 +11,8 @@
 
 import type { Direction } from './board.js';
 import { ALL_DIRS, BOARD_SQUARES, DIR, jumpOf, neighborOf } from './board.js';
+import { AMERICAN_RULESET } from './ruleset.js';
+import type { Ruleset } from './ruleset.js';
 import type { Cell, Color, Move, Piece, PieceKind, Position, Square } from './types.js';
 
 /**
@@ -22,8 +24,26 @@ const MAN_DIRS: Record<Color, readonly Direction[]> = {
   white: [DIR.NW, DIR.NE],
 };
 
-function moveDirs(color: Color, kind: PieceKind): readonly Direction[] {
+/**
+ * Směry PROSTÉHO tahu (bez braní). Muž táhne vždy jen vpřed – braní vzad
+ * (u variant, kde je) mění jen SKOK, ne prostý tah. Dáma `'short'` táhne
+ * všemi směry o 1 pole jako dnes.
+ */
+function simpleMoveDirs(color: Color, kind: PieceKind): readonly Direction[] {
   return kind === 'king' ? ALL_DIRS : MAN_DIRS[color];
+}
+
+/**
+ * Směry BRANÍ. U muže řídí Ruleset: `manCaptureBackward` povolí i skok vzad
+ * (všechny směry), jinak jen vpřed jako americká dáma. Dáma `'short'` bere
+ * všemi směry o 1 pole. Toto je jediný seam, kde se Ruleset dnes reálně
+ * projeví – pro AMERICAN_RULESET je chování identické s předchozím kódem.
+ */
+function captureDirs(color: Color, kind: PieceKind, ruleset: Ruleset): readonly Direction[] {
+  if (kind === 'king') {
+    return ALL_DIRS;
+  }
+  return ruleset.manCaptureBackward ? ALL_DIRS : MAN_DIRS[color];
 }
 
 /**
@@ -69,7 +89,7 @@ export function simpleMovesFrom(position: Position, square: Square): Move[] {
     return [];
   }
   const moves: Move[] = [];
-  for (const dir of moveDirs(cell.color, cell.kind)) {
+  for (const dir of simpleMoveDirs(cell.color, cell.kind)) {
     const target = neighborOf(square, dir);
     if (target !== null && position.board[target - 1] === null) {
       moves.push({ from: square, path: [target], captures: [] });
@@ -101,7 +121,11 @@ export function simpleMovesFrom(position: Position, square: Square): Move[] {
  *
  * Stavební blok – veřejné API je `legalMoves`.
  */
-export function jumpMovesFrom(position: Position, square: Square): Move[] {
+export function jumpMovesFrom(
+  position: Position,
+  square: Square,
+  ruleset: Ruleset = AMERICAN_RULESET,
+): Move[] {
   const cell = cellAt(position, square);
   if (cell === null) {
     return [];
@@ -113,7 +137,7 @@ export function jumpMovesFrom(position: Position, square: Square): Move[] {
   // Kámen je „ve vzduchu" – origin se uvolní pro případný kruhový návrat.
   board[square - 1] = null;
   const moves: Move[] = [];
-  extendJumps(board, cell, square, square, [], [], moves);
+  extendJumps(board, cell, square, square, [], [], moves, ruleset);
   return moves;
 }
 
@@ -130,9 +154,10 @@ function extendJumps(
   path: Square[],
   captures: Square[],
   out: Move[],
+  ruleset: Ruleset,
 ): void {
   let extended = false;
-  for (const dir of moveDirs(piece.color, piece.kind)) {
+  for (const dir of captureDirs(piece.color, piece.kind, ruleset)) {
     const over = neighborOf(current, dir);
     const landing = jumpOf(current, dir);
     if (over === null || landing === null) {
@@ -149,7 +174,7 @@ function extendJumps(
     board[over - 1] = null;
     path.push(landing);
     captures.push(over);
-    extendJumps(board, piece, from, landing, path, captures, out);
+    extendJumps(board, piece, from, landing, path, captures, out, ruleset);
     captures.pop();
     path.pop();
     board[over - 1] = overCell;
@@ -167,10 +192,10 @@ function extendJumps(
  * Teprve když žádný skok neexistuje, vrací se prosté tahy. Skoky jsou
  * úplné sekvence (vícenásobné braní) – viz `jumpMovesFrom`.
  */
-export function legalMoves(position: Position): Move[] {
+export function legalMoves(position: Position, ruleset: Ruleset = AMERICAN_RULESET): Move[] {
   const jumps: Move[] = [];
   for (let square = 1; square <= BOARD_SQUARES; square++) {
-    jumps.push(...jumpMovesFrom(position, square));
+    jumps.push(...jumpMovesFrom(position, square, ruleset));
   }
   if (jumps.length > 0) {
     return jumps;
