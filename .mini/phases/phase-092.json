@@ -2,7 +2,7 @@
   "id": 92,
   "title": "PvP partie do PDN archivu",
   "goal": "Napojit PDN archiv (archive.ts, po fázi 90 bez volajícího) na konec PvP partie — jednosměrný zápis na disk, nenačítá se zpět. BEZ přezdívek hráčů (GDPR): záznam je ANONYMNÍ (jen tahy + výsledek + čas UTC), session ID se nezapisují. Formát ZŮSTÁVÁ PDN (ne md/yaml) — je to standardní notace dámy, přehratelná v libovolném nástroji, což je právě cíl 'zpětného přehrání'; vlastní formát by pro přehrání potřeboval parser navíc a ztratil kompatibilitu. Přeformátovat formatGamePdn (signaturu lze volně měnit — po fázi 90 nemá volajícího): [Event \"American Checkers\"] (dnes \"Checkers\"); standardní tagy [UTCDate]/[UTCTime] v UTC místo dosavadního [Date]; anonymní White/Black místo natvrdo [White \"Engine\"]/[Black \"Human\"] (např. \"?\", žádná jména); movetext s tahy POD SEBOU — jeden číslovaný tah (pár půltahů) na řádek pro čitelnost, ne vše v jednom řádku; PDN zůstane parseovatelný. Hook: writeGamePdn při KAŽDÉM terminálním konci PvP (resignPvp / acceptDrawPvp / přirozený konec dle pravidel v room WS handleru) PRÁVĚ JEDNOU (guard přes archived flag na záznamu). Testy: PDN se zapíše na konec PvP se správným formátem (Event, UTC datum+čas, výsledkový token, tahy pod sebou), idempotentně (ne dvakrát), rozehraná (ongoing) se NEarchivuje. Mimo řez: načítání PDN zpět, in-app přehrávání/analýza (non-goal projektu), ukládání jmen hráčů.",
-  "status": "doing",
+  "status": "done",
   "steps": [
     {
       "title": "Přeformátovat formatGamePdn (anonymní, UTC, tahy pod sebou)",
@@ -20,5 +20,13 @@
       "detail": "Vzdání, dohodnutá remíza i přirozený konec dle pravidel každý zapíšou PRÁVĚ JEDEN PDN se správným formátem a výsledkem; rozehraná (ongoing) partie se NEarchivuje; opakovaný broadcast už terminálního záznamu nezapíše podruhé (guard archived); bez pdnDir se nepíše nic. Injektovatelný čas/dir kvůli determinismu. Výstup: archivace PvP prokázaná zubatými testy nad reálným room WS tokem."
     }
   ],
-  "startedAt": "2026-07-11T01:48:46.628Z"
+  "startedAt": "2026-07-11T01:48:46.628Z",
+  "resolvedVerify": [
+    "Otevřít vygenerovaný .pdn v externím nástroji na dámu a zkusit ho přehrát"
+  ],
+  "completedAt": "2026-07-11T04:06:31.265Z",
+  "autoCommit": {
+    "preSha": "770c38e2803a83167791f985372d5919b2b0604a",
+    "subject": "Phase 92: PvP partie do PDN archivu"
+  }
 }

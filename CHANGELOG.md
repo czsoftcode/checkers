@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.73.0] - 2026-07-11
+
+### Added
+
+- **Archiv dohraných partií dvou lidí (PDN).** Každá dokončená PvP partie se na
+  serveru uloží jako standardní PDN soubor (přehratelný v běžných nástrojích na
+  dámu) – ať už skončí vzdáním, dohodnutou remízou, nebo dojde do konce podle
+  pravidel. Záznam je anonymní: obsahuje jen tahy, výsledek a čas v UTC, žádné
+  přezdívky hráčů. Archiv je jednosměrný (zpět do hry se nenačítá) a nespolehne-li
+  se zápis, partie ani spojení to neshodí. Výchozí složka je `.pdn` v kořeni
+  projektu (přenastavitelná přes `CHECKERS_PDN_DIR`).
+
 ### Changed
 
 - **Úklid serveru (bez dopadu na hru).** Vnitřní zjednodušení herního serveru po
