@@ -16,6 +16,8 @@ import { BOARD_SQUARES } from './board.js';
 import { cellAt } from './moves.js';
 import { initialPosition } from './position.js';
 import type { Cell, Move, Position } from './types.js';
+import { rulesetForVariant } from './variant.js';
+import type { VariantId } from './variant.js';
 
 /**
  * Remízový limit: 80 půltahů (40 tahů každé strany) bez braní a bez tahu
@@ -74,6 +76,15 @@ export function positionKey(position: Position): string {
  */
 export interface GameState {
   readonly position: Position;
+  /**
+   * Varianta partie (id). Určuje ruleset, který `advanceState`/`gameResultFromState`
+   * použijí pro `applyMove`/`legalMoves` – POLE stavu, ne parametr, právě proto,
+   * že `applyMove` pro ruskou/pool potřebuje ruleset (mid-capture promotion mění
+   * výsledek). Sebe-popisný stav vylučuje footgun „americká pravidla na ruskou
+   * partii". `positionKey`/Zobrist ho NEBEROU (varianta není v hashi – opakování
+   * v rámci partie je stejnovariantní).
+   */
+  readonly variant: VariantId;
   /** Počet půltahů od posledního pokroku (braní / tah mužem). */
   readonly pliesWithoutProgress: number;
   /**
@@ -83,10 +94,18 @@ export interface GameState {
   readonly repetitionHistory: readonly string[];
 }
 
-/** Výchozí stav partie: čítač 0, pozice je 1. výskyt ve své historii. */
-export function initialGameState(position: Position = initialPosition()): GameState {
+/**
+ * Výchozí stav partie: čítač 0, pozice je 1. výskyt ve své historii. `variant`
+ * je 'american' jako default – volající, který variantu neřeší (server store,
+ * CLI, dosavadní testy), dostane přesně dnešní chování.
+ */
+export function initialGameState(
+  position: Position = initialPosition(),
+  variant: VariantId = 'american',
+): GameState {
   return {
     position,
+    variant,
     pliesWithoutProgress: 0,
     repetitionHistory: [positionKey(position)],
   };
@@ -110,14 +129,22 @@ export function advanceState(state: GameState, move: Move): GameState {
   // Druh kamene se čte PŘED tahem (proměna = pořád tah muže). Je-li from
   // prázdné či mimo desku, cellAt/applyMove níže vyhodí RangeError.
   const fromCell = cellAt(state.position, move.from);
-  const next = applyMove(state.position, move);
+  // Ruleset z varianty STAVU – ruská/pool proměna uprostřed braní mění, co
+  // applyMove vyrobí. Bez toho by se neamerická partie tiše posouvala americky.
+  const next = applyMove(state.position, move, rulesetForVariant(state.variant));
   const progress = move.captures.length > 0 || fromCell?.kind === 'man';
   const key = positionKey(next);
   if (progress) {
-    return { position: next, pliesWithoutProgress: 0, repetitionHistory: [key] };
+    return {
+      position: next,
+      variant: state.variant,
+      pliesWithoutProgress: 0,
+      repetitionHistory: [key],
+    };
   }
   return {
     position: next,
+    variant: state.variant,
     pliesWithoutProgress: state.pliesWithoutProgress + 1,
     repetitionHistory: [...state.repetitionHistory, key],
   };

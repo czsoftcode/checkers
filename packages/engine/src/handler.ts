@@ -9,8 +9,8 @@
  * respondToLine (respond.ts), aby se nezamaskoval stack.
  */
 
-import { BOARD_SQUARES, legalMoves } from '@checkers/rules';
-import type { Cell, Position } from '@checkers/rules';
+import { BOARD_SQUARES, isVariantId, legalMoves, rulesetForVariant } from '@checkers/rules';
+import type { Cell, Position, Ruleset } from '@checkers/rules';
 
 import { ENGINE_ID, PROTOCOL_VERSION } from './protocol.js';
 import type { EngineResponse, ErrorCode, ErrorResponse, MessageId } from './protocol.js';
@@ -74,6 +74,11 @@ function handleEvaluate(
     return timeMs; // ErrorResponse
   }
 
+  const ruleset = validateVariant(id, message);
+  if ('code' in ruleset) {
+    return ruleset; // ErrorResponse
+  }
+
   const position = parsePosition(message.position);
   if (position === null) {
     return errorResponse(
@@ -83,11 +88,15 @@ function handleEvaluate(
     );
   }
 
-  if (legalMoves(position).length === 0) {
+  if (legalMoves(position, ruleset).length === 0) {
     return errorResponse(id, 'no_legal_moves', 'V pozici není žádný legální tah – partie skončila.');
   }
 
-  const { score } = searchTimed(position, now === undefined ? { timeMs } : { timeMs, now });
+  const { score } = searchTimed(position, {
+    timeMs,
+    ruleset,
+    ...(now !== undefined ? { now } : {}),
+  });
   return { type: 'evaluate', id, score };
 }
 
@@ -110,6 +119,30 @@ function validateTimeMs(
     );
   }
   return timeMs;
+}
+
+/**
+ * Ověří pole `variant` obálky (bestmove i evaluate mají stejný kontrakt) a vrátí
+ * odpovídající `Ruleset`. Chybí → americká (zpětná kompatibilita). Přítomné, ale
+ * neznámé id → `invalid_message` (kontrakt obálky, jako `timeMs`) – NEdefaultuje
+ * tiše na americkou, aby překlep varianty nerozehrál jinou hru. `rulesetForVariant`
+ * se volá jen na už ověřeném id, takže ven nepropadne jeho RangeError.
+ */
+function validateVariant(
+  id: MessageId,
+  message: Record<string, unknown>,
+): Ruleset | ErrorResponse {
+  if (message.variant === undefined) {
+    return rulesetForVariant('american');
+  }
+  if (!isVariantId(message.variant)) {
+    return errorResponse(
+      id,
+      'invalid_message',
+      'Pole "variant" musí být známá varianta (american/pool/russian/czech).',
+    );
+  }
+  return rulesetForVariant(message.variant);
 }
 
 /** Ověřené volitelné páky síly z obálky bestmove (chybí → Profesionál). */
@@ -168,6 +201,11 @@ function handleBestmove(
     return strength; // ErrorResponse
   }
 
+  const ruleset = validateVariant(id, message);
+  if ('code' in ruleset) {
+    return ruleset; // ErrorResponse
+  }
+
   const position = parsePosition(message.position);
   if (position === null) {
     return errorResponse(
@@ -177,7 +215,7 @@ function handleBestmove(
     );
   }
 
-  const moves = legalMoves(position);
+  const moves = legalMoves(position, ruleset);
   if (moves.length === 0) {
     return errorResponse(id, 'no_legal_moves', 'V pozici není žádný legální tah – partie skončila.');
   }
@@ -186,6 +224,7 @@ function handleBestmove(
   // search i losuje rng identicky jako dřív. maxDepth/now undefined → default.
   const { bestMoves, rankedMoves } = searchTimed(position, {
     timeMs,
+    ruleset,
     rankRoot: strength.carelessness > 0,
     ...(strength.maxDepth !== undefined ? { maxDepth: strength.maxDepth } : {}),
     ...(now !== undefined ? { now } : {}),

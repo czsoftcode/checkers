@@ -497,6 +497,11 @@
       "id": 99,
       "title": "Česká: priorita braní dámou",
       "status": "done"
+    },
+    {
+      "id": 100,
+      "title": "Ruleset přes engine + AI (plumbing)",
+      "status": "done"
     }
   ]
 }

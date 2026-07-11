@@ -1,5 +1,5 @@
-import { initialPosition, legalMoves } from '@checkers/rules';
-import type { Cell, Position } from '@checkers/rules';
+import { AMERICAN_RULESET, POOL_RULESET, initialPosition, legalMoves } from '@checkers/rules';
+import type { Cell, Move, Position } from '@checkers/rules';
 import { describe, expect, it } from 'vitest';
 
 import { handleLine } from '../src/handler.js';
@@ -327,5 +327,94 @@ describe('handleLine – chybové větve vstupu', () => {
       id: 'p-1',
       code: 'invalid_position',
     });
+  });
+});
+
+/**
+ * Plumbing varianty přes protokol (fáze 100). Pozice: černý muž 18, bílý muž 14
+ * SEVERNĚ (za zády). V POOL musí černý brát VZAD (jediný legální tah
+ * {18→9, bere 14}); v AMERICKÉ muž vzad nebere → prosté tahy vpřed. Tím se na
+ * jedné pozici pozná, jestli engine reálně počítá pravidly VARIANTY, ne americky.
+ *
+ * ZUBY: kdyby handler variantu ignoroval a hledal americky, na pool požadavku by
+ * vrátil prostý tah bez braní (nebo tah nelegální v poolu) a `expect` na braní
+ * padne. Kdyby naopak default nebyl americký, americký požadavek by vrátil braní.
+ */
+describe('handleLine – varianta (plumbing)', () => {
+  // Sdílená s ruleset-seam.test.ts (rules): 18 černý muž, 14 bílý muž.
+  const backwardCapture = makePosition('black', { 18: 'bm', 14: 'wm' });
+
+  /** Je `move` prvkem `legalMoves(position, ruleset)` (strukturální shoda)? */
+  function isMemberOf(move: Move, moves: readonly Move[]): boolean {
+    return moves.some(
+      (m) =>
+        m.from === move.from &&
+        m.path.length === move.path.length &&
+        m.path.every((p, i) => p === move.path[i]) &&
+        m.captures.length === move.captures.length &&
+        m.captures.every((c, i) => c === move.captures[i]),
+    );
+  }
+
+  it('bestmove variant:pool → vrátí LEGÁLNÍ pool tah (braní vzad)', () => {
+    const res = handleDeterministic(
+      JSON.stringify({
+        type: 'bestmove',
+        id: 'v-1',
+        position: backwardCapture,
+        timeMs: TIME_MS,
+        variant: 'pool',
+      }),
+    );
+    expect(res.type).toBe('bestmove');
+    if (res.type !== 'bestmove') return;
+    // Tah je legální v POOL a NENÍ legální v AMERICKÉ (braní vzad) – důkaz, že
+    // engine počítal pool pravidly.
+    expect(isMemberOf(res.move, legalMoves(backwardCapture, POOL_RULESET))).toBe(true);
+    expect(isMemberOf(res.move, legalMoves(backwardCapture, AMERICAN_RULESET))).toBe(false);
+    expect(res.move.captures.length).toBeGreaterThan(0);
+  });
+
+  it('bestmove BEZ variant → americká (žádné braní vzad)', () => {
+    const res = handleDeterministic(
+      JSON.stringify({
+        type: 'bestmove',
+        id: 'v-2',
+        position: backwardCapture,
+        timeMs: TIME_MS,
+      }),
+    );
+    expect(res.type).toBe('bestmove');
+    if (res.type !== 'bestmove') return;
+    expect(isMemberOf(res.move, legalMoves(backwardCapture, AMERICAN_RULESET))).toBe(true);
+    expect(res.move.captures.length).toBe(0);
+  });
+
+  it('evaluate variant:pool → skóre bez chyby (plumbing i pro evaluate)', () => {
+    const res = handleDeterministic(
+      JSON.stringify({
+        type: 'evaluate',
+        id: 'v-3',
+        position: backwardCapture,
+        timeMs: TIME_MS,
+        variant: 'pool',
+      }),
+    );
+    expect(res.type).toBe('evaluate');
+    if (res.type !== 'evaluate') return;
+    expect(Number.isInteger(res.score)).toBe(true);
+  });
+
+  it('neznámá varianta → invalid_message (NEdefaultuje na americkou)', () => {
+    const res = handleDeterministic(
+      JSON.stringify({
+        type: 'bestmove',
+        id: 'v-4',
+        position: backwardCapture,
+        timeMs: TIME_MS,
+        variant: 'checkers',
+      }),
+    );
+    expect(res).toMatchObject({ type: 'error', id: 'v-4', code: 'invalid_message' });
   });
 });

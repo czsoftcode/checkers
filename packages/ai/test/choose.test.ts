@@ -16,7 +16,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { initialPosition, legalMoves, positionKey } from '@checkers/rules';
+import {
+  AMERICAN_RULESET,
+  POOL_RULESET,
+  initialPosition,
+  legalMoves,
+  positionKey,
+} from '@checkers/rules';
 import type { Cell, Move, Position } from '@checkers/rules';
 
 import { computeAiMove, OPENING_BOOK, lookupBookMove } from '../src/index.js';
@@ -109,6 +115,80 @@ describe('computeAiMove', () => {
       mulberry32(7),
     );
     expect(viaOfflineCap).toEqual(viaLevelDepth);
+  });
+});
+
+/**
+ * Plumbing varianty přes `computeAiMove` (fáze 100). Pozice: černý muž 18, bílý
+ * muž 14 za zády. V POOL musí černý brát VZAD (jediný legální tah); v AMERICKÉ
+ * muž vzad nebere. Dokazuje, že variantu orchestrátor reálně protahuje do searche.
+ */
+describe('computeAiMove – varianta (plumbing)', () => {
+  /** Deska z mapy pole→kód (jen pro tenhle blok). */
+  function board(pieces: Record<number, 'bm' | 'wm'>): Position {
+    const b: Cell[] = Array.from({ length: 32 }, () => null);
+    for (const [sq, code] of Object.entries(pieces)) {
+      b[Number(sq) - 1] = {
+        color: code.startsWith('b') ? 'black' : 'white',
+        kind: 'man',
+      };
+    }
+    return { board: b, turn: 'black' };
+  }
+
+  const backwardCapture = board({ 18: 'bm', 14: 'wm' });
+
+  it('variant:pool → vrátí LEGÁLNÍ pool tah (braní vzad, ne americky)', () => {
+    const move = computeAiMove(
+      backwardCapture,
+      { strength: {}, timeMs: 1000, maxDepth: 4, variant: 'pool', now: fixedNow },
+      mulberry32(3),
+    );
+    const inPool = legalMoves(backwardCapture, POOL_RULESET).some(
+      (m) => m.from === move.from && samePath(m.path, move.path),
+    );
+    const inAmerican = legalMoves(backwardCapture, AMERICAN_RULESET).some(
+      (m) => m.from === move.from && samePath(m.path, move.path),
+    );
+    expect(inPool).toBe(true);
+    expect(inAmerican).toBe(false);
+    expect(move.captures.length).toBeGreaterThan(0);
+  });
+
+  it('kniha se pro pool NEkonzultuje – jde se rovnou hledat', () => {
+    // Výchozí pozice je v knize; kdyby ji pool konzultoval, vrátil by knižní tah
+    // BEZ hledání a rng by se nedotkl. rng, které při zavolání vyhodí, tedy
+    // odhalí, jestli se hledalo: pool MUSÍ hledat (kniha jen americká) → rng se
+    // zavolá v chooseMove → throw. (Pro americkou tatáž kniha vrací knižní tah
+    // bez hledání – viz test „knižní pozice → knižní tah".)
+    const position = initialPosition();
+    const rngThatMustRun = (): number => {
+      throw new Error('SEARCH_REACHED');
+    };
+    expect(() =>
+      computeAiMove(
+        position,
+        { strength: {}, timeMs: 1000, maxDepth: 2, variant: 'pool', book: OPENING_BOOK, now: fixedNow },
+        rngThatMustRun,
+      ),
+    ).toThrow('SEARCH_REACHED');
+  });
+
+  it('americká cesta s knihou beze změny (variant default = american)', () => {
+    // Bez variant → american: kniha se konzultuje, knižní tah bez hledání
+    // (rng se nedotkne). Stejné jako fáze 86, tady jen stvrzeno vedle pool větve.
+    const position = initialPosition();
+    const expected = lookupBookMove(OPENING_BOOK, position);
+    expect(expected).toBeDefined();
+    const rngThatMustNotRun = (): number => {
+      throw new Error('rng nesmí běžet – americká kniha hraje bez hledání');
+    };
+    const move = computeAiMove(
+      position,
+      { strength: {}, timeMs: 1000, book: OPENING_BOOK, now: fixedNow },
+      rngThatMustNotRun,
+    );
+    expect(move).toEqual(expected);
   });
 });
 

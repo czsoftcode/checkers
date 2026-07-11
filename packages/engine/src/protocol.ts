@@ -12,7 +12,7 @@
  * literály (jeden zdroj kontraktu mezi procesy).
  */
 
-import type { Move, Position } from '@checkers/rules';
+import type { Move, Position, VariantId } from '@checkers/rules';
 
 /**
  * Verze protokolu; engine ji hlásí v odpovědi `hello`.
@@ -72,6 +72,14 @@ export interface BestmoveRequest {
   readonly timeMs: number;
   readonly maxDepth?: number;
   readonly carelessness?: number;
+  /**
+   * Varianta pravidel (id string, ne Ruleset objekt – objekt po drátě leakuje
+   * tvar configu). Chybí → 'american', takže starý volající i dnešní server
+   * (než dojde D3) dostane přesně dnešní chování. Zpětně kompatibilní rozšíření
+   * jako `maxDepth`/`carelessness` – BEZ bumpu verze protokolu (v3). Neznámé id
+   * odmítne handler jako `invalid_message`, NEdefaultuje tiše na americkou.
+   */
+  readonly variant?: VariantId;
 }
 
 /**
@@ -103,6 +111,12 @@ export interface EvaluateRequest {
   readonly id: MessageId;
   readonly position: Position;
   readonly timeMs: number;
+  /**
+   * Varianta pravidel (id string). Stejná sémantika jako u `bestmove`: chybí →
+   * 'american', neznámé id → `invalid_message`. Zpětně kompatibilní, bez bumpu
+   * verze protokolu.
+   */
+  readonly variant?: VariantId;
 }
 
 /** Všechny požadavky, kterým engine rozumí. */

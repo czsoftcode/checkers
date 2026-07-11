@@ -25,6 +25,8 @@ export { initialPosition } from './position.js';
 export { legalMoves } from './moves.js';
 export { AMERICAN_RULESET, POOL_RULESET, RUSSIAN_RULESET, CZECH_RULESET } from './ruleset.js';
 export type { Ruleset } from './ruleset.js';
+export { VARIANT_IDS, isVariantId, rulesetForVariant } from './variant.js';
+export type { VariantId } from './variant.js';
 export { applyMove } from './apply.js';
 export {
   MAX_PLIES_WITHOUT_PROGRESS,

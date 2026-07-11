@@ -56,8 +56,8 @@
  * mat v jiné vzdálenosti. Vynechání je levné (mat je vzácný) a přesné.
  */
 
-import { applyMove, legalMoves } from '@checkers/rules';
-import type { Move, Position } from '@checkers/rules';
+import { AMERICAN_RULESET, applyMove, legalMoves } from '@checkers/rules';
+import type { Move, Position, Ruleset } from '@checkers/rules';
 
 import { evaluate } from './evaluate.js';
 import { TranspositionTable } from './transposition.js';
@@ -70,8 +70,14 @@ import { hashPosition } from './zobrist.js';
  * v jednom procesu; výchozí je produkční `evaluate`. Celočíselnost je
  * KONTRAKT (viz hlavička souboru, trik okna `best - 1`) – search si ji
  * nevynucuje, dodržet ji musí každá dosazená funkce.
+ *
+ * `ruleset` je VOLITELNÝ druhý argument (default americká u volajícího): search
+ * ho dodává z varianty, aby evaluace závislá na `legalMoves` (mobilita v2)
+ * počítala tahy pravidly SPRÁVNÉ varianty. Evaluace, které ruleset nepotřebují
+ * (materiálová v1), ho prostě ignorují – proto je volitelný a nerozbíjí starší
+ * dosazené funkce.
  */
-export type EvalFn = (position: Position) => number;
+export type EvalFn = (position: Position, ruleset?: Ruleset) => number;
 
 /**
  * Skóre výhry v kořeni; skutečná hodnota v uzlu je `WIN_SCORE - ply`.
@@ -156,6 +162,11 @@ interface SearchCtx {
   readonly clock: SearchClock | null;
   readonly evaluateFn: EvalFn;
   readonly tt: TranspositionTable | null;
+  /**
+   * Ruleset varianty – search ho předává `legalMoves`/`applyMove`/`evaluateFn`.
+   * Default u volajících je americká, takže dosavadní hledání se nemění.
+   */
+  readonly ruleset: Ruleset;
   nodes: number;
 }
 
@@ -220,8 +231,9 @@ export function searchRoot(
   evaluateFn: EvalFn = evaluate,
   tt: TranspositionTable | null = null,
   rankRoot = false,
+  ruleset: Ruleset = AMERICAN_RULESET,
 ): SearchResult {
-  const ctx: SearchCtx = { clock: null, evaluateFn, tt, nodes: 0 };
+  const ctx: SearchCtx = { clock: null, evaluateFn, tt, ruleset, nodes: 0 };
   return rootSearch(position, depth, ctx, rankRoot);
 }
 
@@ -243,7 +255,7 @@ function rootSearch(
   if (!Number.isInteger(depth) || depth < 1) {
     throw new RangeError(`Neplatná hloubka prohledávání: ${String(depth)}`);
   }
-  const moves = legalMoves(position);
+  const moves = legalMoves(position, ctx.ruleset);
   if (moves.length === 0) {
     throw new RangeError('searchRoot: pozice bez legálního tahu – partie už skončila');
   }
@@ -261,7 +273,7 @@ function rootSearch(
         ? Number.NEGATIVE_INFINITY
         : best - 1;
     const value = -negamax(
-      applyMove(position, move),
+      applyMove(position, move, ctx.ruleset),
       depth - 1,
       1,
       Number.NEGATIVE_INFINITY,
@@ -314,7 +326,7 @@ function negamax(
 ): number {
   ctx.nodes += 1;
   tickClock(ctx.clock);
-  const moves = legalMoves(position);
+  const moves = legalMoves(position, ctx.ruleset);
   if (moves.length === 0) {
     return -(WIN_SCORE - ply);
   }
@@ -322,7 +334,7 @@ function negamax(
   // ověřit první tah.
   const forcedCapture = moves[0] !== undefined && moves[0].captures.length > 0;
   if (depth <= 0 && !forcedCapture) {
-    return ctx.evaluateFn(position);
+    return ctx.evaluateFn(position, ctx.ruleset);
   }
   const childDepth = depth <= 0 ? 0 : depth - 1;
 
@@ -387,7 +399,7 @@ function negamax(
     if (move === undefined) {
       continue;
     }
-    const value = -negamax(applyMove(position, move), childDepth, ply + 1, -beta, -alpha, ctx);
+    const value = -negamax(applyMove(position, move, ctx.ruleset), childDepth, ply + 1, -beta, -alpha, ctx);
     if (value > best) {
       best = value;
       bestMove = move;
@@ -430,6 +442,11 @@ export interface TimedSearchOptions {
    * s nepozorností; jinak nech vypnuté (kořen se pruuje, search je rychlejší).
    */
   readonly rankRoot?: boolean;
+  /**
+   * Ruleset varianty (výchozí americká): protahuje se do `legalMoves`/`applyMove`/
+   * evaluace. Chybí → americká, tedy dosavadní chování beze změny.
+   */
+  readonly ruleset?: Ruleset;
 }
 
 /** Výsledek časovaného searche. */
@@ -473,12 +490,13 @@ export function searchTimed(position: Position, options: TimedSearchOptions): Ti
   const now = options.now ?? currentTimeMs;
   const evaluateFn = options.evaluate ?? evaluate;
   const rankRoot = options.rankRoot ?? false;
+  const ruleset = options.ruleset ?? AMERICAN_RULESET;
   const tt = new TranspositionTable();
 
   const start = now();
   const deadline = start + timeMs;
 
-  const firstCtx: SearchCtx = { clock: null, evaluateFn, tt, nodes: 0 };
+  const firstCtx: SearchCtx = { clock: null, evaluateFn, tt, ruleset, nodes: 0 };
   let result: TimedSearchResult = { ...rootSearch(position, 1, firstCtx, rankRoot), depth: 1 };
   let totalNodes = firstCtx.nodes;
   let lastIterationMs = now() - start;
@@ -492,6 +510,7 @@ export function searchTimed(position: Position, options: TimedSearchOptions): Ti
       clock: { now, deadline, nodesUntilCheck: NODES_PER_TIME_CHECK },
       evaluateFn,
       tt,
+      ruleset,
       nodes: 0,
     };
     let iteration: SearchResult;

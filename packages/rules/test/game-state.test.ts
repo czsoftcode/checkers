@@ -142,6 +142,7 @@ describe('advanceState – čítač a historie', () => {
     );
     const base: GameState = {
       position,
+      variant: 'american',
       pliesWithoutProgress: 12,
       repetitionHistory: ['x', 'y', positionKey(position)],
     };
@@ -160,6 +161,7 @@ describe('advanceState – čítač a historie', () => {
     );
     const base: GameState = {
       position,
+      variant: 'american',
       pliesWithoutProgress: 5,
       repetitionHistory: [positionKey(position)],
     };
@@ -204,6 +206,7 @@ describe('gameResultFromState – remíza 80 půltahů bez pokroku', () => {
   it('čítač těsně pod limitem je ongoing, dosažení limitu je remíza', () => {
     const below: GameState = {
       position: kings,
+      variant: 'american',
       pliesWithoutProgress: MAX_PLIES_WITHOUT_PROGRESS - 1,
       repetitionHistory: [positionKey(kings)],
     };
@@ -224,6 +227,7 @@ describe('gameResultFromState – remíza 80 půltahů bez pokroku', () => {
     );
     const below: GameState = {
       position: withMan,
+      variant: 'american',
       pliesWithoutProgress: MAX_PLIES_WITHOUT_PROGRESS - 1,
       repetitionHistory: [positionKey(withMan)],
     };
@@ -273,6 +277,7 @@ describe('gameResultFromState – trojí opakování', () => {
     );
     const fresh: GameState = {
       position: kings,
+      variant: 'american',
       pliesWithoutProgress: 2,
       repetitionHistory: [positionKey(kings)],
     };
@@ -297,6 +302,7 @@ describe('gameResultFromState – trojí opakování', () => {
     const whiteTurnKey = positionKey({ ...kings, turn: 'white' });
     const state: GameState = {
       position: kings,
+      variant: 'american',
       pliesWithoutProgress: 4,
       repetitionHistory: [positionKey(kings), whiteTurnKey, positionKey(kings), whiteTurnKey],
     };
@@ -316,6 +322,7 @@ describe('gameResultFromState – trojí opakování', () => {
     );
     const state: GameState = {
       position: kings,
+      variant: 'american',
       pliesWithoutProgress: 7,
       repetitionHistory: ['a', 'b', 'a', 'b', 'a', positionKey(kings)],
     };
@@ -325,6 +332,7 @@ describe('gameResultFromState – trojí opakování', () => {
   it('poškozená pozice ve stavu propaguje RangeError', () => {
     const broken: GameState = {
       position: { board: new Array<Cell>(18).fill(null), turn: 'black' },
+      variant: 'american',
       pliesWithoutProgress: 0,
       repetitionHistory: [],
     };
@@ -347,6 +355,7 @@ describe('gameResultFromState – prohra má přednost před remízou', () => {
     );
     const state: GameState = {
       position: blocked,
+      variant: 'american',
       pliesWithoutProgress: MAX_PLIES_WITHOUT_PROGRESS,
       repetitionHistory: [positionKey(blocked)],
     };
@@ -357,6 +366,7 @@ describe('gameResultFromState – prohra má přednost před remízou', () => {
     const empty = positionWith([[18, BLACK_KING]], 'white');
     const state: GameState = {
       position: empty,
+      variant: 'american',
       pliesWithoutProgress: MAX_PLIES_WITHOUT_PROGRESS,
       repetitionHistory: [positionKey(empty)],
     };
@@ -377,6 +387,7 @@ describe('gameResultFromState – prohra má přednost před remízou', () => {
     const key = positionKey(blocked);
     const state: GameState = {
       position: blocked,
+      variant: 'american',
       pliesWithoutProgress: 10,
       repetitionHistory: [key, key, key],
     };

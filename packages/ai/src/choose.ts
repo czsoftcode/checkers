@@ -23,8 +23,8 @@
  * `@checkers/rules` a `@checkers/engine`.
  */
 
-import { legalMoves } from '@checkers/rules';
-import type { Move, Position } from '@checkers/rules';
+import { legalMoves, rulesetForVariant } from '@checkers/rules';
+import type { Move, Position, Ruleset, VariantId } from '@checkers/rules';
 import { chooseMove, searchTimed } from '@checkers/engine';
 import type { Strength } from '@checkers/engine';
 
@@ -49,6 +49,13 @@ export interface ComputeAiMoveOptions {
    * (přes `levelUsesBook`), stejně jako app.ts – orchestrátor jen ctí předanou knihu.
    */
   readonly book?: OpeningBook;
+  /**
+   * Varianta pravidel (id). Chybí → 'american' (zpětná kompatibilita – dnešní
+   * server i offline klient variantu neposílají a hrají americky). Určuje
+   * ruleset předaný searchi; kniha zahájení se konzultuje JEN pro 'american'
+   * (kniha je non-goal pro létavé varianty), pool/ruská/česká jdou rovnou hledat.
+   */
+  readonly variant?: VariantId;
   /** Injektovatelné hodiny pro `searchTimed` (deterministické testy). */
   readonly now?: () => number;
 }
@@ -65,21 +72,27 @@ export function computeAiMove(
   rng: () => number,
 ): Move {
   const { strength, timeMs, book, now } = options;
+  const variant: VariantId = options.variant ?? 'american';
+  const ruleset = rulesetForVariant(variant);
 
-  // 1. Knižní větev – přesně jako app.ts: lookup → re-validace legality přes
-  //    rules. Legální knižní tah se zahraje bez hledání; jinak fallback na search.
-  if (book !== undefined) {
+  // 1. Knižní větev – JEN pro americkou. Kniha zahájení je non-goal pro létavé
+  //    varianty (pool/ruská/česká), ty jdou rovnou hledat. Pro americkou přesně
+  //    jako app.ts: lookup → re-validace legality přes rules → legální knižní tah
+  //    se zahraje bez hledání; nelegální/chybějící → fallback na search.
+  if (book !== undefined && variant === 'american') {
     const bookMove = lookupBookMove(book, position);
-    if (bookMove !== undefined && isLegalMove(position, bookMove)) {
+    if (bookMove !== undefined && isLegalMove(position, bookMove, ruleset)) {
       return bookMove;
     }
   }
 
-  // 2. Hledací větev – bit po bitu jako handleBestmove (handler.ts).
+  // 2. Hledací větev – bit po bitu jako handleBestmove (handler.ts). Ruleset
+  //    varianty teče do searche (pro americkou default = dnešní chování).
   const carelessness = strength.carelessness ?? 0;
   const maxDepth = tighterDepth(strength.maxDepth, options.maxDepth);
   const { bestMoves, rankedMoves } = searchTimed(position, {
     timeMs,
+    ruleset,
     // rankRoot jen pro nepozornou hru; Profesionál (carelessness 0) hledá i losuje
     // rng identicky jako dřív. Stejná podmínka jako handleBestmove.
     rankRoot: carelessness > 0,
@@ -111,8 +124,8 @@ function tighterDepth(levelDepth?: number, cap?: number): number | undefined {
  * data, ne autorita, a knižní tah se musí re-validovat proti aktuální pozici.
  * `path` smí mít duplicity (kruhový skok dámy), proto se porovnává prvkově, ne přes Set.
  */
-function isLegalMove(position: Position, move: Move): boolean {
-  return legalMoves(position).some(
+function isLegalMove(position: Position, move: Move, ruleset: Ruleset): boolean {
+  return legalMoves(position, ruleset).some(
     (m) => m.from === move.from && pathsEqual(m.path, move.path),
   );
 }

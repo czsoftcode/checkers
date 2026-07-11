@@ -201,7 +201,12 @@ describe('GameStore – důvod konce partie (forcedReason/endReason, fáze 78)',
     const overGame = {
       forcedResult: null,
       forcedReason: null,
-      state: { position: { board, turn: 'white' }, pliesWithoutProgress: 0, repetitionHistory: [] },
+      state: {
+        position: { board, turn: 'white' },
+        variant: 'american',
+        pliesWithoutProgress: 0,
+        repetitionHistory: [],
+      },
     } as const;
     expect(effectiveResult(overGame)).not.toBe('ongoing');
     expect(endReason(overGame)).toBe('rules');

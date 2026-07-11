@@ -15,8 +15,8 @@
  * hodnotí jedinou pozici bez historie.
  */
 
-import { BOARD_SQUARES, legalMoves, squareToCoords } from '@checkers/rules';
-import type { Color, Position, Square } from '@checkers/rules';
+import { AMERICAN_RULESET, BOARD_SQUARES, legalMoves, squareToCoords } from '@checkers/rules';
+import type { Color, Position, Ruleset, Square } from '@checkers/rules';
 
 /** Hodnota muže. */
 export const MAN_VALUE = 100;
@@ -40,6 +40,11 @@ const BACK_ROW: Record<Color, number> = { black: 0, white: 7 };
  * Poškozenou desku (díra v poli – `undefined`) odmítá RangeError; tiché
  * přeskočení by dvě různě poškozené pozice ohodnotilo stejně a chyba by
  * kaskádovala do výběru tahu.
+ *
+ * Signatura BEZ `ruleset`: v1 je čistě materiálová (žádné `legalMoves`), ruleset
+ * nepotřebuje. Kontrakt `EvalFn` (druhý arg `ruleset?`) plní tak jako tak –
+ * funkce s méně parametry je do něj přiřaditelná; search jí ruleset předá a v1 ho
+ * prostě zahodí. (Ruleset konzumuje až v2 kvůli mobilitě přes `legalMoves`.)
  */
 export function evaluate(position: Position): number {
   let black = 0;
@@ -120,7 +125,7 @@ const DOUBLE_CORNER_SQUARES: Record<Color, ReadonlySet<Square>> = {
  *
  * Poškozenou desku odmítá RangeError stejně jako v1.
  */
-export function evaluateV2(position: Position): number {
+export function evaluateV2(position: Position, ruleset: Ruleset = AMERICAN_RULESET): number {
   let black = 0;
   let white = 0;
   let blackMen = 0;
@@ -176,8 +181,8 @@ export function evaluateV2(position: Position): number {
   const material = position.turn === 'black' ? black - white : white - black;
 
   const opponent: Color = position.turn === 'black' ? 'white' : 'black';
-  const myMoves = legalMoves(position).length;
-  const oppMoves = legalMoves({ board: position.board, turn: opponent }).length;
+  const myMoves = legalMoves(position, ruleset).length;
+  const oppMoves = legalMoves({ board: position.board, turn: opponent }, ruleset).length;
   const mobility = MOBILITY_WEIGHT * (myMoves - oppMoves);
 
   return material + mobility;

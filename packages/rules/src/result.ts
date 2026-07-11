@@ -3,9 +3,12 @@
  */
 
 import { legalMoves } from './moves.js';
+import { AMERICAN_RULESET } from './ruleset.js';
+import type { Ruleset } from './ruleset.js';
 import type { GameState } from './state.js';
 import { MAX_PLIES_WITHOUT_PROGRESS } from './state.js';
 import type { Position } from './types.js';
+import { rulesetForVariant } from './variant.js';
 
 /**
  * Výsledek partie. `gameResult` (jen pozice) `'draw'` nikdy nevrátí –
@@ -18,8 +21,8 @@ export type GameResult = 'ongoing' | 'black-wins' | 'white-wins' | 'draw';
  * (pat v americké dámě neexistuje, past z GDD 2.7). Staví na kontraktu
  * „prázdné legalMoves = žádný tah" zafixovaném testy fáze 4.
  */
-export function gameResult(position: Position): GameResult {
-  if (legalMoves(position).length > 0) {
+export function gameResult(position: Position, ruleset: Ruleset = AMERICAN_RULESET): GameResult {
+  if (legalMoves(position, ruleset).length > 0) {
     return 'ongoing';
   }
   return position.turn === 'black' ? 'white-wins' : 'black-wins';
@@ -40,7 +43,9 @@ export function gameResult(position: Position): GameResult {
  * jen tehdy, když v ní opravdu je.
  */
 export function gameResultFromState(state: GameState): GameResult {
-  const positional = gameResult(state.position);
+  // Konec „bez tahu" se počítá v rulesetu VARIANTY – jinak by neamerická partie
+  // vyhodnocovala legalMoves americky a mohla hlásit prohru tam, kde tah existuje.
+  const positional = gameResult(state.position, rulesetForVariant(state.variant));
   if (positional !== 'ongoing') {
     return positional;
   }

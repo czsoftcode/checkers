@@ -1,0 +1,44 @@
+{
+  "id": 100,
+  "title": "Ruleset přes engine + AI (plumbing)",
+  "goal": "Protáhnout ruleset přes compute-core: rules-state (GameState nese variantu, advanceState/gameResult ji čtou pro detekci konce hry přes legalMoves v dané variantě), engine (evaluate/handler/search + protokol worker/bestmove pole varianty), ai (choose/opening-book), vše s americkým defaultem. Nová zkouška: computeAiMove/search vrátí legální tah pro NE-americký ruleset (pool) = plumbing není mrtvý. Všechny dosavadní testy zelené BEZE ZMĚNY čísel. MIMO řez: web (selection/controller) + server (dto) wiring a výběr v lobby (D2/D3); per-varianta evalWeights (D1). Uzavírá compute-core část todo 56 (web selection/controller + server dto zůstávají -> D2/D3). Řez z todo 59 (fáze D); 56 i 59 zůstávají otevřené. Nízkoriziková páteř (jako fáze 93), odblokuje D1/D2/D3.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Registr variant: VariantId + rulesetForVariant",
+      "status": "done",
+      "detail": "V rules: typ VariantId ('american'|'pool'|'russian'|'czech') + rulesetForVariant(id) -> Ruleset, export z index. Neznámé id -> RangeError (NE tiché defaultnutí na americkou). Test: každé id vrací ruleset se správnými poli; neznámé vyhodí."
+    },
+    {
+      "title": "GameState nese variantu",
+      "status": "done",
+      "detail": "GameState += variant: VariantId. initialGameState(position, variant='american'). advanceState/gameResultFromState NEMĚNÍ signaturu - čtou state.variant -> rulesetForVariant -> applyMove/legalMoves. positionKey/Zobrist beze změny (position-only). Test: ruská partie přes advanceState aplikuje mid-capture (ne americky); americká beze změny."
+    },
+    {
+      "title": "Engine: ruleset přes search/evaluate + protokol",
+      "status": "done",
+      "detail": "BestmoveRequest/EvaluateRequest += variant? (default american, BEZ bumpu verze protokolu); handler validuje id a mapuje na ruleset; search a evaluate berou ruleset a předávají legalMoves/applyMove. Test: bestmove s variant:'pool' vrátí legální pool tah; bez pole = americká jako dřív."
+    },
+    {
+      "title": "AI: ruleset přes computeAiMove + kniha jen americká",
+      "status": "done",
+      "detail": "computeAiMove/choose berou variantu/ruleset; otvírková kniha JEN pro american, pool/ruská/česká rovnou do searche. Test: computeAiMove(pos, ..., 'pool') vrátí legální pool tah; americká cesta (s knihou) beze změny."
+    },
+    {
+      "title": "Brána: všechny balíčky zelené + neměnnost",
+      "status": "done",
+      "detail": "Server i ostatní balíčky se přeloží s novým GameState polem (store používá initialGameState/advanceState -> pole teče automaticky, american default; ověřit, že store nekonstruuje GameState ručně). Všechny dosavadní testy (perft, engine, ai, server, web) zelené BEZE ZMĚNY čísel + nové plumbing zkoušky (kroky 2-4)."
+    },
+    {
+      "title": "Nezávislý sub-agent review",
+      "status": "done",
+      "detail": "Čerstvý kontext na kontrakty mezi moduly: registr id->ruleset (tichý překlep = jiná hra), variant v GameState vs protokolu (konzistence), default american všude (žádná tichá koruce neamerické partie), zpětná kompatibilita protokolu bez bumpu verze. CLAUDE.md (kontrakty mezi moduly)."
+    }
+  ],
+  "startedAt": "2026-07-11T19:09:53.423Z",
+  "completedAt": "2026-07-11T19:50:19.466Z",
+  "autoCommit": {
+    "preSha": "325cd805e1fe020235cd6743962cd38d6df304f0",
+    "subject": "Phase 100: Ruleset přes engine + AI (plumbing)"
+  }
+}
