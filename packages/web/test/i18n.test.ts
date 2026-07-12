@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { detectLocale, getLocale, initLocale, setLocale, t } from '../src/i18n.js';
+import { detectLocale, getLocale, initLocale, setLocale, t, variantLabel } from '../src/i18n.js';
 
 /**
  * Aktivní jazyk je modulový jedináček – aby jeden test neovlivnil druhý přes
@@ -79,6 +79,24 @@ describe('app.title – titulek stránky', () => {
     expect(t('app.title')).toBe('Americká dáma');
     setLocale('en');
     expect(t('app.title')).toBe('American Checkers');
+  });
+});
+
+describe('variantLabel – sdílený holý název varianty', () => {
+  it('přeloží každou variantu do aktivního jazyka (cs)', () => {
+    setLocale('cs');
+    expect(variantLabel('american')).toBe('Americká');
+    expect(variantLabel('russian')).toBe('Ruská');
+    expect(variantLabel('czech')).toBe('Česká');
+    // Pool nemá zavedený český název → v obou jazycích „Pool".
+    expect(variantLabel('pool')).toBe('Pool');
+  });
+
+  it('přepne s jazykem (en)', () => {
+    setLocale('en');
+    expect(variantLabel('american')).toBe('American');
+    expect(variantLabel('russian')).toBe('Russian');
+    expect(variantLabel('czech')).toBe('Czech');
   });
 });
 

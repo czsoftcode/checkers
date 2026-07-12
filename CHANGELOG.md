@@ -7,6 +7,15 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.78.0] - 2026-07-12
+
+### Added
+
+- **Název varianty nad deskou při hře.** Nahoře u ovládacích tlačítek teď vidíte, jakou
+  variantu právě hrajete: v partii proti počítači holý název (např. „Ruská"), v partii
+  proti člověku popisek „Varianta:" a název místnosti, ve které jste. Text respektuje
+  jazyk (čeština/angličtina).
+
 ## [0.77.0] - 2026-07-12
 
 ### Changed

@@ -18,6 +18,7 @@
  */
 
 import { APP_TITLE } from './index.js';
+import type { VariantId } from '@checkers/rules';
 
 /** Podporované jazyky UI. Rozšíření = přidat klíč do obou slovníků níž. */
 export type Locale = 'cs' | 'en';
@@ -211,6 +212,9 @@ const cs = {
   // Herní obrazovka PvP (fáze 82): stavový pruh, panel, modaly (vzdání, remíza,
   // odveta, ztráta spojení), aria-popisky a výsledek/důvod konce z pohledu hráče.
   'game.connecting': 'Připojuji k partii…',
+  // Popisek „Varianta:" před názvem místnosti nad deskou v PvP (fáze 107) – běžný řez
+  // (ztlumený), samotný název varianty je tučně vedle (jako „Soupeř:" + přezdívka).
+  'game.variantLabel': 'Varianta:',
   'game.opponentLabel': 'Soupeř:',
   'game.offerDraw': 'Nabídnout remízu',
   'game.resign': 'Vzdát se',
@@ -337,6 +341,7 @@ const en = {
   'itch.close': 'Close',
 
   'game.connecting': 'Connecting to the game…',
+  'game.variantLabel': 'Variant:',
   'game.opponentLabel': 'Opponent:',
   'game.offerDraw': 'Offer a draw',
   'game.resign': 'Resign',
@@ -415,4 +420,27 @@ export function t(key: MessageKey, params?: Readonly<Record<string, string | num
     const value = params[name];
     return value === undefined ? match : String(value);
   });
+}
+
+/**
+ * Zobrazovací i18n klíče názvů variant. `Record<VariantId, MessageKey>` vynutí klíč
+ * pro KAŽDÉ id – přidání varianty do `VariantId` bez klíče sem shodí typecheck
+ * (jediný zdroj id je registr `@checkers/rules`). JEDINÝ zdroj mapy varianta→klíč
+ * (dřív žila v `lobby.ts`): čtou ji picker i akordeon v lobby a názvy variant nad
+ * herními deskami (fáze 107). Vzor jako `LEVEL_LABEL_KEYS` v `app-shell.ts`.
+ */
+const VARIANT_LABEL_KEYS: Record<VariantId, MessageKey> = {
+  american: 'variant.american',
+  pool: 'variant.pool',
+  russian: 'variant.russian',
+  czech: 'variant.czech',
+};
+
+/**
+ * Přeloží název varianty do aktivního jazyka – HOLÝ název (bez prefixu), ať se dá
+ * použít v pickeru `<option>` i po dosazení do věty (`game.variantLabel`). Sdílený
+ * zdroj: lobby, akordeon i herní panely počítají název z JEDNÉ mapy.
+ */
+export function variantLabel(variant: VariantId): string {
+  return t(VARIANT_LABEL_KEYS[variant]);
 }

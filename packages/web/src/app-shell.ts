@@ -11,7 +11,7 @@
 
 import { backgroundUrls, pickBackground } from './backgrounds.js';
 import { createBoardController } from './controller.js';
-import { t } from './i18n.js';
+import { t, variantLabel } from './i18n.js';
 import type { MessageKey } from './i18n.js';
 import type {
   BoardController,
@@ -249,13 +249,24 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // tlačítka. Přepínač je součást téhle řady (ne samostatný řádek nad ní).
   const controls = document.createElement('div');
   controls.className = 'controls';
+  // Název ZVOLENÉ varianty nad ovládáním (fáze 107). V AIvP je varianta známá hned
+  // při stavbě skořápky (z lobby přes `options.variant`), takže se vykreslí rovnou a
+  // je vidět po celou dobu (na rozdíl od PvP, kde naskočí až s prvním stavem serveru).
+  // HOLÝ název (bez prefixu „Varianta:") – řádek ovládání má i tak přepínač úrovně a
+  // víc tlačítek, delší text by je zbytečně zalamoval do dvou řad.
+  const variantLine = document.createElement('span');
+  variantLine.className = 'game-variant';
+  variantLine.textContent = variantLabel(variant);
+  const variantDivider = document.createElement('span');
+  variantDivider.className = 'controls-divider';
+  variantDivider.setAttribute('aria-hidden', 'true');
   const controlsDivider = document.createElement('span');
   controlsDivider.className = 'controls-divider';
   controlsDivider.setAttribute('aria-hidden', 'true');
   const offerDrawBtn = button('btn-offer-draw', t('ai.offerDraw'));
   const resignBtn = button('btn-resign', t('ai.resign'));
   const newGameBtn = button('btn-newgame', t('ai.newGame'));
-  controls.append(levelSelect, controlsDivider, offerDrawBtn, resignBtn, newGameBtn);
+  controls.append(variantLine, variantDivider, levelSelect, controlsDivider, offerDrawBtn, resignBtn, newGameBtn);
   // „Do místnosti" jen když je návrat zapojen (main.ts). Sedí v téže řadě jako
   // ostatní tlačítka → dědí responzivní chování (na mobilu se zalomí), na rozdíl
   // od dřívějšího fixního tlačítka v rohu, které se na úzkém displeji nevešlo.

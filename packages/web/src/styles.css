@@ -943,6 +943,19 @@ body {
   justify-content: flex-start;
 }
 
+/* Popisek „Varianta:" před názvem místnosti v PvP (fáze 107): běžný řez, ztlumený –
+   stejně jako „Soupeř:". Oddělení od názvu řeší `gap` na `.controls`. */
+.pvp-variant-label {
+  color: #bbb;
+}
+
+/* Název varianty/místnosti nad deskou (fáze 107): tučný, ať je jasné, jakou
+   variantu hráč hraje. Stejný vzhled v PvP (`.pvp-variant`) i AIvP (`.game-variant`). */
+.pvp-variant,
+.game-variant {
+  font-weight: 700;
+}
+
 /* Popisek „Soupeř:" před přezdívkou (běžný řez, ztlumený), ať je jasné, že jméno
    patří soupeři. Oddělení od přezdívky řeší `gap` na `.controls`. */
 .pvp-opponent-label {

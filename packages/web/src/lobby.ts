@@ -26,8 +26,7 @@
  * DATO – lokalizuje se jen věta, do které ji klient vsadí (`lobby.nickTaken`).
  */
 
-import { t, LOCALES, isLocale, getLocale, setLocale, saveLocale } from './i18n.js';
-import type { MessageKey } from './i18n.js';
+import { t, LOCALES, isLocale, getLocale, setLocale, saveLocale, variantLabel } from './i18n.js';
 import { VARIANT_IDS, isVariantId } from '@checkers/rules';
 import type { VariantId } from '@checkers/rules';
 import { createRoomClient } from './room-client.js';
@@ -53,18 +52,6 @@ const NICK_STORAGE_KEY = 'checkers.roomNick';
 
 /** Klíč v LocalStorage pro zapamatovanou volbu varianty sólo hry (fáze 102). */
 const VARIANT_STORAGE_KEY = 'checkers.variant';
-
-/**
- * Zobrazovací i18n klíče názvů variant pro picker. `Record<VariantId, MessageKey>`
- * vynutí klíč pro KAŽDÉ id – přidání varianty do `VariantId` bez klíče sem shodí
- * typecheck (jediný zdroj id je registr `@checkers/rules`). Vzor jako `LEVEL_LABEL_KEYS`.
- */
-const VARIANT_LABEL_KEYS: Record<VariantId, MessageKey> = {
-  american: 'variant.american',
-  pool: 'variant.pool',
-  russian: 'variant.russian',
-  czech: 'variant.czech',
-};
 
 /**
  * Načte zapamatovanou variantu z LocalStorage. Výchozí `'american'` (vize projektu),
@@ -108,7 +95,7 @@ function buildVariantPicker(): { element: HTMLSelectElement; read: () => Variant
   for (const id of VARIANT_IDS) {
     const option = document.createElement('option');
     option.value = id;
-    option.textContent = t(VARIANT_LABEL_KEYS[id]);
+    option.textContent = variantLabel(id);
     option.selected = id === saved;
     select.append(option);
   }
@@ -743,7 +730,7 @@ export function createLobby(options: LobbyOptions): Lobby {
     header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     const name = document.createElement('span');
     name.className = 'lobby-section-name';
-    name.textContent = t(VARIANT_LABEL_KEYS[id]);
+    name.textContent = variantLabel(id);
     const count = document.createElement('span');
     count.className = 'lobby-section-count';
     count.textContent = String(players.length);

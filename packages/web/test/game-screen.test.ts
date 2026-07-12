@@ -292,6 +292,34 @@ describe('createGameScreen – rozvržení', () => {
   });
 });
 
+describe('createGameScreen – název místnosti (varianty) v panelu (fáze 107)', () => {
+  it('před prvním stavem je label varianty skrytý (variantu nese až push serveru)', () => {
+    const m = mount();
+    expect(hidden(m, '.pvp-variant')).toBe(true);
+    expect(hidden(m, '.pvp-variant-label')).toBe(true);
+  });
+
+  it('s prvním stavem naskočí název místnosti z game.variant', () => {
+    const m = mount();
+    m.socket.message({ type: 'game-state', game: { ...pvpGame('black'), variant: 'russian' } });
+    const name = m.element.querySelector('.pvp-variant');
+    expect(hidden(m, '.pvp-variant')).toBe(false);
+    // Popisek „Varianta:" (běžný řez) + TUČNÝ holý název – rozdělené jako „Soupeř:".
+    expect(m.element.querySelector('.pvp-variant-label')?.textContent).toBe('Varianta:');
+    expect(name?.textContent).toBe('Ruská');
+    // Sedí v panelu ovládání (sdílené třídy), ne někde mimo.
+    expect(m.element.querySelector('.panel .pvp-controls .pvp-variant')).not.toBeNull();
+  });
+
+  it('stav BEZ varianty (starší/nekompletní) label nechá skrytý, neukáže špatný název', () => {
+    const m = mount();
+    m.socket.message({ type: 'game-state', game: pvpGame('black') });
+    expect(hidden(m, '.pvp-variant')).toBe(true);
+    expect(hidden(m, '.pvp-variant-label')).toBe(true);
+    expect(m.element.querySelector('.pvp-variant')?.textContent).toBe('');
+  });
+});
+
 describe('createGameScreen – indikátor na tahu', () => {
   it('je skrytý před prvním stavem', () => {
     const m = mount();

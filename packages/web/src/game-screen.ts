@@ -35,11 +35,11 @@
  * Žádné inline styly ani skripty (CSP) – vzhled je ve `styles.css`.
  */
 
-import type { Color, GameResult } from '@checkers/rules';
+import type { Color, GameResult, VariantId } from '@checkers/rules';
 import type { EndReason } from './server-client.js';
 
 import { backgroundUrls, pickBackground } from './backgrounds.js';
-import { t } from './i18n.js';
+import { t, variantLabel } from './i18n.js';
 import { createGameSocket } from './game-socket.js';
 import type { GameSocketFactory } from './game-socket.js';
 import { preloadImages } from './image-preload.js';
@@ -160,6 +160,19 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   panel.className = 'panel';
   const controls = document.createElement('div');
   controls.className = 'controls pvp-controls';
+  // Název MÍSTNOSTI (varianty), ve které partie běží (fáze 107). Naskočí až s PRVNÍM
+  // pushnutým stavem (`game.variant` v `onState`) – do té doby je skrytý (i s vlastním
+  // oddělovačem), aby v panelu nezůstal viset prázdný text ani osamocená čárka.
+  // Popisek „Varianta:" běžným řezem (ztlumený), samotný název varianty TUČNĚ vedle –
+  // stejný vzor jako „Soupeř:" + přezdívka.
+  const variantLabelEl = document.createElement('span');
+  variantLabelEl.className = 'pvp-variant-label hidden';
+  variantLabelEl.textContent = t('game.variantLabel');
+  const variantName = document.createElement('span');
+  variantName.className = 'pvp-variant hidden';
+  const variantDivider = document.createElement('span');
+  variantDivider.className = 'controls-divider hidden';
+  variantDivider.setAttribute('aria-hidden', 'true');
   // Popisek „Soupeř:" (běžný řez) + TUČNÁ přezdívka, ať je jasné, že jde o jméno
   // soupeře, ne o moje.
   const opponentLabel = document.createElement('span');
@@ -187,7 +200,16 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   // do refreshe (bez reconnectionu se do partie nevrátíš). Čistý odchod z běžící
   // partie je „Vzdát se"; z dohrané „Konec" (uvolní oba). `options.onBackToRoom` se
   // volá jen z těch cest.
-  controls.append(opponentLabel, opponent, divider, offerDrawBtn, resignBtn);
+  controls.append(
+    variantLabelEl,
+    variantName,
+    variantDivider,
+    opponentLabel,
+    opponent,
+    divider,
+    offerDrawBtn,
+    resignBtn,
+  );
 
   panel.append(controls);
 
@@ -463,6 +485,7 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
     info.gameId,
     {
       onState: (game) => {
+        setVariantLabel(game.variant);
         controller.applyState(game);
       },
       onClosed: () => {
@@ -498,6 +521,23 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
       ...(options.gameSocketFactory === undefined ? {} : { socketFactory: options.gameSocketFactory }),
     },
   );
+
+  /**
+   * Vykreslí název místnosti (varianty) v panelu ovládání (fáze 107). Variantu nese
+   * autoritativní stav partie (`PvpGameDto.variant`); dorazí s PRVNÍM pushem, proto
+   * label do té doby drží skrytý. Chybějící/`undefined` variantu (starší/nekompletní
+   * stav) nechá skrytou, ať panel radši NEUKÁŽE nic, než by tvrdil špatný název –
+   * `pvp-controller` si pro desku stejně dosadí americká pravidla nezávisle na tomhle.
+   */
+  function setVariantLabel(variant: VariantId | undefined): void {
+    const show = variant !== undefined;
+    if (show) {
+      variantName.textContent = variantLabel(variant);
+    }
+    variantLabelEl.classList.toggle('hidden', !show);
+    variantName.classList.toggle('hidden', !show);
+    variantDivider.classList.toggle('hidden', !show);
+  }
 
   /** Nastaví text stavového řádku a schová ho, když je prázdný (ať prázdný odstavec ve vodorovném pruhu netvoří mezeru/oddělovač). */
   function setStatus(text: string): void {

@@ -1,0 +1,33 @@
+{
+  "id": 107,
+  "title": "Název varianty nad deskou při hře",
+  "goal": "Na obou herních obrazovkách zobrazit nahoře u ovládacích tlačítek název varianty/místnosti, kterou hráč právě hraje - v PvP z PvpGameDto.variant (v jaké jsem místnosti), v AIvP z options.variant; text z existujících variant.* i18n (cs/en). Herní logika ani tok se nemění. Brána: v PvP partii vidím nahoře název místnosti (americká/pool/ruská/česká), v AIvP partii název zvolené varianty. V PvP název naskočí s prvnim pushnutym stavem (controller.applyState -> game.variant).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Sdilena konstanta + helper pro nazev varianty",
+      "status": "done",
+      "detail": "Vytahnout VARIANT_LABEL_KEYS z lobby.ts do sdileneho mista (i18n.ts nebo maly modul) + helper variantLabel(variant) = t(VARIANT_LABEL_KEYS[variant]). Pokud prefix (Hrajes: {variant}), pridat jeden i18n wrapper klic cs/en (jinak holy nazev). lobby.ts prepnout na sdileny zdroj - beze zmeny chovani. Vystup: jeden zdroj mapy + helper, i18n parita zelena, lobby testy zelene."
+    },
+    {
+      "title": "PvP: label varianty v panelu ovladani",
+      "status": "done",
+      "detail": "V game-screen.ts pridat do .controls panelu label s nazvem varianty z PvpGameDto.variant (nastavi se pri controller.applyState - naskoci s prvnim stavem). Pouzit sdileny variantLabel. Nerozbit layout panelu (pridat label, ne preskladat tlacitka). Vystup: v PvP partii vidim nahore nazev mistnosti."
+    },
+    {
+      "title": "AIvP: label varianty v panelu ovladani",
+      "status": "done",
+      "detail": "V app-shell.ts pridat do ovladaciho panelu tentyz label z options.variant (app-shell.ts:183). Stejne zneni jako PvP (sdileny helper). Vystup: v AIvP partii vidim nahore nazev zvolene varianty."
+    }
+  ],
+  "startedAt": "2026-07-12T14:26:35.300Z",
+  "resolvedVerify": [
+    "Vizuální umístění a čitelnost názvu nad deskou (PvP i AIvP)",
+    "Znění labelu v PvP („Varianta: {název}\")"
+  ],
+  "completedAt": "2026-07-12T14:55:27.783Z",
+  "autoCommit": {
+    "preSha": "b0abff60718a4b6c9e98cbd16d338a36baa23616",
+    "subject": "Phase 107: Název varianty nad deskou při hře"
+  }
+}

@@ -339,12 +339,18 @@ describe('app-shell – panel nad deskou: obsah a struktura', () => {
     const { shell } = await mountRunning();
     const controls = q(shell.element, '.controls');
     const select = q(controls, '.level-select'); // přepínač je UVNITŘ řádku ovládání
-    const divider = q(controls, '.controls-divider');
     const offer = q(controls, '.btn-offer-draw');
-    // Pořadí v řádku: přepínač PŘED oddělovačem PŘED tlačítkem Nabízím remízu.
+    // Pořadí v řádku: přepínač PŘED oddělovačem PŘED tlačítkem Nabízím remízu. Od fáze
+    // 107 je v řádku víc `.controls-divider` (jeden i před názvem varianty), proto se
+    // hledá TEN oddělovač, který leží MEZI přepínačem a tlačítkem – ne slepě první.
     const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(select.compareDocumentPosition(divider) & FOLLOWING).toBeTruthy();
-    expect(divider.compareDocumentPosition(offer) & FOLLOWING).toBeTruthy();
+    const dividers = [...controls.querySelectorAll('.controls-divider')];
+    const divider = dividers.find(
+      (d) =>
+        Boolean(select.compareDocumentPosition(d) & FOLLOWING) &&
+        Boolean(d.compareDocumentPosition(offer) & FOLLOWING),
+    );
+    expect(divider).toBeTruthy();
     // Zrušený samostatný řádek/popisek úrovně („Nová hra proti:") v DOM není.
     expect(shell.element.querySelector('.level-row')).toBeNull();
     expect(shell.element.querySelector('.level-label')).toBeNull();
