@@ -83,20 +83,20 @@ describe('app.title – titulek stránky', () => {
 });
 
 describe('variantLabel – sdílený holý název varianty', () => {
-  it('přeloží každou variantu do aktivního jazyka (cs)', () => {
+  it('přeloží každou variantu do aktivního jazyka (cs), s dovětkem dáma (fáze 109)', () => {
     setLocale('cs');
-    expect(variantLabel('american')).toBe('Americká');
-    expect(variantLabel('russian')).toBe('Ruská');
-    expect(variantLabel('czech')).toBe('Česká');
-    // Pool nemá zavedený český název → v obou jazycích „Pool".
-    expect(variantLabel('pool')).toBe('Pool');
+    expect(variantLabel('american')).toBe('Americká dáma');
+    expect(variantLabel('russian')).toBe('Ruská dáma');
+    expect(variantLabel('czech')).toBe('Česká dáma');
+    // Pool nemá zavedený český přívlastek → „Pool" + dovětek.
+    expect(variantLabel('pool')).toBe('Pool dáma');
   });
 
-  it('přepne s jazykem (en)', () => {
+  it('přepne s jazykem (en), dovětek checkers', () => {
     setLocale('en');
-    expect(variantLabel('american')).toBe('American');
-    expect(variantLabel('russian')).toBe('Russian');
-    expect(variantLabel('czech')).toBe('Czech');
+    expect(variantLabel('american')).toBe('American checkers');
+    expect(variantLabel('russian')).toBe('Russian checkers');
+    expect(variantLabel('czech')).toBe('Czech checkers');
   });
 });
 

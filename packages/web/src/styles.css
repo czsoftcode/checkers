@@ -694,22 +694,41 @@ body {
   cursor: default;
 }
 
-/* Sólo řádek (fáze 102): picker varianty vlevo, tlačítko „Hrát proti počítači"
-   vpravo. Tlačítko zabere zbytek šířky, picker si drží svou (flex-shrink: 0).
-   Na úzkém displeji se zalomí pod sebe (flex-wrap). */
+/* Oddělovač sekce „Hrát proti počítači" od místností nad ní (fáze 109). */
+.lobby-divider {
+  width: 100%;
+  height: 0;
+  margin: 1rem 0 0;
+  border: none;
+  border-top: 1px solid #555;
+}
+
+/* Nadpis sólo sekce (fáze 109): nese kontext, proto tlačítko pod ním smí být krátké. */
+.lobby-solo-heading {
+  margin: 0.8rem 0 0.6rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #eee;
+}
+
+/* Sólo řádek (fáze 102, zkráceno fáze 109): picker varianty vlevo (roztáhne se přes
+   zbytek šířky), KRÁTKÉ tlačítko „Hrát" vpravo v přirozené šířce. `nowrap` + `min-width:
+   0` na pickeru drží select i tlačítko VEDLE SEBE i na úzkém/portrait mobilu – dlouhé
+   tlačítko dřív padalo pod select (proto zkrácené na „Hrát", kontext dodá nadpis). */
 .lobby-solo {
   display: flex;
   align-items: stretch;
   gap: 0.6rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .lobby-solo .lobby-solo-btn {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
 }
 
 .lobby-variant {
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 0.55rem 0.7rem;
   font-size: 1rem;
   border: 1px solid #666;

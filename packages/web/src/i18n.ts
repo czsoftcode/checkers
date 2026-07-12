@@ -158,7 +158,11 @@ const cs = {
   'lobby.nickPlaceholder': 'Tvoje přezdívka',
   'lobby.rosterTitle': 'Přítomní hráči',
   'lobby.reconnectBtn': 'Připojit znovu',
-  'lobby.soloBtn': 'Hrát proti počítači',
+  // Sekce hry proti počítači (fáze 109): nadpis nad selectem varianty odděluje sólo
+  // cestu od místností; tlačítko je krátké („Hrát"), ať se vejde vedle selectu i na
+  // mobilu (kontext dodává nadpis). Dřív bylo dlouhé „Hrát proti počítači" na tlačítku.
+  'lobby.soloHeading': 'Hrát proti počítači',
+  'lobby.soloBtn': 'Hrát',
   'lobby.connecting': 'Připojuji do místnosti…',
   'lobby.you': ' (ty)',
   'lobby.challengeBtn': 'Vyzvat',
@@ -200,13 +204,15 @@ const cs = {
   'lobby.challengeModalTitle': 'Výzva na partii',
   'lobby.challengeModalAria': 'Příchozí výzva na partii',
 
-  // Názvy variant pravidel (fáze 102) – zobrazovací popisky pickeru v lobby (u „Hrát
-  // proti počítači"). Interní id (american/pool/russian/czech) jde po drátě/kódu
-  // anglicky, tady je JEN překlad. Pool nemá zavedený český název → v obou jazycích „Pool".
-  'variant.american': 'Americká',
-  'variant.pool': 'Pool',
-  'variant.russian': 'Ruská',
-  'variant.czech': 'Česká',
+  // Názvy variant pravidel (fáze 102, dovětek „dáma"/„checkers" fáze 109) – zobrazovací
+  // popisky pickeru v lobby, názvů místností i názvu varianty nad deskou (fáze 107, přes
+  // `variantLabel`). Dovětek dělá jasným, že jde o DRUH hry (dáma), ne o jazyk. Interní id
+  // (american/pool/russian/czech) jde po drátě/kódu anglicky, tady je JEN překlad. Pool
+  // nemá zavedený český přívlastek → zůstává „Pool" + dovětek („Pool dáma").
+  'variant.american': 'Americká dáma',
+  'variant.pool': 'Pool dáma',
+  'variant.russian': 'Ruská dáma',
+  'variant.czech': 'Česká dáma',
 
   // Itch build (fáze 89): AI-only publikace. Hra s člověkem tady neběží (server je
   // cross-origin, mrtvý WS) → tlačítko místo místnosti otevře modal s odkazem na
@@ -312,7 +318,8 @@ const en = {
   'lobby.nickPlaceholder': 'Your nickname',
   'lobby.rosterTitle': 'Players present',
   'lobby.reconnectBtn': 'Reconnect',
-  'lobby.soloBtn': 'Play against the computer',
+  'lobby.soloHeading': 'Play against the computer',
+  'lobby.soloBtn': 'Play',
   'lobby.connecting': 'Connecting to the room…',
   'lobby.you': ' (you)',
   'lobby.challengeBtn': 'Challenge',
@@ -342,10 +349,10 @@ const en = {
   'lobby.challengeModalTitle': 'Game challenge',
   'lobby.challengeModalAria': 'Incoming game challenge',
 
-  'variant.american': 'American',
-  'variant.pool': 'Pool',
-  'variant.russian': 'Russian',
-  'variant.czech': 'Czech',
+  'variant.american': 'American checkers',
+  'variant.pool': 'Pool checkers',
+  'variant.russian': 'Russian checkers',
+  'variant.czech': 'Czech checkers',
 
   'itch.humanBtn': 'Play against a human',
   'itch.modalTitle': 'Human vs human is on the full version',

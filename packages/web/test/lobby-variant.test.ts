@@ -79,10 +79,10 @@ describe('lobby – picker varianty sólo hry', () => {
     const labels = Object.fromEntries(
       Array.from(mount().picker.options).map((o) => [o.value, o.textContent]),
     );
-    expect(labels.american).toBe('Americká');
-    expect(labels.pool).toBe('Pool');
-    expect(labels.russian).toBe('Ruská');
-    expect(labels.czech).toBe('Česká');
+    expect(labels.american).toBe('Americká dáma');
+    expect(labels.pool).toBe('Pool dáma');
+    expect(labels.russian).toBe('Ruská dáma');
+    expect(labels.czech).toBe('Česká dáma');
   });
 
   it('předvyplní naposledy uloženou variantu z LocalStorage', () => {

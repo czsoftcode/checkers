@@ -119,22 +119,22 @@ describe('createAppShell – filtr Mistrovství podle varianty', () => {
 });
 
 describe('createAppShell – název varianty nad deskou (fáze 107)', () => {
-  it('vykreslí HOLÝ název zvolené varianty (ruská), bez prefixu „Varianta:"', async () => {
+  it('vykreslí HOLÝ název zvolené varianty (ruská) s dovětkem dáma, bez prefixu „Varianta:"', async () => {
     const { shell } = await mount('russian');
     const line = shell.element.querySelector('.game-variant');
-    expect(line?.textContent).toBe('Ruská');
+    expect(line?.textContent).toBe('Ruská dáma');
   });
 
   it('přeloží název varianty do aktivního jazyka (en)', async () => {
     setLocale('en');
     const { shell } = await mount('czech');
     const line = shell.element.querySelector('.game-variant');
-    expect(line?.textContent).toBe('Czech');
+    expect(line?.textContent).toBe('Czech checkers');
   });
 
   it('bez varianty spadne na americkou (dnešní chování)', async () => {
     const { shell } = await mount();
     const line = shell.element.querySelector('.game-variant');
-    expect(line?.textContent).toBe('Americká');
+    expect(line?.textContent).toBe('Americká dáma');
   });
 });

@@ -124,10 +124,11 @@ function challengeBtns(h: Handle): HTMLButtonElement[] {
 function sections(h: Handle): HTMLElement[] {
   return Array.from(h.el.querySelectorAll<HTMLElement>('.lobby-section'));
 }
-/** Hlavička sekce dané varianty (podle názvu). */
+/** Hlavička sekce dané varianty (podle názvu; shoda prefixem – názvy nesou dovětek
+ *  „dáma" z fáze 109, prefixy variant jsou navzájem jednoznačné). */
 function sectionByName(h: Handle, name: string): HTMLElement {
-  const found = sections(h).find(
-    (s) => s.querySelector('.lobby-section-name')?.textContent === name,
+  const found = sections(h).find((s) =>
+    (s.querySelector('.lobby-section-name')?.textContent ?? '').startsWith(name),
   );
   if (found === undefined) {
     throw new Error(`sekce „${name}" nenalezena`);
@@ -456,7 +457,7 @@ describe('createLobby – akordeon a předsíň', () => {
     const secs = sections(h);
     expect(secs).toHaveLength(4);
     const names = secs.map((s) => s.querySelector('.lobby-section-name')?.textContent);
-    expect(names).toEqual(['Americká', 'Pool', 'Ruská', 'Česká']);
+    expect(names).toEqual(['Americká dáma', 'Pool dáma', 'Ruská dáma', 'Česká dáma']);
     const american = sectionByName(h, 'Americká');
     expect(american.classList.contains('is-mine')).toBe(true);
     expect(american.classList.contains('is-expanded')).toBe(true);

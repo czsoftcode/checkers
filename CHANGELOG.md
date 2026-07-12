@@ -7,6 +7,16 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Lobby: hra proti počítači vizuálně oddělená a názvy variant s dovětkem „dáma".**
+  Sekci „Hrát proti počítači" teď od přehledu místností odděluje čára a nadpis; pod ním
+  je výběr varianty a krátké tlačítko „Hrát", které i na mobilu (na výšku) zůstane vedle
+  výběru, ne pod ním. Názvy variant dostaly dovětek – „Americká dáma", „Pool dáma",
+  „Ruská dáma", „Česká dáma" (anglicky „American/Pool/Russian/Czech checkers") – ať je
+  jasné, že jde o druh hry, ne o jazyk. Dovětek se projeví ve výběru, v názvech místností
+  i v názvu varianty nad deskou.
+
 ## [0.79.0] - 2026-07-12
 
 ### Changed

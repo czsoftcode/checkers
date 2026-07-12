@@ -401,8 +401,16 @@ export function createLobby(options: LobbyOptions): Lobby {
   reconnectBtn.textContent = t('lobby.reconnectBtn');
   disconnected.append(disconnectedMsg, reconnectBtn);
 
-  // Sólo cesta (proti počítači) – nezávislá na místnosti, bez přezdívky. Vedle
-  // tlačítka picker varianty (fáze 102): zvolená varianta se předá do `onPlayVsComputer`.
+  // Sólo cesta (proti počítači) – nezávislá na místnosti, bez přezdívky. Fáze 109:
+  // vizuálně oddělená od místností nad ní oddělovačem + nadpisem „Hrát proti počítači",
+  // aby bylo jasné, že jde o samostatnou cestu (hra proti AI), ne o další místnost.
+  // Pod nadpisem řádek: picker varianty (fáze 102) + KRÁTKÉ tlačítko „Hrát" (kontext
+  // dodá nadpis) – zvolená varianta se předá do `onPlayVsComputer`.
+  const soloDivider = document.createElement('hr');
+  soloDivider.className = 'lobby-divider';
+  const soloHeading = document.createElement('h2');
+  soloHeading.className = 'lobby-solo-heading';
+  soloHeading.textContent = t('lobby.soloHeading');
   const soloVariant = buildVariantPicker();
   const soloBtn = document.createElement('button');
   soloBtn.type = 'button';
@@ -452,7 +460,7 @@ export function createLobby(options: LobbyOptions): Lobby {
   nickDialog.append(nickTitle, nickModalMsg, nickInput, nickModalLang, nickActions);
   nickModal.append(nickDialog);
 
-  card.append(header, message, room, disconnected, soloRow);
+  card.append(header, message, room, disconnected, soloDivider, soloHeading, soloRow);
   element.append(card, challengeModal, nickModal);
 
   // Přezdívka posledního úspěšného/pokusného vstupu – pro „Připojit znovu".
@@ -1182,8 +1190,15 @@ function createItchEntry(options: LobbyOptions): Lobby {
   humanBtn.className = 'lobby-human-btn';
   humanBtn.textContent = t('itch.humanBtn');
 
-  // Sólo cesta (proti počítači) – shodná s místností: picker varianty + tlačítko,
-  // řídí ji caller přes `onPlayVsComputer(variant)`.
+  // Sólo cesta (proti počítači) – shodná s místností: oddělovač + nadpis „Hrát proti
+  // počítači" (fáze 109) a pod ním picker varianty + KRÁTKÉ tlačítko „Hrát". Nadpis tu
+  // musí být taky – bez něj by holé „Hrát" ztratilo kontext (tlačítko je sdílené,
+  // `lobby.soloBtn`). Řídí ji caller přes `onPlayVsComputer(variant)`.
+  const soloDivider = document.createElement('hr');
+  soloDivider.className = 'lobby-divider';
+  const soloHeading = document.createElement('h2');
+  soloHeading.className = 'lobby-solo-heading';
+  soloHeading.textContent = t('lobby.soloHeading');
   const soloVariant = buildVariantPicker();
   const soloBtn = document.createElement('button');
   soloBtn.type = 'button';
@@ -1193,7 +1208,7 @@ function createItchEntry(options: LobbyOptions): Lobby {
   soloRow.className = 'lobby-solo';
   soloRow.append(soloVariant.element, soloBtn);
 
-  card.append(header, humanBtn, soloRow);
+  card.append(header, humanBtn, soloDivider, soloHeading, soloRow);
   element.append(card);
 
   // Modal (skrytý). Znovupoužívá CSP-bezpečné třídy `.modal-overlay`/`.modal-dialog`

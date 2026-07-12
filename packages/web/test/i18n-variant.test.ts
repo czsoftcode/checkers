@@ -30,17 +30,17 @@ describe('i18n – názvy variant + aria pickeru', () => {
     }
   });
 
-  it('konkrétní překlady (cs vs en) sedí, Pool je v obou stejný', () => {
+  it('konkrétní překlady (cs vs en) sedí, s dovětkem dáma/checkers (fáze 109)', () => {
     setLocale('cs');
-    expect(t('variant.american')).toBe('Americká');
-    expect(t('variant.russian')).toBe('Ruská');
-    expect(t('variant.czech')).toBe('Česká');
-    expect(t('variant.pool')).toBe('Pool');
+    expect(t('variant.american')).toBe('Americká dáma');
+    expect(t('variant.russian')).toBe('Ruská dáma');
+    expect(t('variant.czech')).toBe('Česká dáma');
+    expect(t('variant.pool')).toBe('Pool dáma');
     setLocale('en');
-    expect(t('variant.american')).toBe('American');
-    expect(t('variant.russian')).toBe('Russian');
-    expect(t('variant.czech')).toBe('Czech');
-    expect(t('variant.pool')).toBe('Pool');
+    expect(t('variant.american')).toBe('American checkers');
+    expect(t('variant.russian')).toBe('Russian checkers');
+    expect(t('variant.czech')).toBe('Czech checkers');
+    expect(t('variant.pool')).toBe('Pool checkers');
   });
 
   it('aria-label pickeru existuje v obou jazycích', () => {

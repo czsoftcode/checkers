@@ -542,6 +542,11 @@
       "id": 108,
       "title": "Lobby: jedna vstupní stránka s místnostmi",
       "status": "done"
+    },
+    {
+      "id": 109,
+      "title": "Lobby: oddělit AIvP a dovětek dáma",
+      "status": "done"
     }
   ]
 }

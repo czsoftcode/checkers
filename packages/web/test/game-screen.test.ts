@@ -306,7 +306,7 @@ describe('createGameScreen – název místnosti (varianty) v panelu (fáze 107)
     expect(hidden(m, '.pvp-variant')).toBe(false);
     // Popisek „Varianta:" (běžný řez) + TUČNÝ holý název – rozdělené jako „Soupeř:".
     expect(m.element.querySelector('.pvp-variant-label')?.textContent).toBe('Varianta:');
-    expect(name?.textContent).toBe('Ruská');
+    expect(name?.textContent).toBe('Ruská dáma');
     // Sedí v panelu ovládání (sdílené třídy), ne někde mimo.
     expect(m.element.querySelector('.panel .pvp-controls .pvp-variant')).not.toBeNull();
   });

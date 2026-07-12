@@ -1,0 +1,34 @@
+{
+  "id": 109,
+  "title": "Lobby: oddělit AIvP a dovětek dáma",
+  "goal": "V lobby vizuálně oddělit místnosti od hry proti počítači: pod místnostmi nadpis Hrát proti počítači, pod ním select variant a vedle něj jen krátké tlačítko Hrát (aby se select + tlačítko vešly vedle sebe i na mobilu). K názvům variant přidat dovětek dáma (Americká dáma, Pool dáma, Ruská dáma, Česká dáma; en American/Pool/Russian/Czech checkers) v selectu i v názvech místností, ať je jasné, že jde o druh hry, ne jazyk. Klient-only: lobby.ts layout + i18n.ts + mobilni CSS. Pozn: variant.* je sdileny label, dovetek se projevi i u nazvu varianty nad deskou (faze 107).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "i18n: dovetek dama + texty AIvP sekce (cs/en)",
+      "status": "done",
+      "detail": "variant.* -> Americka dama/Pool dama/Ruska dama/Ceska dama (cs), American/Pool/Russian/Czech checkers (en). Novy klic nadpisu Hrat proti pocitaci (lobby.soloHeading), zkratit lobby.soloBtn na Hrat/Play. i18n parita zelena. Overit, ze dovetek nevypada spatne u labelu nad deskou (faze 107) ani v itch vetvi."
+    },
+    {
+      "title": "Lobby: oddelit AIvP sekci (nadpis + oddelovac + kratke Hrat)",
+      "status": "done",
+      "detail": "V lobby.ts pod akordeonem pridat vizualni oddelovac + nadpis Hrat proti pocitaci, pod nim soloRow = select + kratke tlacitko Hrat. Nerozbit AIvP tok (onPlayVsComputer) ani druhou (itch) createLobby vetev - lobby.soloBtn je sdileny, v itch bez nadpisu doresit (pridat nadpis i tam nebo itch label zvlast). Vystup: mistnosti a hra proti pocitaci jsou zretelne oddelene."
+    },
+    {
+      "title": "Mobilni CSS: select + Hrat vedle sebe",
+      "status": "done",
+      "detail": ".lobby-solo (styles.css:700): zajistit, ze select + kratke Hrat zustanou vedle sebe i v uzkem/portrait viewportu (dnes se dlouhe tlacitko zalamovalo pod sebe). Vystup: na mobilu vedle sebe, overeno v portrait sirce."
+    }
+  ],
+  "startedAt": "2026-07-12T18:45:30.713Z",
+  "resolvedVerify": [
+    "Na mobilu (portrait) select varianty + tlačítko „Hrát\" zůstanou vedle sebe",
+    "Dovětek „dáma\" nevypadá špatně u názvu varianty NAD DESKOU (fáze 107)",
+    "Vzhled oddělovače + nadpisu „Hrát proti počítači\" v lobby"
+  ],
+  "completedAt": "2026-07-12T19:01:21.848Z",
+  "autoCommit": {
+    "preSha": "5cf5813e021f910556cb3bdfc5b127d2d114f23a",
+    "subject": "Phase 109: Lobby: oddělit AIvP a dovětek dáma"
+  }
+}
