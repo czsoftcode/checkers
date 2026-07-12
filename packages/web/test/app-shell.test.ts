@@ -172,7 +172,7 @@ function change(el: HTMLElement): void {
 const OVER: GameStatus = { result: 'white-wins', turn: 'white', engineStatus: 'idle' };
 
 describe('app-shell – stav tlačítek podle výsledku', () => {
-  it('za běhu je aktivní jen Vzdávám hru, po konci jen Nová hra', async () => {
+  it('za běhu je aktivní jen Vzdát se, po konci jen Nová hra', async () => {
     const { shell, created } = await mountRunning();
 
     const resignBtn = q(shell.element, '.btn-resign') as HTMLButtonElement;
@@ -335,12 +335,12 @@ describe('app-shell – panel nad deskou: obsah a struktura', () => {
     expect(q(errModal, '.modal-msg').textContent).toContain('chybu');
   });
 
-  it('přepínač úrovně je v řádku ovládání vlevo od „Nabízím remízu", s oddělovačem mezi nimi', async () => {
+  it('přepínač úrovně je v řádku ovládání vlevo od „Remíza", s oddělovačem mezi nimi', async () => {
     const { shell } = await mountRunning();
     const controls = q(shell.element, '.controls');
     const select = q(controls, '.level-select'); // přepínač je UVNITŘ řádku ovládání
     const offer = q(controls, '.btn-offer-draw');
-    // Pořadí v řádku: přepínač PŘED oddělovačem PŘED tlačítkem Nabízím remízu. Od fáze
+    // Pořadí v řádku: přepínač PŘED oddělovačem PŘED tlačítkem Remíza. Od fáze
     // 107 je v řádku víc `.controls-divider` (jeden i před názvem varianty), proto se
     // hledá TEN oddělovač, který leží MEZI přepínačem a tlačítkem – ne slepě první.
     const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
@@ -625,7 +625,7 @@ describe('app-shell – úroveň přežije reload (LocalStorage)', () => {
 });
 
 describe('app-shell – inline potvrzení vzdání', () => {
-  it('„Vzdávám hru" ukáže potvrzení; „Ano" vzdá, „Zrušit" ne', async () => {
+  it('„Vzdát se" ukáže potvrzení; „Ano" vzdá, „Zrušit" ne', async () => {
     const { shell, created } = await mountRunning();
 
     const controls = q(shell.element, '.controls');
@@ -651,7 +651,7 @@ describe('app-shell – inline potvrzení vzdání', () => {
   });
 });
 
-describe('app-shell – tlačítko „Nabízím remízu"', () => {
+describe('app-shell – tlačítko „Remíza"', () => {
   const ONGOING: GameStatus = { result: 'ongoing', turn: 'black', engineStatus: 'idle' };
   const THINKING: GameStatus = { result: 'ongoing', turn: 'white', engineStatus: 'thinking' };
 
@@ -736,7 +736,7 @@ describe('app-shell – Nová hra uklidí starý controller (polling)', () => {
 });
 
 describe('app-shell – selhání při zakládání partie', () => {
-  it('createGame selže → hláška, Nová hra aktivní, Vzdávám hru zamčené', async () => {
+  it('createGame selže → hláška, Nová hra aktivní, Vzdát se zamčené', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const client: ServerClient = {
       createGame: () => Promise.reject(new Error('síť dole')),
@@ -1141,7 +1141,7 @@ describe('app-shell – dvě kola v Mistrovství', () => {
 });
 
 describe('app-shell – návrat do místnosti (onExit)', () => {
-  it('bez onExit se tlačítko „Do místnosti" nevykreslí', async () => {
+  it('bez onExit se tlačítko „Místnosti" nevykreslí', async () => {
     const { factory } = fakeFactory();
     const shell = createAppShell(fakeClient(gameDto(initialPosition())), { createController: factory });
     document.body.append(shell.element);
@@ -1164,7 +1164,7 @@ describe('app-shell – návrat do místnosti (onExit)', () => {
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 
-  it('tlačítko „Do místnosti" zůstává aktivní i za běhu partie', async () => {
+  it('tlačítko „Místnosti" zůstává aktivní i za běhu partie', async () => {
     const { factory } = fakeFactory();
     const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
       createController: factory,

@@ -192,7 +192,7 @@ describe('createGameScreen – anglická obrazovka', () => {
   it('statické popisky a tlačítka jsou anglicky', () => {
     const { element } = mount('en');
     expect(element.querySelector('.pvp-opponent-label')?.textContent).toBe('Opponent:');
-    expect(element.querySelector('.btn-offer-draw')?.textContent).toBe('Offer a draw');
+    expect(element.querySelector('.btn-offer-draw')?.textContent).toBe('Draw');
     expect(element.querySelector('.btn-resign')?.textContent).toBe('Resign');
     expect(element.querySelector('.status')?.textContent).toBe('Connecting to the game…');
   });

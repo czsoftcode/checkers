@@ -547,6 +547,11 @@
       "id": 109,
       "title": "Lobby: oddělit AIvP a dovětek dáma",
       "status": "done"
+    },
+    {
+      "id": 110,
+      "title": "Zkrátit tlačítka nad hrací deskou",
+      "status": "done"
     }
   ]
 }

@@ -488,7 +488,7 @@ describe('createGameScreen – vzdání modalem (fáze 77)', () => {
 });
 
 describe('createGameScreen – nabídka remízy modalem (fáze 77)', () => {
-  it('klik Nabídnout remízu odešle offerDraw, ukáže „čekám" a zamkne tlačítko', () => {
+  it('klik Remíza odešle offerDraw, ukáže „čekám" a zamkne tlačítko', () => {
     const m = mount();
     m.socket.message({ type: 'game-state', game: pvpGame('black') });
     click(m, '.btn-offer-draw');

@@ -208,7 +208,7 @@ describe('app-shell i18n – statické ovládání anglicky', () => {
   it('tlačítka, potvrzení vzdání a modal jsou anglicky', async () => {
     const { client } = levelEchoClient();
     const { element } = await mount('en', client);
-    expect(q(element, '.btn-offer-draw').textContent).toBe('Offer a draw');
+    expect(q(element, '.btn-offer-draw').textContent).toBe('Draw');
     expect(q(element, '.btn-resign').textContent).toBe('Resign');
     expect(q(element, '.btn-newgame').textContent).toBe('New game');
     expect(q(element, '.btn-modal-close').textContent).toBe('Close');

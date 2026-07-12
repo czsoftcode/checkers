@@ -1,0 +1,32 @@
+{
+  "id": 110,
+  "title": "Zkrátit tlačítka nad hrací deskou",
+  "goal": "Zkrátit popisky ovládacích tlačítek nad deskou, aby se s delším nazvem varianty (faze 107/109) vesly na jeden radek - hlavne AIvP obrazovka: ai.offerDraw Nabizim remizu -> Remiza, ai.resign Vzdavam hru -> Vzdat se, ai.toRoom Do mistnosti -> Konec (ne Zpet - to evokuje undo/vraceni tahu, coz je navic non-goal; en End). Kvuli konzistenci sjednotit i PvP game.offerDraw na Remiza. Anglicke ekvivalenty (Draw/Resign/End). i18n parita cs/en; overit, ze rada tlacitek nad deskou se vejde na jeden radek. Klient-only, i18n.ts. Pozn: i po zkraceni je AIvP rada husta (varianta+uroven+3 tlacitka+Nova hra) - na uzkem mobilu muze pripadny zbytkovy wrap byt follow-up layout, ne text.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "i18n: zkratit AIvP tlacitka (cs/en)",
+      "status": "done",
+      "detail": "ai.offerDraw -> Remiza/Draw, ai.resign -> Vzdat se/Resign, ai.toRoom -> Konec/End. i18n parita (klice beze zmeny) zelena. Testy drzi pres class selektory (.btn-resign/.btn-offer-draw/.btn-back-room), textContent asertace na tato tlacitka nejsou -> nespadnou."
+    },
+    {
+      "title": "i18n: sjednotit PvP Remiza",
+      "status": "done",
+      "detail": "game.offerDraw -> Remiza/Draw (bylo Nabidnout remizu/Offer a draw), at PvP i AIvP maji stejny kratky popisek. Pozor: neplest s result statusem Remiza. (game-screen.test.ts:602 / app-shell 327) - to je jina hodnota, nemenit."
+    },
+    {
+      "title": "Overit jeden radek + testy zelene",
+      "status": "done",
+      "detail": "Vizualne overit, ze ovladaci rada nad deskou (AIvP i PvP) s delsim nazvem varianty (Americka dama/American checkers) drzi jeden radek na desktopu; spustit web testy (zelene); volitelne osvezit zastarale it(...) popisy zminujici stary text. Zbytkovy wrap na uzkem mobilu = layout follow-up, ne text."
+    }
+  ],
+  "startedAt": "2026-07-12T19:11:59.271Z",
+  "resolvedVerify": [
+    "Ovládací řada nad deskou drží jeden řádek na desktopu (AIvP i PvP) s dlouhým názvem varianty"
+  ],
+  "completedAt": "2026-07-12T19:28:23.839Z",
+  "autoCommit": {
+    "preSha": "38d76d5bb384798b06fc9eb4d74986fcbdf714d2",
+    "subject": "Phase 110: Zkrátit tlačítka nad hrací deskou"
+  }
+}

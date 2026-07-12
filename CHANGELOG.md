@@ -7,7 +7,14 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.80.0] - 2026-07-12
+
 ### Changed
+
+- **Kratší tlačítka nad hrací deskou.** Ovládací tlačítka se zkrátila, aby se s delším
+  názvem varianty vešla na jeden řádek. V partii proti počítači: „Nabízím remízu" → „Remíza",
+  „Vzdávám hru" → „Vzdát se", „Do místnosti" → „Místnosti". V partii proti člověku se
+  „Nabídnout remízu" sjednotila na „Remíza". Anglicky odpovídají „Draw", „Resign", „Rooms".
 
 - **Lobby: hra proti počítači vizuálně oddělená a názvy variant s dovětkem „dáma".**
   Sekci „Hrát proti počítači" teď od přehledu místností odděluje čára a nadpis; pod ním
