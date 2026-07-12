@@ -4,6 +4,7 @@ import { createRoomClient } from '../src/room-client.js';
 import type {
   ChallengeAcceptedInfo,
   IncomingChallenge,
+  LobbyView,
   OutgoingChallenge,
   RoomClient,
   RoomWebSocket,
@@ -67,6 +68,7 @@ function harness(options: { connectTimeoutMs?: number } = {}) {
   const events = {
     joined: [] as RosterEntry[][],
     roster: [] as RosterEntry[][],
+    lobbies: [] as LobbyView[][],
     nickTaken: [] as string[],
     error: [] as string[],
     disconnected: 0,
@@ -84,6 +86,7 @@ function harness(options: { connectTimeoutMs?: number } = {}) {
     {
       onJoined: (r) => events.joined.push(r),
       onRoster: (r) => events.roster.push(r),
+      onLobbies: (l) => events.lobbies.push(l),
       onNickTaken: (s) => events.nickTaken.push(s),
       onError: (m) => events.error.push(m),
       onDisconnected: () => {
@@ -607,5 +610,74 @@ describe('createRoomClient – vzdání a remíza (fáze 77)', () => {
     sock.message({ type: 'draw-rejected', gameId: 42 }); // špatný typ
     expect(events.drawOffered).toEqual([]);
     expect(events.drawRejected).toEqual([]);
+  });
+});
+
+describe('createRoomClient – varianta-lobby (fáze 104)', () => {
+  it('join s variantou pošle join{nick, variant}; bez varianty ji vynechá', () => {
+    const { sockets, client } = harness();
+    client.join('Jan', 'russian');
+    sockets[0]!.open();
+    expect(sockets[0]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Jan', variant: 'russian' })]);
+
+    const h2 = harness();
+    h2.client.join('Eva'); // bez varianty → server default american
+    h2.sockets[0]!.open();
+    expect(h2.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Eva' })]);
+  });
+
+  it('switchLobby po vstupu pošle switch-lobby{variant}; před vstupem je no-op', () => {
+    const { sockets, client } = harness();
+    // Před joinem: žádný socket → no-op (nic se neposílá, nespadne).
+    client.switchLobby('czech');
+    expect(sockets).toHaveLength(0);
+
+    client.join('Jan');
+    sockets[0]!.open();
+    sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }], variant: 'american' });
+    sockets[0]!.sent.length = 0; // zahoď join
+    client.switchLobby('pool');
+    expect(sockets[0]!.sent).toEqual([JSON.stringify({ type: 'switch-lobby', variant: 'pool' })]);
+  });
+
+  it('lobbies snímek → onLobbies se všemi 4 lobby a označením MÉ lobby (isSelf)', () => {
+    const { sockets, events, client } = harness();
+    client.join('Jan');
+    sockets[0]!.open();
+    sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }], variant: 'american' });
+    sockets[0]!.message({
+      type: 'lobbies',
+      lobbies: [
+        { variant: 'american', players: [{ id: '1', nick: 'Jan' }, { id: '2', nick: 'Eva' }] },
+        { variant: 'pool', players: [] },
+        { variant: 'russian', players: [{ id: '3', nick: 'Petr' }] },
+        { variant: 'czech', players: [] },
+      ],
+    });
+    expect(events.lobbies).toHaveLength(1);
+    const snap = events.lobbies[0]!;
+    expect(snap.map((l) => l.variant)).toEqual(['american', 'pool', 'russian', 'czech']);
+    const american = snap.find((l) => l.variant === 'american')!;
+    // Jan jsem já (isSelf), Eva ne.
+    expect(american.players.find((p) => p.nick === 'Jan')!.isSelf).toBe(true);
+    expect(american.players.find((p) => p.nick === 'Eva')!.isSelf).toBe(false);
+    // V cizí lobby nikdo není já.
+    const russian = snap.find((l) => l.variant === 'russian')!;
+    expect(russian.players.every((p) => !p.isSelf)).toBe(true);
+  });
+
+  it('vadný lobbies snímek (neznámá varianta / špatný tvar) se tiše ignoruje', () => {
+    const { sockets, events, client } = harness();
+    client.join('Jan');
+    sockets[0]!.open();
+    sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }], variant: 'american' });
+    // Neznámá varianta v jedné položce → celý snímek zahozen (guard).
+    sockets[0]!.message({
+      type: 'lobbies',
+      lobbies: [{ variant: 'klingonská', players: [] }],
+    });
+    // Ne-pole lobbies.
+    sockets[0]!.message({ type: 'lobbies', lobbies: 'nesmysl' });
+    expect(events.lobbies).toEqual([]);
   });
 });

@@ -36,6 +36,8 @@ export type {
   SwitchLobbyResult,
   RoomServerMessage,
   RosterMessage,
+  LobbyRoster,
+  LobbiesMessage,
   JoinedMessage,
   LeftMessage,
   NickTakenMessage,

@@ -7,7 +7,7 @@
  */
 
 import { AMERICAN_RULESET, legalMoves, rulesetForVariant } from '@checkers/rules';
-import type { GameResult, GameState, Move, Position, Ruleset, Square } from '@checkers/rules';
+import type { GameResult, GameState, Move, Position, Ruleset, Square, VariantId } from '@checkers/rules';
 import type { EndReason } from './store.js';
 
 /** Tah ve tvaru pro drát: prostá, JSON-serializovatelná data (čísla 1–32). */
@@ -31,6 +31,14 @@ export interface PvpGameDto {
   readonly position: Position;
   readonly result: GameResult;
   readonly legalMoves: MoveDto[];
+  /**
+   * Varianta pravidel partie (id). Klient ji čte, aby na zvýrazňování legálních
+   * tahů (výběr kamene, dopady skoku) použil pravidla TÉTO varianty, ne americká
+   * (default `nextTargets`) – jinak by deska ruské/české/pool partie nabízela cizí
+   * tahy. Jediný zdroj pravdy o variantě pro desku je tohle pole (`state.variant`),
+   * klient si variantu nedrží zvlášť, ať se nerozejde s partií (server je autorita).
+   */
+  readonly variant: VariantId;
   /**
    * Důvod konce partie z pohledu klienta (fáze 78): `'resign'` (soupeř se vzdal),
    * `'draw-agreement'` (dohodnutá remíza), `'rules'` (konec podle pravidel), nebo
@@ -90,6 +98,8 @@ export function pvpGameToDto(
     // Ruleset z varianty STAVU – jinak by DTO ruské/české partie nabídlo americké
     // (krátká dáma) legální tahy a autorita by tiše hrála jinou hru.
     legalMoves: legalMoveDtos(state.position, rulesetForVariant(state.variant)),
+    // Varianta partie na drát: klient podle ní zvýrazní tahy TÉTO varianty (fáze 104).
+    variant: state.variant,
     reason,
   };
 }

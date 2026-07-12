@@ -87,6 +87,25 @@ export interface RosterMessage {
   /** Varianta lobby, do které hráč vstoupil (echo pro klienta – fáze 103). */
   readonly variant: VariantId;
 }
+
+/** Roster JEDNÉ lobby ve snímku všech lobby (fáze 104): varianta + přítomní. */
+export interface LobbyRoster {
+  readonly variant: VariantId;
+  readonly players: RoomPlayer[];
+}
+
+/**
+ * Snímek rosterů VŠECH 4 lobby (fáze 104). Server ho pushuje KAŽDÉMU přihlášenému
+ * po každé změně prezence (join, switch-lobby, odchod), aby akordeon v klientu
+ * viděl, kdo je v které lobby, i BEZ vstupu do ní. Je to čistě ČTENÍ (rostery na
+ * displej); scoped `roster`/`joined`/`left` (jedna lobby) zůstávají pro logiku
+ * výzev nedotčené (fáze 103) – tenhle snímek je NAVÍC, ne náhrada. Starý klient
+ * neznámý `type` ignoruje.
+ */
+export interface LobbiesMessage {
+  readonly type: 'lobbies';
+  readonly lobbies: LobbyRoster[];
+}
 export interface JoinedMessage {
   readonly type: 'joined';
   readonly player: RoomPlayer;
@@ -181,6 +200,7 @@ export interface GameClosedMessage {
 }
 export type RoomServerMessage =
   | RosterMessage
+  | LobbiesMessage
   | JoinedMessage
   | LeftMessage
   | NickTakenMessage
@@ -408,6 +428,35 @@ export class Lobbies {
   /** Počet přihlášených (napříč všemi lobby) – pro testy/diagnostiku. */
   totalCount(): number {
     return this.identities.size;
+  }
+
+  /**
+   * Snímek rosterů VŠECH 4 lobby (fáze 104) v pořadí {@link VARIANT_IDS}. Pro
+   * all-roster broadcast akordeonu – čistě čtení (bez socketů), volá se po každé
+   * změně prezence. Registr je úplný, takže je vždy 4 položky.
+   */
+  allRosters(): LobbyRoster[] {
+    return VARIANT_IDS.map((variant) => ({ variant, players: this.room(variant).roster() }));
+  }
+
+  /**
+   * Rozešle `payload` VŠEM přihlášeným hráčům napříč lobby (fáze 104) – fan-out
+   * přes identity (jeden socket na identitu). Pro all-roster snímek, ať ho po
+   * změně prezence dostane i hráč v JINÉ lobby. Zavřené sockety (readyState !==
+   * OPEN) přeskočí; výjimku z jednoho `send` spolkne a zaloguje (fire-and-forget
+   * jako {@link RoomPresence.broadcast}), aby jeden vadný socket nezhodil ostatní.
+   */
+  broadcastAll(payload: string): void {
+    for (const identity of this.identities.values()) {
+      if (identity.socket.readyState !== WS_OPEN) {
+        continue;
+      }
+      try {
+        identity.socket.send(payload);
+      } catch (error) {
+        console.error('Lobbies: all-roster broadcast selhal:', error);
+      }
+    }
   }
 
   /**

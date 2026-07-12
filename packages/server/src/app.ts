@@ -125,6 +125,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.decorate('lobbies', lobbies);
   app.decorate('roomPresence', lobbies.room('american'));
 
+  /**
+   * Rozešle snímek rosterů VŠECH 4 lobby každému přihlášenému (fáze 104). Volá se
+   * po KAŽDÉ změně prezence (join, switch-lobby, odchod), aby akordeon v klientu
+   * viděl aktuální obsazení všech lobby i bez vstupu do nich. Fire-and-forget
+   * (izolace chyb je v `Lobbies.broadcastAll`); scoped `roster`/`joined`/`left`
+   * (fáze 103) zůstávají – tenhle snímek je NAVÍC.
+   */
+  function broadcastLobbies(): void {
+    lobbies.broadcastAll(JSON.stringify({ type: 'lobbies', lobbies: lobbies.allRosters() }));
+  }
+
   // Registr čekajících výzev + busy stav párování (fáze 68). Logika mimo route
   // (viz challenges.ts); route jen serializuje a rozesílá. Dekorace zpřístupní
   // registr i store integračnímu testu (deterministické čekání na čekající výzvu /
@@ -294,6 +305,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         lobbies
           .room(lobby)
           .broadcast(JSON.stringify({ type: 'joined', player: result.player }), result.player.id);
+        // All-roster snímek VŠEM (vč. příchozího): jeho vstup mění obsazení jeho
+        // lobby, což akordeon ostatních (i v jiné lobby) musí vidět (fáze 104).
+        broadcastLobbies();
       };
 
       // Přechod do jiné varianta-lobby BEZ ztráty identity (fáze 103). Server op –
@@ -350,6 +364,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
             JSON.stringify({ type: 'joined', player: { id: me.id, nick: me.nick } }),
             me.id,
           );
+        // Přechod mění obsazení DVOU lobby (odkud/kam) → all-roster snímek všem (fáze 104).
+        broadcastLobbies();
       };
 
       // Výzva na partii (fáze 68). Jen zapsaný hráč smí vyzývat; cíl musí být v
@@ -963,6 +979,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         lobbies.remove(id);
         // `left` zbylým V JEHO lobby – hráč už je odebraný, except není třeba.
         lobbies.room(lobby).broadcast(JSON.stringify({ type: 'left', player: { id } }));
+        // Odchod mění obsazení jeho lobby → all-roster snímek zbylým (fáze 104). Odcházející
+        // socket je zavřený, broadcastAll ho přeskočí (readyState), takže mu nic neposílá.
+        broadcastLobbies();
         // Odchod ruší jeho čekající výzvy (vyzyvatele i vyzvaného) a jeho busy stav.
         // Každý protějšek zaniklé výzvy dostane `challenge-cancelled` (fire-and-forget;
         // sendTo hlídá otevřenost socketu). Bez toho by protějšek čekal na mrtvou výzvu.

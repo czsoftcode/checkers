@@ -325,6 +325,51 @@ describe('createPvpController', () => {
   });
 });
 
+describe('createPvpController – varianta z DTO řídí zvýraznění (fáze 104)', () => {
+  // Bílý muž na 14 je ZA ZÁDY černého muže na 18 → braní vzad (18x9). Americká
+  // pravidla ho nedovolí (default `nextTargets`), ruská ano a povinné braní ho vynutí.
+  const backward: Position = { board: board([[18, 'black'], [14, 'white']]), turn: 'black' };
+
+  it('ruská partie: deska nabízí braní vzad (18→9) a klik ho odešle', () => {
+    const h = mount('black');
+    // DTO nese variant='russian' → controller zvýrazní tahy ruských pravidel.
+    h.controller.applyState({
+      mode: 'pvp',
+      id: 'g1',
+      position: backward,
+      result: 'ongoing',
+      reason: null,
+      variant: 'russian',
+      legalMoves: [],
+    });
+    const root = h.controller.element;
+    click(root, 18);
+    // Braní vzad je v ruské variantě povinné → jediný cíl je 9 (zvýrazněné).
+    expect(squareEl(root, 9).classList.contains('target')).toBe(true);
+    click(root, 9);
+    expect(h.sent).toEqual([{ from: 18, path: [9] }]);
+  });
+
+  it('bez varianty (default american): braní vzad se NEnabídne, 9 není cíl', () => {
+    // Zub: kdyby controller ignoroval variantu a jel vždy americky, předchozí test
+    // by neprošel; tady naopak ověřím, že americká pravidla braní vzad nedovolí.
+    const h = mount('black');
+    h.controller.applyState({
+      mode: 'pvp',
+      id: 'g1',
+      position: backward,
+      result: 'ongoing',
+      reason: null,
+      legalMoves: [], // variant chybí → default 'american'
+    });
+    const root = h.controller.element;
+    click(root, 18);
+    expect(squareEl(root, 9).classList.contains('target')).toBe(false);
+    click(root, 9);
+    expect(h.sent).toEqual([]); // 9 není legální americký cíl → nic neodešle
+  });
+});
+
 describe('createPvpController – tažení myší (drag & drop)', () => {
   it('prosté tažení na legální pole odešle {from, path} a zamkne vstup', () => {
     const h = mount('black');

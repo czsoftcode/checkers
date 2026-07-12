@@ -517,6 +517,11 @@
       "id": 103,
       "title": "Server: PvP varianta-lobby (jádro)",
       "status": "done"
+    },
+    {
+      "id": 104,
+      "title": "Klient: čtyři varianta-lobby (UI)",
+      "status": "done"
     }
   ]
 }

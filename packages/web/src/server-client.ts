@@ -130,6 +130,17 @@ export interface PvpGameDto {
    * bez důvodu. Server ho u živého kontraktu posílá vždy (u PvP stavu).
    */
   readonly reason?: EndReason | null;
+  /**
+   * Varianta pravidel partie (fáze 104). Klient podle ní zvýrazní tahy TÉTO
+   * varianty (jinak by `pvp-controller` defaultoval americká pravidla a deska
+   * ruské/české/pool partie by nabízela cizí tahy). VOLITELNÝ na klientu
+   * schválně (jako `reason`): starší/nekompletní stav bez `variant` guard
+   * NEzahodí (deska nezamrzne) a controller spadne na výchozí `'american'`.
+   * Server ho u živého kontraktu posílá vždy. Přítomná neplatná hodnota
+   * (neznámé id) je drift → `isPvpGameDto` ji odmítne (`rulesetForVariant` by
+   * na ní spadl RangeError).
+   */
+  readonly variant?: VariantId;
 }
 
 /**
@@ -393,6 +404,12 @@ export function isPvpGameDto(value: unknown): value is PvpGameDto {
     return false;
   }
   if (!Array.isArray(record.legalMoves) || !record.legalMoves.every(isMoveDto)) {
+    return false;
+  }
+  // `variant`: VOLITELNÉ (starší/nekompletní stav bez pole → controller default
+  // 'american'). Když PŘIJDE, musí to být známé id (jinak by `rulesetForVariant`
+  // spadl RangeError) – neplatné id je drift → odmítni.
+  if (record.variant !== undefined && !isVariantId(record.variant)) {
     return false;
   }
   const position = record.position;

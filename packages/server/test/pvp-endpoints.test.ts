@@ -42,10 +42,19 @@ describe('PvP partie na REST endpointu čtení (fáze 70 + 90)', () => {
     expect((dto.position as { turn: string }).turn).toBe('black');
     expect(dto.result).toBe('ongoing');
     expect(dto.reason).toBeNull(); // fáze 78: běžící partie → žádný důvod konce
+    expect(dto.variant).toBe('american'); // fáze 104: default partie nese american
     expect(Array.isArray(dto.legalMoves)).toBe(true);
     // Engine-specifická pole se do PvP DTO nesmí protáhnout (ne falešně null).
-    // `reason` je NAOPAK součástí PvP kontraktu (fáze 78) – musí být přítomné.
-    expect(Object.keys(dto).sort()).toEqual(['id', 'legalMoves', 'mode', 'position', 'reason', 'result']);
+    // `reason` je součástí PvP kontraktu (fáze 78), `variant` od fáze 104 – oba musí být.
+    expect(Object.keys(dto).sort()).toEqual([
+      'id',
+      'legalMoves',
+      'mode',
+      'position',
+      'reason',
+      'result',
+      'variant',
+    ]);
   });
 
   it('neexistující partie zůstává 404 (not-found má přednost)', async () => {

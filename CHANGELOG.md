@@ -7,8 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.75.0] - 2026-07-12
+
 ### Added
 
+- **Multiplayer: čtyři varianta-lobby v úvodní místnosti (akordeon).** Po vstupu do
+  místnosti vidíte nahoře svou přezdívku a pod ní čtyři přepínatelné místnosti (americká,
+  pool, ruská, česká) jako akordeon. Rozbalená sekce ukáže, kdo je v té místnosti; ve
+  své místnosti navíc soupeře vyzvete, do ostatních přejdete tlačítkem „Vstoupit". Kdo
+  přibude nebo odejde v kterékoli místnosti se propíše všem živě. Výzva a odehrání partie
+  fungují jako dřív, teď v rámci zvolené varianty; deska v ruské/české/pool partii
+  zvýrazňuje tahy podle té varianty (včetně braní vzad a klouzavé létavé dámy). Hráči
+  z různých místností se navzájem nevyzvou.
 - **Server: čtyři PvP varianta-lobby (jádro).** Multiplayer server nově rozlišuje
   variantu: přezdívka je jedna na celý server (globální identita, příprava na budoucí
   login) a hráč je vždy v právě jedné ze čtyř lobby (americká, pool, ruská, česká).

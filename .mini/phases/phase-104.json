@@ -1,0 +1,49 @@
+{
+  "id": 104,
+  "title": "Klient: čtyři varianta-lobby (UI)",
+  "goal": "Klientské UI čtyř fixních varianta-lobby jako AKORDEON: nahoře přezdívka, pod ní 4 místnosti (řízeno registrem variant) jako přepínatelné akordeonové sekce; rozbalená sekce ukáže roster (kdo tam je) + tlačítko Vstoupit; po vstupu výzva a hra jako dnes. room-client pošle variantu při join (+ op switchLobby z D3a), přechod mezi lobby přes akordeon. i18n: názvy místností + nové texty přes cs/en (názvy variant už z D2). Brána: ve dvou prohlížečích vstoupím do téže lobby (pool/ruská/česká), vyzvu se a odehraju partii; cross-variant se nevidíme; přepnutí lobby funguje; stávající PvP tok (americká) beze změny; i18n testy zelené. UZAVÍRÁ todo 59 a celou vlnu variant. POZOR do discuss: akordeon chce vidět rostery VŠECH 4 lobby před vstupem -> server musí rostery vystavit (může rozšířit D3a); a jestli PvP herní obrazovka potřebuje variantu client-side, nebo stačí server-provided legalMoves.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Server: variant do PvpGameDto a pvpGameToDto",
+      "status": "done",
+      "detail": "Pridat readonly variant: VariantId do interface PvpGameDto (server dto.ts + web server-client.ts), naplnit v pvpGameToDto z state.variant, rozsirit isPvpGameDto guard. Vystup: DTO nese variantu; test dto/game-socket overi, ze ne-americka partie posle spravne variant."
+    },
+    {
+      "title": "pvp-controller: varianta z DTO do zvyrazneni",
+      "status": "done",
+      "detail": "pvp-controller.ts importuje rulesetForVariant, cte variant z PvpGameDto a preda ruleset do vsech 5 nextTargets(...) (dnes :204,241,341,451,458 bez rulesetu = americky); game-screen.ts protahne variantu do controlleru. Vystup: v ruske/ceske/pool partii deska zvyrazni spravne dopady; test pvp-controlleru na ne-americke variante."
+    },
+    {
+      "title": "Server: broadcast rosteru vsech 4 lobby",
+      "status": "done",
+      "detail": "Novy LobbiesMessage (type:lobbies, snimek [{variant, players}]x4) v presence.ts; Lobbies.allRosters() + broadcastAll() (fan-out pres vsechny identity). app.ts pushne snimek nove pripojenemu a po KAZDE zmene prezence (join, switchLobby, close). Vystup: zmena v lobby A dorazi socketu v lobby B (novy test); stavajici scoped roster/joined/left a ws testy zustavaji zelene."
+    },
+    {
+      "title": "room-client: variant v join, switchLobby, prijem lobbies",
+      "status": "done",
+      "detail": "join(nick, variant?) posle variantu (default kompat.); nova metoda switchLobby(variant); novy handler onLobbies(snapshot) + parser lobbies zpravy. Vystup: room-client umi vstoupit do zvolene lobby, prepnout a prijimat all-roster snimek; test room-clientu (join s variantou, switch, lobbies callback)."
+    },
+    {
+      "title": "i18n: klice nazvu mistnosti + akordeonu (cs/en)",
+      "status": "done",
+      "detail": "Pridat do i18n.ts klice pro texty akordeonu (Vstoupit, stavy sekci, jsi tady) do cs i en; nazvy variant uz z D2. Zadne natvrdo retezce. Vystup: i18n testy (parita cs/en) zelene."
+    },
+    {
+      "title": "lobby.ts: akordeon 4 varianta-lobby",
+      "status": "done",
+      "detail": "Prestavet UI: nahore prezdivka, pod ni 4 prepinatelne akordeonove sekce (rizene registrem variant). Rozbalena sekce = roster te lobby z onLobbies snimku; sekce MOJI lobby = tlacitka Vyzvat, ostatni 3 = tlacitko Vstoupit (switchLobby). Behem partie se prepinani nenabizi. Vystup: brana - dva prohlizece vstoupi do teze ne-americke lobby, vyzvou se, odehraji; cross-variant se nevidi; prepnuti funguje; americky tok beze zmeny."
+    }
+  ],
+  "startedAt": "2026-07-12T10:51:29.490Z",
+  "resolvedVerify": [
+    "Brána: dva prohlížeče, tatáž ne-americká lobby → výzva a odehraná partie",
+    "Cross-variant izolace + přepnutí + americký tok beze změny",
+    "Vizuál akordeonu (CSS)"
+  ],
+  "completedAt": "2026-07-12T11:35:39.114Z",
+  "autoCommit": {
+    "preSha": "cec438755ef6f865d5b42cb4715827bc34014ce8",
+    "subject": "Phase 104: Klient: čtyři varianta-lobby (UI)"
+  }
+}

@@ -25,6 +25,9 @@
  *    (ani `onDisconnected` z právě zavíraného socketu).
  */
 
+import { isVariantId } from '@checkers/rules';
+import type { VariantId } from '@checkers/rules';
+
 /** `WebSocket.OPEN` dle WHATWG (i knihovna ws). Otevřený socket. */
 const WS_OPEN = 1;
 
@@ -39,6 +42,15 @@ export interface RosterEntry {
   readonly id: string;
   readonly nick: string;
   readonly isSelf: boolean;
+}
+
+/**
+ * Roster JEDNÉ lobby v all-roster snímku (fáze 104): varianta + hráči v UI tvaru
+ * (vč. `isSelf`, aby akordeon poznal MOU lobby a v ní zobrazil tlačítka Vyzvat).
+ */
+export interface LobbyView {
+  readonly variant: VariantId;
+  readonly players: RosterEntry[];
 }
 
 /**
@@ -99,6 +111,13 @@ export type RoomSocketFactory = (url: string) => RoomWebSocket;
 export interface RoomClientHandlers {
   readonly onJoined?: (roster: RosterEntry[]) => void;
   readonly onRoster?: (roster: RosterEntry[]) => void;
+  /**
+   * All-roster snímek VŠECH 4 lobby (fáze 104) – přijde po připojení a po každé
+   * změně prezence kdekoli (i v jiné lobby). Akordeon z něj kreslí obsazení všech
+   * místností a MOU lobby pozná podle položky s `isSelf`. Je to NAVÍC k scoped
+   * `onJoined`/`onRoster` (jedna lobby, pro výzvy), ne jejich náhrada.
+   */
+  readonly onLobbies?: (lobbies: LobbyView[]) => void;
   readonly onNickTaken?: (suggestion: string) => void;
   readonly onError?: (message: string) => void;
   readonly onDisconnected?: () => void;
@@ -162,11 +181,21 @@ export const DEFAULT_CONNECT_TIMEOUT_MS = 12000;
 /** Ovládání klienta místnosti. `dispose` zavře socket a odmlčí callbacky. */
 export interface RoomClient {
   /**
-   * Vstup do místnosti pod přezdívkou. Otevře socket (nebo použije už otevřený,
+   * Vstup do místnosti pod přezdívkou do zvolené varianta-lobby (fáze 104).
+   * `variant` je volitelná: když chybí, join se pošle bez ní a server zařadí do
+   * AMERICKÉ lobby (zpětná kompatibilita). Otevře socket (nebo použije už otevřený,
    * pokud join ještě neuspěl – opakování po `nick-taken`/`error`) a pošle
-   * `join{nick}`. Po úspěšném joinu je no-op (server by druhý join odmítl).
+   * `join{nick, variant?}`. Po úspěšném joinu je no-op (server by druhý join odmítl).
    */
-  join(nick: string): void;
+  join(nick: string, variant?: VariantId): void;
+  /**
+   * Přejde do jiné varianta-lobby BEZ opuštění místnosti (fáze 104) – pošle
+   * `switch-lobby{variant}`. Smí jen zapsaný hráč otevřeným socketem; jinak no-op.
+   * Server odpoví scoped `roster` cílové lobby a všem pošle all-roster snímek;
+   * přechod za běhu partie server odmítne (`error`). Neúspěch (mimo pořadí, busy)
+   * chodí běžnou cestou `onError`.
+   */
+  switchLobby(variant: VariantId): void;
   /**
    * Vyzve hráče `targetId` na partii (`{type:'challenge', targetId}`). No-op, když
    * ještě nejsi v místnosti nebo už máš odchozí výzvu (drží se NEJVÝŠ jedna – viz
@@ -242,6 +271,23 @@ function isRoomPlayer(value: unknown): value is RoomPlayer {
   return typeof record.id === 'string' && typeof record.nick === 'string';
 }
 
+/**
+ * Runtime guard tvaru jedné lobby v all-roster snímku (`lobbies[i]`): platné
+ * `variant` id a pole hráčů `RoomPlayer`. Vadnou/cizí položku odmítni, ať se do
+ * akordeonu nedostane undefined/neznámá varianta.
+ */
+function isWireLobbyRoster(value: unknown): value is { variant: VariantId; players: RoomPlayer[] } {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    isVariantId(record.variant) &&
+    Array.isArray(record.players) &&
+    record.players.every(isRoomPlayer)
+  );
+}
+
 /** Runtime guard tvaru příchozí výzvy (`challenged.challenge`); vadnou zprávu odmítni. */
 function isIncomingChallenge(value: unknown): value is IncomingChallenge {
   if (typeof value !== 'object' || value === null) {
@@ -280,6 +326,11 @@ export function createRoomClient(
   // Přezdívka, se kterou join NAPOSLEDY poslán (trimnutá klientem stejně jako server).
   // Po úspěchu (`roster`) je to moje přezdívka → podle ní se v rosteru pozná „ty".
   let pendingNick = '';
+  // Varianta lobby, do které se posílá NEJBLIŽŠÍ join (fáze 104). `undefined` =
+  // join bez varianty → server zařadí do americké (zpětná kompatibilita). Přechod
+  // mezi lobby po vstupu jde přes `switchLobby`, ne přes re-join, takže tohle je
+  // jen počáteční lobby (a přežije reconnect – join po pádu ji pošle znovu).
+  let pendingVariant: VariantId | undefined;
   let myNick: string | null = null;
   // `true` po úspěšném joinu (přišel `roster`). Blokuje další join (server by ho
   // po úspěchu odmítl) a rozliší „spadlo spojení po vstupu" od „nikdy nevstoupil".
@@ -367,7 +418,15 @@ export function createRoomClient(
     if (socket?.readyState !== WS_OPEN) {
       return;
     }
-    socket.send(JSON.stringify({ type: 'join', nick: pendingNick }));
+    // Variantu přidej jen když je zadaná – bez ní server default (americká), ať
+    // stará cesta (join bez varianty) jede beze změny (fáze 104).
+    socket.send(
+      JSON.stringify(
+        pendingVariant === undefined
+          ? { type: 'join', nick: pendingNick }
+          : { type: 'join', nick: pendingNick, variant: pendingVariant },
+      ),
+    );
     // Server musí do limitu odpovědět (roster/nick-taken/error). Když ne (mrtvé
     // spojení nebo tvarově vadná, tiše zahozená odpověď), spojení shodíme a
     // ohlásíme odpojení – UI se tak dostane z „Připojuji…" ven a půjde zkusit znovu.
@@ -449,6 +508,32 @@ export function createRoomClient(
         joined = true;
         myNick = pendingNick; // join uspěl → tenhle nick jsem já
         handlers.onJoined?.(rosterEntries());
+        return;
+      }
+      case 'lobbies': {
+        // All-roster snímek všech 4 lobby (fáze 104). Vadnou/cizí položku → zahoď
+        // CELÝ snímek (guard), ať se do akordeonu nedostane undefined/neznámá
+        // varianta. `isSelf` se počítá z mého nicku – v jednom rosteru jsem, tam mě
+        // akordeon najde.
+        if (!Array.isArray(msg.lobbies)) {
+          return;
+        }
+        const mine = myNick?.toLowerCase() ?? null;
+        const views: LobbyView[] = [];
+        for (const entry of msg.lobbies as unknown[]) {
+          if (!isWireLobbyRoster(entry)) {
+            return;
+          }
+          views.push({
+            variant: entry.variant,
+            players: entry.players.map((p) => ({
+              id: p.id,
+              nick: p.nick,
+              isSelf: mine !== null && p.nick.toLowerCase() === mine,
+            })),
+          });
+        }
+        handlers.onLobbies?.(views);
         return;
       }
       case 'joined': {
@@ -606,11 +691,12 @@ export function createRoomClient(
   }
 
   return {
-    join(nick: string): void {
+    join(nick: string, variant?: VariantId): void {
       if (disposed) {
         return;
       }
       pendingNick = nick.trim();
+      pendingVariant = variant; // undefined → join bez varianty (server default american)
       if (socket !== null && socket.readyState === WS_OPEN) {
         if (joined) {
           return; // už jsem v místnosti – druhý join by server odmítl
@@ -622,6 +708,17 @@ export function createRoomClient(
         return; // socket se otevírá – join se pošle na `open` s aktuálním pendingNick
       }
       openSocket(); // žádný / zavřený socket → čerstvé spojení, join na `open`
+    },
+    switchLobby(variant: VariantId): void {
+      // Přejít smí jen zapsaný hráč otevřeným socketem. Server je autorita: přechod
+      // za běhu partie / mimo pořadí odmítne `error` (jde běžnou cestou `onError`).
+      if (disposed || !joined) {
+        return;
+      }
+      if (socket?.readyState !== WS_OPEN) {
+        return;
+      }
+      socket.send(JSON.stringify({ type: 'switch-lobby', variant }));
     },
     challenge(targetId: string): void {
       // Vyzývat smí jen zapsaný hráč otevřeným socketem a jen když nemá odchozí výzvu.

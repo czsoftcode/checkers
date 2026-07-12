@@ -173,6 +173,14 @@ const cs = {
   'lobby.langAria': 'Jazyk',
   'lobby.variantAria': 'Varianta hry proti počítači',
 
+  // Akordeon čtyř varianta-lobby (fáze 104): nahoře přezdívka, pod ní 4 přepínatelné
+  // sekce (jedna = jedna varianta). Rozbalená sekce ukáže roster + akci (Vyzvat v MÉ
+  // lobby, Vstoupit v ostatních). Názvy místností = názvy variant (`variant.*`, D2).
+  'lobby.loggedInAs': 'Jsi tu jako {nick}',
+  'lobby.enterLobbyBtn': 'Vstoupit',
+  'lobby.hereBadge': 'Jsi tady',
+  'lobby.emptyLobby': 'Zatím tu nikdo není',
+
   // Názvy variant pravidel (fáze 102) – zobrazovací popisky pickeru v lobby (u „Hrát
   // proti počítači"). Interní id (american/pool/russian/czech) jde po drátě/kódu
   // anglicky, tady je JEN překlad. Pool nemá zavedený český název → v obou jazycích „Pool".
@@ -297,6 +305,11 @@ const en = {
   'lobby.nickTaken': 'That nickname is taken. Try “{suggestion}”.',
   'lobby.langAria': 'Language',
   'lobby.variantAria': 'Game variant against the computer',
+
+  'lobby.loggedInAs': 'You are here as {nick}',
+  'lobby.enterLobbyBtn': 'Enter',
+  'lobby.hereBadge': "You're here",
+  'lobby.emptyLobby': 'No one here yet',
 
   'variant.american': 'American',
   'variant.pool': 'Pool',

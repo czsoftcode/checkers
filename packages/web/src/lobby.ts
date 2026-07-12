@@ -30,6 +30,7 @@ import { createRoomClient } from './room-client.js';
 import type {
   ChallengeAcceptedInfo,
   IncomingChallenge,
+  LobbyView,
   OutgoingChallenge,
   RoomSocketFactory,
   RosterEntry,
@@ -356,9 +357,13 @@ export function createLobby(options: LobbyOptions): Lobby {
   const message = document.createElement('p');
   message.className = 'lobby-msg hidden';
 
-  // Pohled místnosti (`joined`): stav výzev + seznam přítomných.
+  // Pohled místnosti (`joined`): nahoře přezdívka, stav výzev, pak AKORDEON 4 lobby.
   const room = document.createElement('div');
   room.className = 'lobby-room hidden';
+
+  // Řádek s mou přezdívkou nad akordeonem (fáze 104): „Jsi tu jako {nick}".
+  const nickLine = document.createElement('p');
+  nickLine.className = 'lobby-nick-line';
 
   // Stav MÉ odchozí výzvy (čekám na odpověď) – skrytý, když žádná neběží.
   const outgoing = document.createElement('p');
@@ -372,12 +377,13 @@ export function createLobby(options: LobbyOptions): Lobby {
   const incomingList = document.createElement('ul');
   incomingList.className = 'lobby-challenges';
 
-  const roomHeading = document.createElement('h2');
-  roomHeading.className = 'lobby-room-title';
-  roomHeading.textContent = t('lobby.rosterTitle');
-  const rosterList = document.createElement('ul');
-  rosterList.className = 'lobby-roster';
-  room.append(outgoing, notice, incomingList, roomHeading, rosterList);
+  // Akordeon 4 varianta-lobby (fáze 104). Sekce se generují z registru variant
+  // (`VARIANT_IDS`) v `renderRoom` – přidání varianty je nový záznam v registru,
+  // ne zásah sem. Obsah (rostery, MOJE lobby, rozbalená sekce) plyne z all-roster
+  // snímku `onLobbies`.
+  const accordion = document.createElement('div');
+  accordion.className = 'lobby-accordion';
+  room.append(nickLine, outgoing, notice, incomingList, accordion);
 
   // Pohled odpojení (`disconnected`): hláška + ruční znovupřipojení (žádný auto-reconnect).
   const disconnected = document.createElement('div');
@@ -409,9 +415,28 @@ export function createLobby(options: LobbyOptions): Lobby {
   // odpojení: pád PŘED vstupem = „nepodařilo se připojit" (server dole / timeout),
   // pád PO vstupu = „spojení se přerušilo".
   let joinedOnce = false;
-  // Poslední roster – držíme ho, ať jde překreslit tlačítka „Vyzvat" (jejich
-  // disabled stav) při změně odchozí výzvy, aniž přijde nový roster ze serveru.
-  let currentRoster: RosterEntry[] = [];
+  // Poslední all-roster snímek všech 4 lobby (fáze 104) – z něj akordeon kreslí
+  // obsazení místností. Držíme ho, ať jde překreslit (disabled tlačítka „Vyzvat"
+  // při změně odchozí výzvy, přepnutí rozbalené sekce) bez čekání na nový snímek.
+  let currentLobbies: LobbyView[] = [];
+  // MOJE lobby (varianta, ve které jsem) – odvozená ze snímku (položka s `isSelf`).
+  // Řídí, která sekce nabízí „Vyzvat" (jen moje) vs. „Vstoupit" (ostatní).
+  let myVariant: VariantId | null = null;
+  // Rozbalená sekce akordeonu (nebo `null` = všechny sbalené). Výchozí = moje lobby;
+  // uživatel ji přepíná klikem na hlavičku sekce nebo vstupem do jiné lobby.
+  let expandedVariant: VariantId | null = null;
+  // `true`, jakmile jsme JEDNOU nastavili výchozí rozbalenou sekci (moje lobby).
+  // Bez něj by každý další snímek prezence (join/left/switch KOHOKOLI → broadcast
+  // všem) znovu rozbalil moji sekci, i když ji uživatel právě vědomě sbalil.
+  let hasAutoExpanded = false;
+  // Moje přezdívka pro řádek nad akordeonem (z rosteru / snímku, fallback `lastNick`).
+  let myNick = '';
+  // `true` mezi kliknutím na „Vstoupit" a odpovědí serveru (roster = úspěch / error =
+  // odmítnutí). Uzavírá závod: kliknu Vstoupit, ale soupeř mezitím přijme MOU výzvu →
+  // vznikne partie a `switch-lobby` server odmítne („během partie"). Ta chyba by jinak
+  // v `onError` propadla do herní obrazovky (activeGameErrorHandler) a ukázala matoucí
+  // hlášku u desky. Flag ji označí jako přechodovou → spolkne se / jde do notice, ne do hry.
+  let pendingSwitch = false;
   // `true`, dokud čeká MOJE odchozí výzva – tehdy nejdou vyzývat další (max-1).
   let outgoingPending = false;
   // Aktuální pohled – rozhoduje, kam mířit serverovou chybu: PŘED vstupem na formulář
@@ -435,11 +460,27 @@ export function createLobby(options: LobbyOptions): Lobby {
     {
       onJoined: (roster) => {
         joinedOnce = true;
+        pendingSwitch = false; // úspěšný přechod dorazí jako roster cílové lobby
+        // Přezdívku vezmi z rosteru (položka `isSelf`), fallback poslední zadaná.
+        myNick = roster.find((r) => r.isSelf)?.nick ?? lastNick;
         setView('joined');
-        renderRoster(roster);
+        renderRoom(); // skeleton akordeonu; obsah rosterů dorovná onLobbies (přijde hned po)
       },
-      onRoster: (roster) => {
-        renderRoster(roster);
+      onLobbies: (lobbies) => {
+        // All-roster snímek všech 4 lobby (fáze 104) – jediný zdroj obsazení pro akordeon.
+        currentLobbies = lobbies;
+        const selfLobby = lobbies.find((l) => l.players.some((p) => p.isSelf));
+        if (selfLobby !== undefined) {
+          myVariant = selfLobby.variant;
+          myNick = selfLobby.players.find((p) => p.isSelf)?.nick ?? myNick;
+        }
+        // Výchozí rozbalená sekce = MOJE lobby, ale JEN poprvé – pak už respektuj
+        // uživatelovu volbu (sbalení/rozbalení se nesmí resetovat příštím snímkem).
+        if (!hasAutoExpanded && myVariant !== null) {
+          expandedVariant = myVariant;
+          hasAutoExpanded = true;
+        }
+        renderRoom();
       },
       onIncomingChallenges: (challenges) => {
         renderIncoming(challenges);
@@ -555,6 +596,18 @@ export function createLobby(options: LobbyOptions): Lobby {
         nickInput.select();
       },
       onError: (text) => {
+        // Odmítnutí PŘECHODU do jiné lobby (`switch-lobby`) – typicky závod „soupeř
+        // přijal mou výzvu dřív, než dorazil switch → jsem busy". NESMÍ propadnout do
+        // herní obrazovky jako odmítnutý tah (matoucí hláška u desky). Spolkni ho: za
+        // běhu partie je pohled místnosti stejně odpojený (notice by nikdo neviděl),
+        // mimo partii ho ukaž jako neutrální notice. Konzumuje se právě jednou.
+        if (pendingSwitch) {
+          pendingSwitch = false;
+          if (activeGameErrorHandler === null) {
+            showNotice(text);
+          }
+          return;
+        }
         // Za běhu PvP partie je chyba z room WS odmítnutá herní operace – tah, vzdání
         // nebo příkaz remízy (roster ani výzvy se z herní obrazovky neposílají). Doruč ji
         // herní obrazovce; pohled místnosti je mezitím odpojený z DOM, notice by nikdo neviděl.
@@ -620,39 +673,119 @@ export function createLobby(options: LobbyOptions): Lobby {
   }
 
   /**
-   * Vykreslí seznam přítomných. Vlastní záznam zvýrazní a označí „(ty)"; u cizích
-   * přidá tlačítko „Vyzvat" (klik → výzva). Tlačítka jsou zamčená, dokud čeká moje
-   * odchozí výzva (max-1) – tehdy nejdřív dořeš tu stávající.
+   * Vykreslí AKORDEON 4 varianta-lobby (fáze 104): nahoře přezdívka, pod ní sekce
+   * z registru `VARIANT_IDS`. Každá sekce má hlavičku (název varianty + počet hráčů)
+   * a po rozbalení tělo s rosterem té lobby. MOJE lobby nabízí u cizích hráčů „Vyzvat"
+   * a mě označí „Jsi tady"; ostatní lobby jsou jen ke čtení + tlačítko „Vstoupit"
+   * (přechod přes `switchLobby`). Přebuduje se celé z `currentLobbies` – žádný
+   * inkrementální diff (rostery jsou malé, jednoduchost > úspora).
    */
-  function renderRoster(roster: RosterEntry[]): void {
-    currentRoster = roster;
-    const items = roster.map((entry) => {
-      const li = document.createElement('li');
-      li.className = 'lobby-roster-item';
-      const name = document.createElement('span');
-      name.className = 'lobby-roster-name';
-      name.textContent = entry.nick;
-      li.append(name);
-      if (entry.isSelf) {
-        li.classList.add('is-self');
-        const you = document.createElement('span');
-        you.className = 'lobby-you';
-        you.textContent = t('lobby.you');
-        name.append(you);
-      } else {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'lobby-challenge-btn';
-        btn.textContent = t('lobby.challengeBtn');
-        btn.disabled = outgoingPending;
-        btn.addEventListener('click', () => {
-          room_client.challenge(entry.id);
-        });
-        li.append(btn);
-      }
-      return li;
+  function renderRoom(): void {
+    nickLine.textContent = myNick === '' ? '' : t('lobby.loggedInAs', { nick: myNick });
+    accordion.replaceChildren(...VARIANT_IDS.map((id) => buildSection(id)));
+  }
+
+  /** Postaví jednu sekci akordeonu pro variantu `id` (hlavička + volitelně tělo). */
+  function buildSection(id: VariantId): HTMLElement {
+    const players = currentLobbies.find((l) => l.variant === id)?.players ?? [];
+    const expanded = expandedVariant === id;
+    const isMine = myVariant === id;
+
+    const section = document.createElement('div');
+    section.className = 'lobby-section';
+    section.classList.toggle('is-mine', isMine);
+    section.classList.toggle('is-expanded', expanded);
+
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'lobby-section-header';
+    header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    const name = document.createElement('span');
+    name.className = 'lobby-section-name';
+    name.textContent = t(VARIANT_LABEL_KEYS[id]);
+    const count = document.createElement('span');
+    count.className = 'lobby-section-count';
+    count.textContent = String(players.length);
+    header.append(name, count);
+    // Klik na hlavičku rozbalí/sbalí sekci (jen jedna otevřená – akordeon).
+    header.addEventListener('click', () => {
+      expandedVariant = expanded ? null : id;
+      renderRoom();
     });
-    rosterList.replaceChildren(...items);
+    section.append(header);
+
+    if (expanded) {
+      section.append(buildSectionBody(id, players, isMine));
+    }
+    return section;
+  }
+
+  /** Tělo rozbalené sekce: roster té lobby + akce (Vyzvat v mé lobby / Vstoupit v cizí). */
+  function buildSectionBody(id: VariantId, players: RosterEntry[], isMine: boolean): HTMLElement {
+    const body = document.createElement('div');
+    body.className = 'lobby-section-body';
+    const list = document.createElement('ul');
+    list.className = 'lobby-roster';
+    if (players.length === 0) {
+      const empty = document.createElement('li');
+      empty.className = 'lobby-empty';
+      empty.textContent = t('lobby.emptyLobby');
+      list.append(empty);
+    } else {
+      for (const p of players) {
+        list.append(buildRosterItem(p, isMine));
+      }
+    }
+    body.append(list);
+    // Cizí lobby (ne moje) = jen ke čtení + tlačítko Vstoupit (přechod přes switchLobby).
+    if (!isMine) {
+      const enterBtn = document.createElement('button');
+      enterBtn.type = 'button';
+      enterBtn.className = 'lobby-enter-btn';
+      enterBtn.textContent = t('lobby.enterLobbyBtn');
+      enterBtn.addEventListener('click', () => {
+        // Po vstupu ať sekce zůstane rozbalená (ukáže Vyzvat). Server přesune členství
+        // a pošle nový snímek (onLobbies), který myVariant přepočítá. `pendingSwitch`
+        // hlídá závod s přijetím výzvy (viz `onError`).
+        expandedVariant = id;
+        pendingSwitch = true;
+        room_client.switchLobby(id);
+      });
+      body.append(enterBtn);
+    }
+    return body;
+  }
+
+  /**
+   * Jedna položka rosteru. V MÉ lobby: vlastní záznam zvýrazní a označí „Jsi tady",
+   * u cizích přidá „Vyzvat" (zamčené, dokud čeká moje odchozí výzva – max-1). V cizí
+   * lobby jsou položky jen ke čtení (žádné Vyzvat – výzva jen v téže lobby, fáze 103).
+   */
+  function buildRosterItem(entry: RosterEntry, isMine: boolean): HTMLElement {
+    const li = document.createElement('li');
+    li.className = 'lobby-roster-item';
+    const name = document.createElement('span');
+    name.className = 'lobby-roster-name';
+    name.textContent = entry.nick;
+    li.append(name);
+    if (entry.isSelf) {
+      li.classList.add('is-self');
+      const you = document.createElement('span');
+      you.className = 'lobby-you';
+      you.textContent = t('lobby.hereBadge');
+      name.append(you);
+    } else if (isMine) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'lobby-challenge-btn';
+      btn.textContent = t('lobby.challengeBtn');
+      btn.disabled = outgoingPending;
+      btn.addEventListener('click', () => {
+        room_client.challenge(entry.id);
+      });
+      li.append(btn);
+    }
+    return li;
   }
 
   /** Vykreslí příchozí výzvy; každá má tlačítka Přijmout/Odmítnout na svoje id. */
@@ -688,8 +821,8 @@ export function createLobby(options: LobbyOptions): Lobby {
     outgoingPending = pending !== null;
     outgoing.textContent = pending === null ? '' : t('lobby.waitingFor', { nick: pending.targetNick });
     outgoing.classList.toggle('hidden', pending === null);
-    // Překresli roster, ať se u tlačítek „Vyzvat" projeví nový disabled stav.
-    renderRoster(currentRoster);
+    // Překresli akordeon, ať se u tlačítek „Vyzvat" projeví nový disabled stav.
+    renderRoom();
   }
 
   /** Krátká neutrální hláška k výzvám (odmítnutí / odchod soupeře); prázdná ji skryje. */

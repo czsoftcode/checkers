@@ -58,6 +58,10 @@ function mountLobby() {
   activeLobbies.push(lobby);
   document.body.append(lobby.element);
   const el = lobby.element;
+  // Eager query jen na PERSISTENTNÍ prvky (vznikají v konstruktoru, vždy v DOM).
+  // Dynamické prvky akordeonu (`.lobby-roster`, `.lobby-challenge-btn`, `.lobby-section`)
+  // se dotazují líně přes `el.querySelector(All)` v jednotlivých testech (existují až
+  // po vstupu / rozbalení sekce).
   const q = <T extends HTMLElement>(sel: string): T => {
     const found = el.querySelector<T>(sel);
     if (found === null) {
@@ -76,10 +80,11 @@ function mountLobby() {
     form: q<HTMLFormElement>('.lobby-join'),
     nick: q<HTMLInputElement>('.lobby-nick'),
     room: q<HTMLElement>('.lobby-room'),
-    roster: q<HTMLUListElement>('.lobby-roster'),
     challenges: q<HTMLUListElement>('.lobby-challenges'),
     outgoing: q<HTMLElement>('.lobby-outgoing'),
     notice: q<HTMLElement>('.lobby-notice'),
+    accordion: q<HTMLElement>('.lobby-accordion'),
+    nickLine: q<HTMLElement>('.lobby-nick-line'),
     disconnected: q<HTMLElement>('.lobby-disconnected'),
     reconnectBtn: q<HTMLButtonElement>('.lobby-reconnect-btn'),
     soloBtn: q<HTMLButtonElement>('.lobby-solo-btn'),
@@ -87,20 +92,71 @@ function mountLobby() {
   };
 }
 
-/** Připojí lobby a doručí roster (Jan=já, Eva=2, Petr=3). Vrátí handle + socket. */
-function joinedLobby() {
+type Handle = ReturnType<typeof mountLobby>;
+
+/** Položky rosteru PRÁVĚ ROZBALENÉ sekce (dynamické – v akordeonu). */
+function rosterItems(h: Handle): HTMLElement[] {
+  return Array.from(h.el.querySelectorAll<HTMLElement>('.lobby-roster-item'));
+}
+/** Tlačítka „Vyzvat" v rozbalené sekci mé lobby. */
+function challengeBtns(h: Handle): HTMLButtonElement[] {
+  return Array.from(h.el.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn'));
+}
+/** Sekce akordeonu (4, dle registru variant). */
+function sections(h: Handle): HTMLElement[] {
+  return Array.from(h.el.querySelectorAll<HTMLElement>('.lobby-section'));
+}
+/** Hlavička sekce dané varianty (podle názvu). */
+function sectionByName(h: Handle, name: string): HTMLElement {
+  const found = sections(h).find(
+    (s) => s.querySelector('.lobby-section-name')?.textContent === name,
+  );
+  if (found === undefined) {
+    throw new Error(`sekce „${name}" nenalezena`);
+  }
+  return found;
+}
+
+/** All-roster snímek 4 lobby: `players` mapuje variantu → seznam [id, nick]. */
+function lobbiesMsg(players: Partial<Record<string, [string, string][]>>) {
+  const all = ['american', 'pool', 'russian', 'czech'] as const;
+  return {
+    type: 'lobbies',
+    lobbies: all.map((variant) => ({
+      variant,
+      players: (players[variant] ?? []).map(([id, nick]) => ({ id, nick })),
+    })),
+  };
+}
+
+/**
+ * Připojí lobby do AMERICKÉ lobby a doručí roster + all-roster snímek: v americké
+ * jsou Jan(=já), Eva(2), Petr(3), ostatní lobby prázdné. Moje lobby (american) je
+ * po vstupu rozbalená → `.lobby-roster` ukazuje ty tři hráče s tlačítky Vyzvat.
+ */
+function joinedLobby(): Handle {
   const h = mountLobby();
   h.nick.value = 'Jan';
   submit(h.form);
   h.sockets[0]!.open();
   h.sockets[0]!.message({
     type: 'roster',
+    variant: 'american',
     players: [
       { id: '1', nick: 'Jan' },
       { id: '2', nick: 'Eva' },
       { id: '3', nick: 'Petr' },
     ],
   });
+  h.sockets[0]!.message(
+    lobbiesMsg({
+      american: [
+        ['1', 'Jan'],
+        ['2', 'Eva'],
+        ['3', 'Petr'],
+      ],
+    }),
+  );
   h.sockets[0]!.sent.length = 0; // zahoď join
   return h;
 }
@@ -135,14 +191,11 @@ describe('createLobby', () => {
     const src = bg!.getAttribute('src') ?? '';
     expect(src.length).toBeGreaterThan(0); // ?url import → neprázdná URL
     expect(src).toContain('intro'); // je to opravdu intro.webp, ne jiný asset
-    // Fallback <img> je landscape varianta – NESMÍ to být mobilní obrázek (jinak by
-    // se na šířku ukazovalo mobilní pozadí).
     expect(src).not.toContain('mobile');
   });
 
   it('pozadí je <picture> a na výšku (portrait) vybírá intro_mobile.webp', () => {
     const h = mountLobby();
-    // <img.page-bg> žije uvnitř <picture> (fallback), ne přímo pod .lobby.
     const picture = h.el.querySelector('picture');
     expect(picture).not.toBeNull();
     const bg = picture!.querySelector<HTMLImageElement>('img.page-bg');
@@ -150,17 +203,12 @@ describe('createLobby', () => {
 
     const source = picture!.querySelector('source');
     expect(source).not.toBeNull();
-    // Výběr řídí ORIENTACE, ne šířka – zub proti záměně za max-width breakpoint.
     expect(source!.getAttribute('media')).toBe('(orientation: portrait)');
     const srcset = source!.getAttribute('srcset') ?? '';
-    expect(srcset).toContain('intro_mobile'); // portrait varianta míří na mobilní asset
+    expect(srcset).toContain('intro_mobile');
 
-    // Pořadí v <picture>: <source> MUSÍ být před <img>, jinak ho prohlížeč ignoruje.
     const kids = Array.from(picture!.children);
     expect(kids.indexOf(source!)).toBeLessThan(kids.indexOf(bg!));
-
-    // jsdom z <picture> reálně nevybírá – tenhle test hlídá jen STRUKTURU (source/media/
-    // asset/pořadí). Skutečný výběr obrázku podle orientace ověří člověk v prohlížeči.
   });
 
   it('start ukáže formulář a schová místnost', () => {
@@ -170,7 +218,7 @@ describe('createLobby', () => {
     expect(h.disconnected.classList.contains('hidden')).toBe(true);
   });
 
-  it('vstup → připojuji (zamčený formulář) → roster se zvýrazněným „ty"', () => {
+  it('vstup → připojuji (zamčený formulář) → akordeon s mou rozbalenou lobby', () => {
     const h = mountLobby();
     h.nick.value = 'Jan';
     submit(h.form);
@@ -181,26 +229,179 @@ describe('createLobby', () => {
     h.sockets[0]!.open();
     expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Jan' })]);
 
-    h.sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }, { id: '2', nick: 'Eva' }] });
+    h.sockets[0]!.message({
+      type: 'roster',
+      variant: 'american',
+      players: [
+        { id: '1', nick: 'Jan' },
+        { id: '2', nick: 'Eva' },
+      ],
+    });
+    h.sockets[0]!.message(
+      lobbiesMsg({
+        american: [
+          ['1', 'Jan'],
+          ['2', 'Eva'],
+        ],
+      }),
+    );
     expect(h.room.classList.contains('hidden')).toBe(false);
     expect(h.form.classList.contains('hidden')).toBe(true);
-    const items = h.roster.querySelectorAll('.lobby-roster-item');
+    // Nahoře přezdívka.
+    expect(h.nickLine.textContent).toContain('Jan');
+    // Moje lobby (american) je rozbalená → roster s 2 hráči; první = já (is-self, „Jsi tady").
+    const items = rosterItems(h);
     expect(items).toHaveLength(2);
     expect(items[0]!.classList.contains('is-self')).toBe(true);
-    expect(items[0]!.textContent).toContain('(ty)');
+    expect(items[0]!.textContent).toContain('Jsi tady');
     expect(items[1]!.classList.contains('is-self')).toBe(false);
   });
 
-  it('joined/left aktualizují seznam živě', () => {
-    const h = mountLobby();
-    h.nick.value = 'Jan';
-    submit(h.form);
-    h.sockets[0]!.open();
-    h.sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }] });
-    h.sockets[0]!.message({ type: 'joined', player: { id: '2', nick: 'Eva' } });
-    expect(h.roster.querySelectorAll('.lobby-roster-item')).toHaveLength(2);
-    h.sockets[0]!.message({ type: 'left', player: { id: '2' } });
-    expect(h.roster.querySelectorAll('.lobby-roster-item')).toHaveLength(1);
+  it('akordeon má 4 sekce (registr variant), moje lobby je označená a rozbalená', () => {
+    const h = joinedLobby();
+    const secs = sections(h);
+    expect(secs).toHaveLength(4);
+    const names = secs.map((s) => s.querySelector('.lobby-section-name')?.textContent);
+    expect(names).toEqual(['Americká', 'Pool', 'Ruská', 'Česká']);
+    const american = sectionByName(h, 'Americká');
+    expect(american.classList.contains('is-mine')).toBe(true);
+    expect(american.classList.contains('is-expanded')).toBe(true);
+    expect(american.querySelector('.lobby-section-header')!.getAttribute('aria-expanded')).toBe('true');
+    // Počet hráčů v hlavičce.
+    expect(american.querySelector('.lobby-section-count')!.textContent).toBe('3');
+  });
+
+  it('all-roster snímek aktualizuje obsazení živě (bez re-joinu)', () => {
+    const h = joinedLobby();
+    expect(rosterItems(h)).toHaveLength(3);
+    // Nový snímek: Petr odešel z americké.
+    h.sockets[0]!.message(
+      lobbiesMsg({
+        american: [
+          ['1', 'Jan'],
+          ['2', 'Eva'],
+        ],
+      }),
+    );
+    expect(rosterItems(h)).toHaveLength(2);
+    expect(sectionByName(h, 'Americká').querySelector('.lobby-section-count')!.textContent).toBe('2');
+  });
+
+  it('cizí lobby: rozbalím sekci → roster jen ke čtení + tlačítko Vstoupit, žádné Vyzvat', () => {
+    const h = joinedLobby();
+    // Do ruské lobby přidej hráče (přes snímek), ať je co zobrazit.
+    h.sockets[0]!.message(
+      lobbiesMsg({
+        american: [['1', 'Jan']],
+        russian: [['9', 'Olga']],
+      }),
+    );
+    const russian = sectionByName(h, 'Ruská');
+    // Zpočátku sbalená (moje lobby je american).
+    expect(russian.classList.contains('is-expanded')).toBe(false);
+    russian.querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    const russianOpen = sectionByName(h, 'Ruská');
+    expect(russianOpen.classList.contains('is-expanded')).toBe(true);
+    // Roster Olgy je vidět, ale bez tlačítka Vyzvat (cizí lobby = jen čtení).
+    const items = Array.from(russianOpen.querySelectorAll('.lobby-roster-item'));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.textContent).toContain('Olga');
+    expect(russianOpen.querySelector('.lobby-challenge-btn')).toBeNull();
+    // A je tam tlačítko Vstoupit.
+    expect(russianOpen.querySelector('.lobby-enter-btn')).not.toBeNull();
+  });
+
+  it('klik na Vstoupit pošle switch-lobby{variant}', () => {
+    const h = joinedLobby();
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-enter-btn')!.click();
+    expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'switch-lobby', variant: 'russian' })]);
+  });
+
+  it('po switch (nový snímek s mnou v ruské) se moje lobby přesune a nabídne Vyzvat', () => {
+    const h = joinedLobby();
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-enter-btn')!.click();
+    // Server přesune členství a pošle nový snímek: Jan je teď v ruské (s Olgou).
+    h.sockets[0]!.message(
+      lobbiesMsg({
+        russian: [
+          ['1', 'Jan'],
+          ['9', 'Olga'],
+        ],
+      }),
+    );
+    const russian = sectionByName(h, 'Ruská');
+    expect(russian.classList.contains('is-mine')).toBe(true);
+    expect(russian.classList.contains('is-expanded')).toBe(true);
+    // V mé (teď ruské) lobby má Olga tlačítko Vyzvat.
+    const olga = Array.from(russian.querySelectorAll<HTMLElement>('.lobby-roster-item')).find((li) =>
+      li.textContent?.includes('Olga'),
+    )!;
+    expect(olga.querySelector('.lobby-challenge-btn')).not.toBeNull();
+    // Americká už není moje.
+    expect(sectionByName(h, 'Americká').classList.contains('is-mine')).toBe(false);
+  });
+
+  it('klik na hlavičku moje lobby ji sbalí (toggle)', () => {
+    const h = joinedLobby();
+    expect(sectionByName(h, 'Americká').classList.contains('is-expanded')).toBe(true);
+    sectionByName(h, 'Americká').querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    expect(sectionByName(h, 'Americká').classList.contains('is-expanded')).toBe(false);
+    expect(rosterItems(h)).toHaveLength(0); // sbaleno → žádné položky
+  });
+
+  it('prázdná cizí lobby po rozbalení hlásí „zatím tu nikdo není"', () => {
+    const h = joinedLobby();
+    const pool = sectionByName(h, 'Pool');
+    pool.querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    expect(sectionByName(h, 'Pool').querySelector('.lobby-empty')!.textContent).toContain('nikdo');
+  });
+
+  it('vědomé sbalení mé sekce přežije další snímek prezence (nerozbalí se zpět)', () => {
+    const h = joinedLobby();
+    // Sbal moji (americkou) sekci klikem na hlavičku.
+    sectionByName(h, 'Americká').querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    expect(sectionByName(h, 'Americká').classList.contains('is-expanded')).toBe(false);
+    // Přijde další snímek (Olga se přidala do ruské) – moje sekce ZŮSTANE sbalená.
+    // Zub: bez `hasAutoExpanded` by ji auto-expand znovu otevřel při každém snímku.
+    h.sockets[0]!.message(
+      lobbiesMsg({
+        american: [
+          ['1', 'Jan'],
+          ['2', 'Eva'],
+          ['3', 'Petr'],
+        ],
+        russian: [['9', 'Olga']],
+      }),
+    );
+    expect(sectionByName(h, 'Americká').classList.contains('is-expanded')).toBe(false);
+  });
+
+  it('odmítnutí switch-lobby (závod s přijetím výzvy) NEpropadne na herní obrazovku', () => {
+    const h = joinedLobby();
+    // Rozbal ruskou a klikni Vstoupit → odejde switch-lobby (pendingSwitch=true).
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-enter-btn')!.click();
+    expect(h.sockets[0]!.sent).toContain(JSON.stringify({ type: 'switch-lobby', variant: 'russian' }));
+    // Souběžně soupeř přijal MOU výzvu → vznikla partie, přejdu do hry (registruje onError).
+    h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
+    const link = h.onGameStart.mock.calls[0]![1];
+    const gameErrors: string[] = [];
+    link.onError((m) => gameErrors.push(m));
+    // Teprve teď server odmítne switch-lobby (jsem busy). NESMÍ dorazit do hry.
+    h.sockets[0]!.message({ type: 'error', message: 'Nelze přejít do jiné lobby během partie.' });
+    expect(gameErrors).toEqual([]);
+  });
+
+  it('odmítnutí switch-lobby mimo partii jde do notice, zůstávám v místnosti', () => {
+    const h = joinedLobby();
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-enter-btn')!.click();
+    h.sockets[0]!.message({ type: 'error', message: 'Neznámá varianta lobby.' });
+    expect(h.notice.textContent).toContain('Neznámá varianta');
+    expect(h.room.classList.contains('hidden')).toBe(false);
+    expect(h.form.classList.contains('hidden')).toBe(true);
   });
 
   it('prázdná přezdívka se neodešle (klientská pojistka)', () => {
@@ -209,6 +410,14 @@ describe('createLobby', () => {
     submit(h.form);
     expect(h.sockets).toHaveLength(0);
     expect(h.msg.textContent).toContain('Zadej přezdívku');
+  });
+
+  it('join se posílá BEZ varianty (počáteční lobby = server default american)', () => {
+    const h = mountLobby();
+    h.nick.value = 'Jan';
+    submit(h.form);
+    h.sockets[0]!.open();
+    expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Jan' })]);
   });
 
   it('obsazená přezdívka vrátí formulář s návrhem předvyplněným v poli', () => {
@@ -228,7 +437,7 @@ describe('createLobby', () => {
     h.nick.value = 'Jan';
     submit(h.form);
     h.sockets[0]!.open();
-    h.sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }] });
+    h.sockets[0]!.message({ type: 'roster', variant: 'american', players: [{ id: '1', nick: 'Jan' }] });
     h.sockets[0]!.fireClose();
     expect(h.disconnected.classList.contains('hidden')).toBe(false);
     expect(h.room.classList.contains('hidden')).toBe(true);
@@ -254,7 +463,7 @@ describe('createLobby', () => {
     h.nick.value = 'Jan';
     submit(h.form);
     h.sockets[0]!.open();
-    h.sockets[0]!.message({ type: 'roster', players: [{ id: '1', nick: 'Jan' }] });
+    h.sockets[0]!.message({ type: 'roster', variant: 'american', players: [{ id: '1', nick: 'Jan' }] });
     h.sockets[0]!.fireClose();
     expect(h.disconnected.textContent).toContain('přerušilo');
   });
@@ -286,28 +495,25 @@ describe('createLobby', () => {
 
 describe('createLobby – přepínač jazyka (fáze 84)', () => {
   it('vykreslí <select> s možnostmi z LOCALES a předvybere aktivní jazyk', () => {
-    // beforeEach připnul jazyk na cs → aktivní volba musí být cs.
     const h = mountLobby();
     const options = Array.from(h.lang.options);
-    expect(options.map((o) => o.value)).toEqual(['cs', 'en']); // hodnoty = Locale kódy
-    expect(options.map((o) => o.textContent)).toEqual(['Čeština', 'English']); // endonymy
+    expect(options.map((o) => o.value)).toEqual(['cs', 'en']);
+    expect(options.map((o) => o.textContent)).toEqual(['Čeština', 'English']);
     expect(h.lang.value).toBe(getLocale());
     expect(h.lang.value).toBe('cs');
-    expect(h.lang.classList.contains('hidden')).toBe(false); // entry view → viditelný
+    expect(h.lang.classList.contains('hidden')).toBe(false);
   });
 
   it('změna jazyka uloží volbu do LocalStorage a vyžádá překreslení', () => {
     const h = mountLobby();
     h.lang.value = 'en';
     h.lang.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(localStorage.getItem('checkers.locale')).toBe('en'); // persist
-    expect(h.onLocaleChange).toHaveBeenCalledTimes(1); // rebuild přes caller
-    expect(getLocale()).toBe('en'); // aktivní jazyk přepnut
+    expect(localStorage.getItem('checkers.locale')).toBe('en');
+    expect(h.onLocaleChange).toHaveBeenCalledTimes(1);
+    expect(getLocale()).toBe('en');
   });
 
   it('přepnutí jazyka uchová i rozepsanou (neodeslanou) přezdívku', () => {
-    // Rebuild přes onLocaleChange staví lobby znovu; rozepsaný nick se musí uložit,
-    // ať ho po překreslení předvyplní loadSavedNick. Zub proti smazání saveNick z handleru.
     const h = mountLobby();
     h.nick.value = 'Rozepsany';
     h.lang.value = 'en';
@@ -317,23 +523,23 @@ describe('createLobby – přepínač jazyka (fáze 84)', () => {
 
   it('výběr stejného jazyka nepřekresluje ani nezapisuje (žádná zbytečná práce)', () => {
     const h = mountLobby();
-    h.lang.value = 'cs'; // stejný jako aktivní
+    h.lang.value = 'cs';
     h.lang.dispatchEvent(new Event('change', { bubbles: true }));
     expect(h.onLocaleChange).not.toHaveBeenCalled();
     expect(localStorage.getItem('checkers.locale')).toBeNull();
   });
 
   it('mimo entry (po vstupu do místnosti) je přepínač skrytý – rebuild by zabil WS', () => {
-    const h = joinedLobby(); // dožene do `joined` view
-    expect(h.room.classList.contains('hidden')).toBe(false); // opravdu v místnosti
+    const h = joinedLobby();
+    expect(h.room.classList.contains('hidden')).toBe(false);
     expect(h.lang.classList.contains('hidden')).toBe(true);
   });
 });
 
 describe('createLobby – výzvy', () => {
-  it('roster: vlastní záznam bez tlačítka, cizí s „Vyzvat"', () => {
+  it('roster mé lobby: vlastní záznam bez tlačítka, cizí s „Vyzvat"', () => {
     const h = joinedLobby();
-    const items = h.roster.querySelectorAll('.lobby-roster-item');
+    const items = rosterItems(h);
     expect(items).toHaveLength(3);
     expect(items[0]!.querySelector('.lobby-challenge-btn')).toBeNull(); // Jan = já
     expect(items[1]!.querySelector('.lobby-challenge-btn')).not.toBeNull(); // Eva
@@ -342,14 +548,12 @@ describe('createLobby – výzvy', () => {
 
   it('klik na Vyzvat pošle challenge, ukáže „čekám" a zamkne další tlačítka', () => {
     const h = joinedLobby();
-    const evaBtn = h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!;
+    const evaBtn = challengeBtns(h)[0]!;
     evaBtn.click();
     expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'challenge', targetId: '2' })]);
     expect(h.outgoing.classList.contains('hidden')).toBe(false);
     expect(h.outgoing.textContent).toContain('Eva');
-    // ostatní „Vyzvat" zamčené (max-1 odchozí)
-    const btns = h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn');
-    for (const b of btns) {
+    for (const b of challengeBtns(h)) {
       expect(b.disabled).toBe(true);
     }
   });
@@ -369,7 +573,6 @@ describe('createLobby – výzvy', () => {
 
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g1', color: 'white', opponentId: '2' });
     expect(h.onGameStart).toHaveBeenCalledTimes(1);
-    // Druhý argument je herní most (GameLink) – tvar ověřují testy mostu níž.
     expect(h.onGameStart.mock.calls[0]![0]).toEqual({
       gameId: 'g1',
       color: 'white',
@@ -383,7 +586,7 @@ describe('createLobby – výzvy', () => {
 
   it('herní most: link.move pošle {type:move, gameId, from, path} po room WS', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click(); // vyzvi Evu (odchozí)
+    challengeBtns(h)[0]!.click(); // vyzvi Evu (odchozí)
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
     h.sockets[0]!.sent.length = 0; // zahoď challenge
     const link = h.onGameStart.mock.calls[0]![1];
@@ -394,9 +597,9 @@ describe('createLobby – výzvy', () => {
 
   it('herní most: resign/offerDraw/acceptDraw/rejectDraw pošlou {type, gameId} po room WS (fáze 77)', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    challengeBtns(h)[0]!.click();
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
-    h.sockets[0]!.sent.length = 0; // zahoď challenge
+    h.sockets[0]!.sent.length = 0;
     const link = h.onGameStart.mock.calls[0]![1];
     expect(link.resign()).toBe(true);
     expect(link.offerDraw()).toBe(true);
@@ -412,7 +615,7 @@ describe('createLobby – výzvy', () => {
 
   it('herní most: draw-offered/draw-rejected pro TUTO partii spustí registrované handlery (fáze 77)', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    challengeBtns(h)[0]!.click();
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
     const link = h.onGameStart.mock.calls[0]![1];
     let offered = 0;
@@ -428,7 +631,7 @@ describe('createLobby – výzvy', () => {
 
   it('herní most: signál remízy pro JINOU partii se ignoruje (filtr na gameId)', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    challengeBtns(h)[0]!.click();
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
     const link = h.onGameStart.mock.calls[0]![1];
     let offered = 0;
@@ -439,7 +642,7 @@ describe('createLobby – výzvy', () => {
 
   it('herní most: po odregistraci onDrawOffered už signál handler nespustí (fáze 77)', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    challengeBtns(h)[0]!.click();
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
     const link = h.onGameStart.mock.calls[0]![1];
     let offered = 0;
@@ -451,7 +654,7 @@ describe('createLobby – výzvy', () => {
 
   it('herní most: leaveGame (Konec) pošle {type:leave-game, gameId} (fáze 77)', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    challengeBtns(h)[0]!.click();
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
     h.sockets[0]!.sent.length = 0;
     const link = h.onGameStart.mock.calls[0]![1];
@@ -461,7 +664,7 @@ describe('createLobby – výzvy', () => {
 
   it('herní most: offerRematch/acceptRematch/declineRematch pošlou {type, gameId} (fáze 77)', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    challengeBtns(h)[0]!.click();
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
     h.sockets[0]!.sent.length = 0;
     const link = h.onGameStart.mock.calls[0]![1];
@@ -477,7 +680,7 @@ describe('createLobby – výzvy', () => {
 
   it('herní most: rematch-offered/rematch-declined pro TUTO partii spustí handlery (fáze 77)', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    challengeBtns(h)[0]!.click();
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
     const link = h.onGameStart.mock.calls[0]![1];
     let offered = 0;
@@ -492,7 +695,6 @@ describe('createLobby – výzvy', () => {
     expect(offered).toBe(1);
     expect(declined).toBe(1);
     expect(closed).toBe(1);
-    // Signál pro JINOU partii se ignoruje.
     h.sockets[0]!.message({ type: 'rematch-offered', gameId: 'jina' });
     h.sockets[0]!.message({ type: 'game-closed', gameId: 'jina' });
     expect(offered).toBe(1);
@@ -501,20 +703,19 @@ describe('createLobby – výzvy', () => {
 
   it('herní most: za běhu partie míří chyba z room WS do hry, ne do notice lobby', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click();
+    challengeBtns(h)[0]!.click();
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g7', color: 'black', opponentId: '2' });
     const link = h.onGameStart.mock.calls[0]![1];
     const gameErrors: string[] = [];
     const unsub = link.onError((m) => gameErrors.push(m));
 
     h.sockets[0]!.message({ type: 'error', message: 'Nelegální tah.' });
-    expect(gameErrors).toEqual(['Nelegální tah.']); // dorazilo do hry
-    expect(h.notice.classList.contains('hidden')).toBe(true); // lobby notice se nedotklo
+    expect(gameErrors).toEqual(['Nelegální tah.']);
+    expect(h.notice.classList.contains('hidden')).toBe(true);
 
-    // Po odregistraci (návrat do místnosti) se chyba zas chová jako lobby notice.
     unsub();
     h.sockets[0]!.message({ type: 'error', message: 'Výzva už neplatí.' });
-    expect(gameErrors).toEqual(['Nelegální tah.']); // do hry už nic nepřišlo
+    expect(gameErrors).toEqual(['Nelegální tah.']);
     expect(h.notice.classList.contains('hidden')).toBe(false);
     expect(h.notice.textContent).toBe('Výzva už neplatí.');
   });
@@ -532,29 +733,25 @@ describe('createLobby – výzvy', () => {
 
   it('challenge-rejected schová „čekám", odemkne tlačítka a ukáže notice', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click(); // vyzvi Evu
+    challengeBtns(h)[0]!.click(); // vyzvi Evu
     h.sockets[0]!.message({ type: 'challenge-rejected', challengedId: '2' });
     expect(h.outgoing.classList.contains('hidden')).toBe(true);
     expect(h.notice.classList.contains('hidden')).toBe(false);
     expect(h.notice.textContent).toContain('Eva');
-    const btns = h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn');
-    for (const b of btns) {
+    for (const b of challengeBtns(h)) {
       expect(b.disabled).toBe(false);
     }
   });
 
   it('serverová chyba výzvy PO vstupu zůstane v místnosti (notice), nevyhodí na formulář', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click(); // vyzvi Evu (busy)
+    challengeBtns(h)[0]!.click(); // vyzvi Evu (busy)
     h.sockets[0]!.message({ type: 'error', message: 'Vyzvaný hráč už hraje.' });
-    // zůstávám v místnosti; formulář nicku se NEukáže
     expect(h.room.classList.contains('hidden')).toBe(false);
     expect(h.form.classList.contains('hidden')).toBe(true);
     expect(h.notice.textContent).toContain('už hraje');
-    // odchozí uvolněná a tlačítka zas aktivní (nezaseklo se na max-1)
     expect(h.outgoing.classList.contains('hidden')).toBe(true);
-    const btns = h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn');
-    for (const b of btns) {
+    for (const b of challengeBtns(h)) {
       expect(b.disabled).toBe(false);
     }
   });
@@ -565,7 +762,7 @@ describe('createLobby – výzvy', () => {
     submit(h.form); // connecting
     h.sockets[0]!.open();
     h.sockets[0]!.message({ type: 'error', message: 'Přezdívka je moc dlouhá.' });
-    expect(h.form.classList.contains('hidden')).toBe(false); // formulář zpět
+    expect(h.form.classList.contains('hidden')).toBe(false);
     expect(h.msg.textContent).toContain('moc dlouhá');
   });
 
@@ -582,7 +779,7 @@ describe('createLobby – výzvy', () => {
 
   it('challenge-cancelled na mou odchozí ji zruší (soupeř odešel během čekání)', () => {
     const h = joinedLobby();
-    h.roster.querySelectorAll<HTMLButtonElement>('.lobby-challenge-btn')[0]!.click(); // vyzvi Evu
+    challengeBtns(h)[0]!.click(); // vyzvi Evu
     expect(h.outgoing.classList.contains('hidden')).toBe(false);
     h.sockets[0]!.message({ type: 'challenge-cancelled', challengeId: 'serverové-id' });
     expect(h.outgoing.classList.contains('hidden')).toBe(true);

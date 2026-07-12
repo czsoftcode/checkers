@@ -39,7 +39,8 @@
  * (todo 42) i timeout (todo 43) jsou mimo tento řez.
  */
 
-import type { Color, GameResult, Position, Square } from '@checkers/rules';
+import { AMERICAN_RULESET, rulesetForVariant } from '@checkers/rules';
+import type { Color, GameResult, Position, Ruleset, Square } from '@checkers/rules';
 
 import { createBoardView } from './board-view.js';
 import type { DropOutcome, RenderState } from './board-view.js';
@@ -135,6 +136,12 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
   // Stav partie z posledního převzatého stavu serveru. Do prvního `applyState`
   // je pozice `null` → deska je prázdná a klik nic nedělá (žádná pozice k výběru).
   let position: Position | null = null;
+  // Ruleset VARIANTY partie – čte se z DTO (`dto.variant`) v `applyState`, jediný
+  // zdroj (server je autorita, klient si variantu nedrží zvlášť). Řídí zvýrazňování
+  // legálních tahů (výběr, dopady, dokončení řetězu), aby UI počítalo tytéž tahy jako
+  // server. Do prvního stavu je americký (deska je stejně prázdná, `canInput` false),
+  // pak ho nastaví `applyState` z varianty partie (chybějící/neplatná → 'american').
+  let ruleset: Ruleset = AMERICAN_RULESET;
   let result: GameResult = 'ongoing';
   // Důvod konce partie z posledního stavu serveru (fáze 78). Normalizovaný: jen
   // platný `EndReason`, jinak `null` (běží / stav ho nenese / neznámá hodnota).
@@ -201,7 +208,7 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     return (
       position !== null &&
       selection !== null &&
-      nextTargets(position, selection.from, selection.path).includes(square)
+      nextTargets(position, selection.from, selection.path, ruleset).includes(square)
     );
   }
 
@@ -238,7 +245,7 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
       return;
     }
     const path = [...selection.path, square];
-    if (nextTargets(position, selection.from, path).length > 0) {
+    if (nextTargets(position, selection.from, path, ruleset).length > 0) {
       // Skok ještě pokračuje (další povinný dopad) – prodluž trasu a kámen OPTICKY
       // usaď na tento dopad (`settle` → `effectivePosition`: kámen na dopadu, sebrané
       // zmizí), ať zobrazení klikání sedí s tažením. Server ho přesune celý až s tahem;
@@ -338,10 +345,10 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     const from = selection.from;
     const prefix = selection.path;
     // `to` je bezprostřední povinný dopad z aktuální pozice v řetězu.
-    if (nextTargets(position, from, prefix).includes(to)) {
+    if (nextTargets(position, from, prefix, ruleset).includes(to)) {
       const newPath = [...prefix, to];
-      const captured = capturedOnHop(position, from, prefix, to);
-      if (nextTargets(position, from, newPath).length > 0) {
+      const captured = capturedOnHop(position, from, prefix, to, ruleset);
+      if (nextTargets(position, from, newPath, ruleset).length > 0) {
         // Meziskok: kámen ZŮSTANE na `to` a čeká na další skok. Deska ho na dopad usadí
         // (`hop` níže) a sebrané schová; každé další překreslení odvodí totéž zobrazení
         // z výběru (`effectivePosition`), takže se sebraný kámen „nevzkřísí".
@@ -350,7 +357,7 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
         return { kind: 'hop', landing: to, captured };
       }
       // Tento dopad tah DOKONČÍ.
-      const move = resolveMove(position, from, newPath);
+      const move = resolveMove(position, from, newPath, ruleset);
       if (move === null) {
         return bounce(); // obrana: dopad bez pokračování by měl jít vyřešit
       }
@@ -358,7 +365,7 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     }
     // `to` není bezprostřední dopad → zkus celý řetěz končící v `to` (souvislé tažení
     // přes víc skoků v jednom gestu). `captures` mimo už sebrané (`prefix`).
-    const chain = resolveChainTo(position, from, prefix, to);
+    const chain = resolveChainTo(position, from, prefix, to, ruleset);
     if (chain !== null) {
       return commitDrag(chain.from, chain.path, to, chain.captures.slice(prefix.length));
     }
@@ -415,7 +422,7 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     if (moving === null) {
       return pos;
     }
-    const captured = capturesForPrefix(pos, sel.from, sel.path);
+    const captured = capturesForPrefix(pos, sel.from, sel.path, ruleset);
     const landing = lastHopOf(sel);
     const board = pos.board.slice();
     board[sel.from - 1] = null;
@@ -448,14 +455,14 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
         position,
         selected: selection.from,
         path: [],
-        targets: nextTargets(position, selection.from, []),
+        targets: nextTargets(position, selection.from, [], ruleset),
       };
     }
     return {
       position: effectivePosition(position, selection),
       selected: lastHopOf(selection),
       path: [selection.from, ...selection.path.slice(0, -1)],
-      targets: nextTargets(position, selection.from, selection.path),
+      targets: nextTargets(position, selection.from, selection.path, ruleset),
     };
   }
 
@@ -475,6 +482,10 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     }
     const prevResult = result;
     position = dto.position;
+    // Varianta partie ze serveru (autorita). Chybějící/neplatná (starší stav, drift
+    // odchycený guardem výš) → 'american' = dnešní chování. Nastav PŘED renderem, ať
+    // `nextTargets` v `renderState` počítá tahy správné varianty.
+    ruleset = rulesetForVariant(dto.variant ?? 'american');
     result = dto.result;
     // Důvod konce (fáze 78): normalizuj na hranici – neznámé/chybějící `reason`
     // (starší server, rozbitý stav) drž jako `null`, skořápka pak spadne na text

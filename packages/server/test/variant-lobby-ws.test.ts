@@ -348,6 +348,75 @@ describe('Varianta-lobby – switch-lobby (fáze 103)', () => {
   });
 });
 
+describe('Varianta-lobby – all-roster broadcast akordeonu (fáze 104)', () => {
+  it('změna v lobby A dorazí socketu v lobby B (snímek nese všechny 4 lobby)', async () => {
+    const port = await start();
+    const alice = await join(port, 'Alice', 'american');
+    const bob = await join(port, 'Bob', 'russian');
+    // Bob (ruská lobby) sleduje změny prezence napříč lobby – vyčisti dosavadní zprávy.
+    bob.received.length = 0;
+
+    // Carol vstoupí do AMERICKÉ lobby (jiná než Bobova ruská).
+    const carol = await join(port, 'Carol', 'american');
+
+    // Bob dostane all-roster snímek, i když je v JINÉ lobby – to je jádro fáze 104
+    // (bez broadcastu by Bob o Carol vůbec nevěděl).
+    const snapshot = await takeMessage(bob.received, 'lobbies');
+    expect(snapshot.lobbies.map((l) => l.variant).sort()).toEqual([
+      'american',
+      'czech',
+      'pool',
+      'russian',
+    ]);
+    const american = snapshot.lobbies.find((l) => l.variant === 'american');
+    expect(american?.players.map((p) => p.nick).sort()).toEqual(['Alice', 'Carol']);
+    const russian = snapshot.lobbies.find((l) => l.variant === 'russian');
+    expect(russian?.players.map((p) => p.nick)).toEqual(['Bob']);
+    void alice;
+    void carol;
+  });
+
+  it('odchod z lobby A aktualizuje all-roster snímek v lobby B', async () => {
+    const port = await start();
+    const alice = await join(port, 'Alice', 'american');
+    const bob = await join(port, 'Bob', 'russian');
+    bob.received.length = 0;
+
+    alice.ws.close();
+
+    // Bob (ruská) dostane snímek s PRÁZDNOU americkou lobby (Alice odešla).
+    await waitFor(() =>
+      bob.received.some(
+        (m) =>
+          m.type === 'lobbies' &&
+          (m.lobbies.find((l) => l.variant === 'american')?.players.length ?? -1) === 0,
+      ),
+    );
+  });
+
+  it('switch-lobby aktualizuje snímek u nezúčastněného pozorovatele', async () => {
+    const port = await start();
+    const observer = await join(port, 'Obs', 'czech'); // stojí v české, jen kouká
+    const mover = await join(port, 'Mover', 'american');
+    observer.received.length = 0;
+
+    mover.ws.send(JSON.stringify({ type: 'switch-lobby', variant: 'pool' }));
+
+    // Pozorovatel v české lobby uvidí snímek, kde Mover je v pool a v american není.
+    await waitFor(() =>
+      observer.received.some((m) => {
+        if (m.type !== 'lobbies') return false;
+        const pool = m.lobbies.find((l) => l.variant === 'pool');
+        const american = m.lobbies.find((l) => l.variant === 'american');
+        return (
+          pool?.players.some((p) => p.nick === 'Mover') === true &&
+          american?.players.some((p) => p.nick === 'Mover') !== true
+        );
+      }),
+    );
+  });
+});
+
 describe('Varianta-lobby – PDN nese variantu (fáze 103)', () => {
   it('dokončená ruská partie zapíše [Variant "russian"] a odpovídající Event', async () => {
     const port = await start({ archive: true });

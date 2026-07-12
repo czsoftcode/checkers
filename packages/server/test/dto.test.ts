@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AMERICAN_RULESET, initialGameState, legalMoves, rulesetForVariant } from '@checkers/rules';
+import { AMERICAN_RULESET, initialGameState, initialPosition, legalMoves, rulesetForVariant } from '@checkers/rules';
 import type { Cell, Color, Position } from '@checkers/rules';
 import { findLegalMove, moveToDto, pvpGameToDto } from '../src/index.js';
 
@@ -36,7 +36,17 @@ describe('pvpGameToDto', () => {
     // se sem protáhla, klient by je omylem četl jako platný stav enginu/úrovně.
     // `reason` je NAOPAK součástí PvP kontraktu (fáze 78), tak musí být přítomné.
     const keys = Object.keys(dto).sort();
-    expect(keys).toEqual(['id', 'legalMoves', 'mode', 'position', 'reason', 'result']);
+    expect(keys).toEqual(['id', 'legalMoves', 'mode', 'position', 'reason', 'result', 'variant']);
+  });
+
+  it('variant: default partie nese american, ne-americká svou variantu (fáze 104)', () => {
+    // Klient čte `variant` z DTO, aby zvýraznil tahy TÉ varianty. Kdyby DTO variantu
+    // neposílalo (nebo tvrdě americkou), deska ruské/české partie by nabízela cizí tahy.
+    expect(pvpGameToDto('a', initialGameState(), 'ongoing', null).variant).toBe('american');
+    const russian = pvpGameToDto('r', initialGameState(initialPosition(), 'russian'), 'ongoing', null);
+    expect(russian.variant).toBe('russian');
+    const czech = pvpGameToDto('c', initialGameState(initialPosition(), 'czech'), 'ongoing', null);
+    expect(czech.variant).toBe('czech');
   });
 
   it('result se PŘEDÁVÁ zvenčí (efektivní výsledek), DTO ho neodvozuje', () => {
