@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.79.0] - 2026-07-12
+
+### Changed
+
+- **Multiplayer: jedna vstupní stránka místo dvou kroků.** Úvod a předsíň jsou teď
+  jedna obrazovka: nahoře „Jsi přihlášen jako X", pod tím rovnou přehled čtyř místností
+  s obsazeností a dole „Hrát proti počítači". Přezdívka se zadává v malém okně; kdo se
+  vrací, připojí se rovnou bez ptaní (přezdívka se pamatuje). Přezdívku změníte kliknutím
+  na „Jsi přihlášen jako X". Zrušená tlačítka „Vstoupit do místnosti" a „Odpojit".
+  Přepínač jazyka je vidět pořád (i v okně přezdívky) a jeho přepnutí vás z předsíně
+  nevyhodí. Kdo chce hrát jen proti počítači, okno přezdívky zavře a hraje bez přihlášení.
+
 ## [0.78.0] - 2026-07-12
 
 ### Added

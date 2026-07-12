@@ -73,8 +73,9 @@ describe('lobby – jazyk podle prohlížeče', () => {
     setBrowserLanguages(['cs-CZ']);
     initLocale();
     const h = mountEntry();
-    expect(h.text('.lobby-title')).toBe('Herní místnost');
-    expect(h.text('.lobby-join-btn')).toBe('Vstoupit do místnosti');
+    expect(h.text('.lobby-title')).toBe('Herní místnosti');
+    // Tlačítko „Uložit" v modalu přezdívky (fáze 108, dřív „Vstoupit do místnosti").
+    expect(h.text('.lobby-nick-save-btn')).toBe('Uložit');
     expect(h.text('.lobby-solo-btn')).toBe('Hrát proti počítači');
     expect(h.placeholder('.lobby-nick')).toBe('Tvoje přezdívka');
   });
@@ -83,8 +84,8 @@ describe('lobby – jazyk podle prohlížeče', () => {
     setBrowserLanguages(['en-US']);
     initLocale();
     const h = mountEntry();
-    expect(h.text('.lobby-title')).toBe('Game room');
-    expect(h.text('.lobby-join-btn')).toBe('Enter the room');
+    expect(h.text('.lobby-title')).toBe('Game rooms');
+    expect(h.text('.lobby-nick-save-btn')).toBe('Save');
     expect(h.text('.lobby-solo-btn')).toBe('Play against the computer');
     expect(h.placeholder('.lobby-nick')).toBe('Your nickname');
   });
@@ -93,7 +94,7 @@ describe('lobby – jazyk podle prohlížeče', () => {
     setBrowserLanguages(['de-DE']);
     initLocale();
     const h = mountEntry();
-    expect(h.text('.lobby-title')).toBe('Game room');
+    expect(h.text('.lobby-title')).toBe('Game rooms');
     expect(h.text('.lobby-solo-btn')).toBe('Play against the computer');
   });
 });

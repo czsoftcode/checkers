@@ -153,10 +153,9 @@ const cs = {
   // pravdy `APP_TITLE`, ať neexistuje ve dvou kopiích.
   'app.title': APP_TITLE,
 
-  'lobby.title': 'Herní místnost',
+  'lobby.title': 'Herní místnosti',
   'lobby.nickAria': 'Přezdívka',
   'lobby.nickPlaceholder': 'Tvoje přezdívka',
-  'lobby.joinBtn': 'Vstoupit do místnosti',
   'lobby.rosterTitle': 'Přítomní hráči',
   'lobby.reconnectBtn': 'Připojit znovu',
   'lobby.soloBtn': 'Hrát proti počítači',
@@ -177,11 +176,22 @@ const cs = {
   // Akordeon čtyř varianta-lobby (fáze 104): nahoře přezdívka, pod ní 4 přepínatelné
   // sekce (jedna = jedna varianta). Rozbalená sekce ukáže roster + akci (Vyzvat v MÉ
   // lobby, Vstoupit v ostatních). Názvy místností = názvy variant (`variant.*`, D2).
-  'lobby.loggedInAs': 'Jsi tu jako {nick}',
-  'lobby.disconnectBtn': 'Odpojit',
+  'lobby.loggedInAs': 'Jsi přihlášen jako {nick}',
+  // Výzva k přihlášení, když ještě nemám přezdívku (klik = otevřít modal přezdívky).
+  // „Hrát proti počítači" jde i bez přihlášení – proto modal NENÍ past (fáze 108).
+  'lobby.signIn': 'Přihlásit se ke hře s lidmi',
   'lobby.enterLobbyBtn': 'Vstoupit',
   'lobby.hereBadge': 'Jsi tady',
   'lobby.emptyLobby': 'Zatím tu nikdo není',
+
+  // Modal přezdívky (fáze 108): jediná brána identity. Při prvním načtení (bez uložené
+  // přezdívky) vyskočí a nejde zavřít bez nicku; klik na „Jsi přihlášen jako X" ho
+  // reotevře (změna přezdívky – tehdy jde Storno = nechat starou). Uložení = connect.
+  'lobby.nickModalTitle': 'Zvol si přezdívku',
+  'lobby.nickModalAria': 'Zadání přezdívky',
+  'lobby.nickSaveBtn': 'Uložit',
+  'lobby.nickCancelBtn': 'Zrušit',
+  'lobby.changeNick': 'Změnit přezdívku',
 
   // Modal příchozí výzvy (fáze 106): nahradil řádek v seznamu. Server garantuje
   // nejvýš JEDNU příchozí výzvu, takže modal ukáže vždy právě jednu; jen Přijmout/
@@ -297,10 +307,9 @@ export type MessageKey = keyof typeof cs;
 const en = {
   'app.title': 'American Checkers',
 
-  'lobby.title': 'Game room',
+  'lobby.title': 'Game rooms',
   'lobby.nickAria': 'Nickname',
   'lobby.nickPlaceholder': 'Your nickname',
-  'lobby.joinBtn': 'Enter the room',
   'lobby.rosterTitle': 'Players present',
   'lobby.reconnectBtn': 'Reconnect',
   'lobby.soloBtn': 'Play against the computer',
@@ -318,11 +327,17 @@ const en = {
   'lobby.langAria': 'Language',
   'lobby.variantAria': 'Game variant against the computer',
 
-  'lobby.loggedInAs': 'You are here as {nick}',
-  'lobby.disconnectBtn': 'Disconnect',
+  'lobby.loggedInAs': 'You are signed in as {nick}',
+  'lobby.signIn': 'Sign in to play with people',
   'lobby.enterLobbyBtn': 'Enter',
   'lobby.hereBadge': "You're here",
   'lobby.emptyLobby': 'No one here yet',
+
+  'lobby.nickModalTitle': 'Choose your nickname',
+  'lobby.nickModalAria': 'Enter your nickname',
+  'lobby.nickSaveBtn': 'Save',
+  'lobby.nickCancelBtn': 'Cancel',
+  'lobby.changeNick': 'Change nickname',
 
   'lobby.challengeModalTitle': 'Game challenge',
   'lobby.challengeModalAria': 'Incoming game challenge',

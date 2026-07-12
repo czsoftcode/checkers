@@ -1,0 +1,39 @@
+{
+  "id": 108,
+  "title": "Lobby: jedna vstupní stránka s místnostmi",
+  "goal": "Sloučit úvod a předsíň do JEDNÉ stránky podle druhého snímku: nahoře input přezdívky (místo Jsi tu jako X), pod ním rovnou akordeon 4 místností (obsazenost + Vstoupit), dole Hrát proti počítači. Zrušit tlačítka Vstoupit do místnosti i Odpojit a oddělený connected pohled. Přepínač jazyků zůstává vedle nadpisu (jako dnes). Nadpis se změní z Herní místnost na množné Herní místnosti. Klient se tiše connectne po zadání platné přezdívky, klik na místnost = enter/switch. Klient-only (connect/enter/předsíň z fáze 105 už existují), reverzuje form-first z fáze 106. Otevřené pro discuss: co ukazují počty PŘED zadáním nicku (placeholder vs anonymní connect = serverová změna); kdy proběhne tichý connect; obsazená přezdívka; změna nicku po připojení; jazykový přepínač nesmí shodit spojení natrvalo.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "i18n: mnozny nadpis, modal, zmenit prezdivku (cs/en)",
+      "status": "done",
+      "detail": "lobby.title Herni mistnost->Herni mistnosti / Game room->Game rooms. Nove klice: nick modal (titulek, aria, ulozit/storno), zmenit prezdivku. Repurpose/odstranit lobby.joinBtn/lobby.disconnectBtn. Vystup: i18n parita testy zelene (klice existuji pro dalsi kroky)."
+    },
+    {
+      "title": "Nick modal + auto-connect z LocalStorage",
+      "status": "done",
+      "detail": "Novy modal (reuse .modal-overlay/.modal-dialog) pro zadani prezdivky: validace (prazdny/dlouhy), ulozeni -> saveNick + connect{nick}; nick-taken -> modal zustane/reopen s navrhem; prepinac jazyka dosazitelny i z modalu. Na load: ulozeny nick -> auto-connect rovnou; jinak otevrit modal. Pri prvnim nacteni modal nejde zavrit bez nicku. Vystup: prvni navsteva = modal -> connect; vracejici se = auto-connect bez modalu."
+    },
+    {
+      "title": "Jedna stranka: predsin jako jediny pohled",
+      "status": "done",
+      "detail": "Odstranit entry form (form/nickInput/joinBtn) i Odpojit a prechody na entry. Akordeon + Jsi prihlasen jako X + Hrat proti pocitaci = jedina stranka (2. snimek). Jsi prihlasen jako X / odkaz zmenit prezdivku reotevre nick modal; ulozeni noveho nicku = odpojit starou identitu + connect nove. View se zjednodusi (entry pryc). AIvP soloBtn/picker beze zmeny. Vystup: uvod vypada jako 2. snimek, zadne Vstoupit do mistnosti."
+    },
+    {
+      "title": "Prepnuti jazyka prezije spojeni",
+      "status": "done",
+      "detail": "onLocaleChange rebuild -> nova stranka se auto-connectne ulozenym nickem (ne navrat na prazdny pohled), langSelect dosazitelny. Vystup: prepnu jazyk v predsini -> zustanu pripojeny s zivymi pocty; test/overeni."
+    }
+  ],
+  "startedAt": "2026-07-12T15:36:25.896Z",
+  "resolvedVerify": [
+    "Vizuál jedné vstupní stránky (2. snímek): nadpis, modal, akordeon, sólo",
+    "Tok první návštěvy vs. návrat (auto-connect)",
+    "REVIZE goalu: modal místo inline inputu + zavíratelnost modalu"
+  ],
+  "completedAt": "2026-07-12T16:31:34.516Z",
+  "autoCommit": {
+    "preSha": "b3cbd4b496d56d84aeaca70a10fdf780a6c4be00",
+    "subject": "Phase 108: Lobby: jedna vstupní stránka s místnostmi"
+  }
+}

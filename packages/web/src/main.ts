@@ -90,9 +90,9 @@ function showLobby(): void {
   const mounted = createLobby({
     onPlayVsComputer: showSolo,
     onGameStart: showGame,
-    // Přepnutí jazyka (fáze 84): jazyk je už uložený + nastavený, znovupostav čerstvé
-    // lobby, ať se `t()` řetězce přeloží. Bezpečné jen z `entry` view (bez živého WS),
-    // proto lobby přepínač mimo `entry` skrývá.
+    // Přepnutí jazyka (fáze 84/108): jazyk je už uložený + nastavený, znovupostav
+    // čerstvé lobby, ať se `t()` řetězce přeloží. Rebuild zavře staré room WS, ale nové
+    // lobby se uloženým nickem samo AUTO-connectne (fáze 108), takže se spojení obnoví.
     onLocaleChange: showLobby,
   });
   lobby = mounted;

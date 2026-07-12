@@ -43,9 +43,9 @@ describe('detectLocale', () => {
 describe('t – překlad a interpolace', () => {
   it('vrátí text aktivního jazyka (cs vs en)', () => {
     setLocale('cs');
-    expect(t('lobby.title')).toBe('Herní místnost');
+    expect(t('lobby.title')).toBe('Herní místnosti');
     setLocale('en');
-    expect(t('lobby.title')).toBe('Game room');
+    expect(t('lobby.title')).toBe('Game rooms');
   });
 
   it('dosadí {nick} do šablony', () => {

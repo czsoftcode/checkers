@@ -537,6 +537,11 @@
       "id": 107,
       "title": "Název varianty nad deskou při hře",
       "status": "done"
+    },
+    {
+      "id": 108,
+      "title": "Lobby: jedna vstupní stránka s místnostmi",
+      "status": "done"
     }
   ]
 }

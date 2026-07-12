@@ -244,14 +244,15 @@ function saveNick(nick: string): void {
 }
 
 /**
- * Stav obrazovky (fáze 106, form-first): `entry` (formulář přezdívky + přepínač
- * jazyka, akordeon skrytý), `connecting` (čekám na odpověď serveru), `connected`
- * (jsem PŘIPOJEN – předsíň i členství: nahoře „Jsi tu jako X" + Odpojit, pod tím
- * ŽIVÝ akordeon 4 lobby), `disconnected` (spadlo spojení → „Připojit znovu"). Předsíň
- * (`myVariant=null`) a členství sdílí view `connected`; liší se jen akce v sekcích
- * (Vstoupit→enter/switch-lobby vs. Vyzvat), viz {@link buildSectionBody}.
+ * Stav obrazovky (fáze 108, jedna stránka): `connecting` (odeslán connect, čekám na
+ * první snímek – akordeon je vidět s „Připojuji…", počty ještě prázdné), `connected`
+ * (jsem PŘIPOJEN – předsíň i členství: nahoře „Jsi přihlášen jako X", pod tím ŽIVÝ
+ * akordeon 4 lobby), `disconnected` (spadlo spojení → „Připojit znovu"). Zadání/změnu
+ * přezdívky řeší MODAL nezávisle na tomto stavu; `entry` view z fáze 106 je zrušený.
+ * Předsíň (`myVariant=null`) a členství sdílí view `connected`; liší se jen akce
+ * v sekcích (Vstoupit→enter/switch-lobby vs. Vyzvat), viz {@link buildSectionBody}.
  */
-type View = 'entry' | 'connecting' | 'connected' | 'disconnected';
+type View = 'connecting' | 'connected' | 'disconnected';
 
 /** Postaví obrazovku místnosti. Vrací kořenový prvek k vložení do stránky. */
 export function createLobby(options: LobbyOptions): Lobby {
@@ -297,81 +298,68 @@ export function createLobby(options: LobbyOptions): Lobby {
   heading.className = 'lobby-title';
   heading.textContent = t('lobby.title');
 
-  // Přepínač jazyka: `<select>` generovaný z LOCALES (jediný zdroj pravdy) – přidání
-  // jazyka nevyžaduje zásah sem. Aktuální jazyk je předvybraný, popisky jsou ENDONYMY
-  // (jazyk sám v sobě). Změna: ulož volbu do LocalStorage, přepni aktivní jazyk a nech
-  // caller znovupostavit lobby (`onLocaleChange`), ať se `t()` řetězce přeloží.
-  //
-  // Přepínač je zpřístupněný JEN v `entry` view (mimo něj ho `setView` skrývá): v
-  // `entry` uživatel JEŠTĚ NENÍ v místnosti (žádný roster ani partie k ztrátě), takže
-  // rebuild je neškodný – i kdyby po `nick-taken`/`error` zůstal room WS otevřený,
-  // `dispose()` ho čistě zavře a nový se otevře líně až při dalším `join()`. V
-  // `joined`/`disconnected` by naopak rebuild hráče vyhodil z rozjeté místnosti.
-  const langSelect = document.createElement('select');
-  langSelect.className = 'lobby-lang';
-  langSelect.setAttribute('aria-label', t('lobby.langAria'));
-  const activeLocale = getLocale();
-  for (const { locale, label } of LOCALES) {
-    const option = document.createElement('option');
-    option.value = locale;
-    option.textContent = label;
-    option.selected = locale === activeLocale;
-    langSelect.append(option);
-  }
-  langSelect.addEventListener('change', () => {
-    const chosen = langSelect.value;
-    // Hodnoty `<option>` pocházejí z LOCALES; guard je pojistka proti cizímu zásahu do
-    // DOM a zároveň zúží `string` na `Locale` pro `saveLocale`/`setLocale`.
-    if (!isLocale(chosen) || chosen === getLocale()) {
-      return;
+  // Přepínač jazyka: `<select>` z LOCALES (jediný zdroj pravdy, ENDONYMY). Na JEDNÉ
+  // vstupní stránce (fáze 108) je vidět VŽDY vedle nadpisu – dřív ho `setView` mimo
+  // `entry` skrýval, protože rebuild přes `onLocaleChange` zavře room WS. Teď se
+  // překreslené lobby samo auto-connectne uloženou přezdívkou (viz init dole), takže
+  // se spojení obnoví a přepnutí jazyka hráče z předsíně natrvalo nevyhodí. Týž
+  // přepínač staví `buildLangSelect` i do modalu přezdívky, aby ho první ne-český
+  // návštěvník dosáhl i přes celoobrazovkový overlay.
+  function buildLangSelect(className: string): HTMLSelectElement {
+    const select = document.createElement('select');
+    select.className = className;
+    select.setAttribute('aria-label', t('lobby.langAria'));
+    const active = getLocale();
+    for (const { locale, label } of LOCALES) {
+      const option = document.createElement('option');
+      option.value = locale;
+      option.textContent = label;
+      option.selected = locale === active;
+      select.append(option);
     }
-    // Rebuild postaví čerstvé lobby a přezdívku vezme z `loadSavedNick()`. Ulož proto
-    // i ROZEPSANOU (neodeslanou) přezdívku, ať ji přepnutí jazyka nesmázne – jinak by
-    // se pole po rebuildu vrátilo jen na poslední ODESLANou hodnotu (fáze 84).
-    saveNick(nickInput.value.trim());
-    saveLocale(chosen);
-    setLocale(chosen);
-    options.onLocaleChange();
-  });
+    select.addEventListener('change', () => {
+      const chosen = select.value;
+      // Hodnoty `<option>` pocházejí z LOCALES; guard zúží `string` na `Locale` a
+      // odchytí cizí zásah do DOM. Rozepsaná (NEULOŽENÁ) přezdívka z modalu se
+      // přepnutím jazyka ZÁMĚRNĚ nezachovává (fáze 108): uložit ji by buď spustilo
+      // auto-connect s nedokončeným nickem, nebo obešlo bránu identity – radši prázdný
+      // modal v novém jazyce.
+      if (!isLocale(chosen) || chosen === getLocale()) {
+        return;
+      }
+      saveLocale(chosen);
+      setLocale(chosen);
+      options.onLocaleChange();
+    });
+    return select;
+  }
 
+  const langSelect = buildLangSelect('lobby-lang');
   header.append(heading, langSelect);
 
-  // Formulář přezdívky (`entry`/`connecting`). Submit = vstup do místnosti.
-  const form = document.createElement('form');
-  form.className = 'lobby-join';
-  const nickInput = document.createElement('input');
-  nickInput.type = 'text';
-  nickInput.className = 'lobby-nick';
-  nickInput.setAttribute('aria-label', t('lobby.nickAria'));
-  nickInput.placeholder = t('lobby.nickPlaceholder');
-  nickInput.maxLength = NICK_MAX_LENGTH;
-  nickInput.value = loadSavedNick();
-  const joinBtn = document.createElement('button');
-  joinBtn.type = 'submit';
-  joinBtn.className = 'lobby-join-btn';
-  joinBtn.textContent = t('lobby.joinBtn');
-  form.append(nickInput, joinBtn);
-
-  // Hláška: stav připojování, obsazená přezdívka (návrh), chyba validace ze serveru.
+  // Hláška stavu: „Připojuji…" během connectu, jinak skrytá. Obsazená přezdívka i
+  // chyby validace nicku jdou do MODALU přezdívky (fáze 108), ne sem.
   const message = document.createElement('p');
   message.className = 'lobby-msg hidden';
 
-  // Pohled místnosti (`connected` – předsíň i členství): nahoře přezdívka + Odpojit,
-  // stav výzev, pak ŽIVÝ AKORDEON 4 lobby (fáze 106).
+  // JEDINÁ vstupní stránka (fáze 108): předsíň i členství sdílí jeden pohled. Nahoře
+  // „Jsi přihlášen jako X" (klik = změnit přezdívku), pod tím stav výzev a ŽIVÝ
+  // AKORDEON 4 lobby. Žádný oddělený `entry` formulář ani „Odpojit" – identitu řeší
+  // modal. `room` je viditelný pořád (skryje ho jen `disconnected` pohled).
   const room = document.createElement('div');
-  room.className = 'lobby-room hidden';
+  room.className = 'lobby-room';
 
-  // Hlavička místnosti: „Jsi tu jako {nick}" (fáze 104) + tlačítko Odpojit (fáze 106,
-  // návrat do form-first bez pádu spojení).
+  // „Jsi přihlášen jako {nick}" jako TLAČÍTKO: klik reotevře modal přezdívky (změna
+  // identity) – nahrazuje zrušené „Odpojit". Text i viditelnost řídí `renderRoom`
+  // (prázdný nick = skrytý, dokud nejsem připojen). `title`/`aria-label` napoví účel.
   const roomHeader = document.createElement('div');
   roomHeader.className = 'lobby-room-header';
-  const nickLine = document.createElement('p');
+  const nickLine = document.createElement('button');
+  nickLine.type = 'button';
   nickLine.className = 'lobby-nick-line';
-  const disconnectBtn = document.createElement('button');
-  disconnectBtn.type = 'button';
-  disconnectBtn.className = 'lobby-disconnect-btn';
-  disconnectBtn.textContent = t('lobby.disconnectBtn');
-  roomHeader.append(nickLine, disconnectBtn);
+  nickLine.setAttribute('aria-label', t('lobby.changeNick'));
+  nickLine.title = t('lobby.changeNick');
+  roomHeader.append(nickLine);
 
   // Stav MÉ odchozí výzvy (čekám na odpověď) – skrytý, když žádná neběží.
   const outgoing = document.createElement('p');
@@ -424,15 +412,58 @@ export function createLobby(options: LobbyOptions): Lobby {
   soloRow.className = 'lobby-solo';
   soloRow.append(soloVariant.element, soloBtn);
 
-  card.append(header, form, message, room, disconnected, soloRow);
-  element.append(card, challengeModal);
+  // MODAL PŘEZDÍVKY (fáze 108) – jediná brána identity. Reuse CSP-bezpečných tříd
+  // `.modal-overlay`/`.modal-dialog` (žádné inline styly). Obsahuje: titulek, hlášku
+  // (prázdný/obsazený nick), input, VLASTNÍ přepínač jazyka (dosažitelný i přes
+  // overlay) a tlačítka Uložit/Zrušit. „Zrušit" je vidět jen když JE modal zavíratelný
+  // (změna nicku existující identity); při PRVNÍM načtení (bez identity) chybí a Esc/
+  // klik mimo nic nedělají – bez nicku ze stránky neodejdeš (jinak žádná identita a
+  // počty se nenačtou).
+  const nickModal = document.createElement('div');
+  nickModal.className = 'modal-overlay lobby-nick-modal hidden';
+  const nickDialog = document.createElement('div');
+  nickDialog.className = 'modal-dialog';
+  nickDialog.setAttribute('role', 'dialog');
+  nickDialog.setAttribute('aria-modal', 'true');
+  nickDialog.setAttribute('aria-label', t('lobby.nickModalAria'));
+  const nickTitle = document.createElement('h2');
+  nickTitle.className = 'modal-msg';
+  nickTitle.textContent = t('lobby.nickModalTitle');
+  const nickModalMsg = document.createElement('p');
+  nickModalMsg.className = 'modal-notice hidden';
+  const nickInput = document.createElement('input');
+  nickInput.type = 'text';
+  nickInput.className = 'lobby-nick';
+  nickInput.setAttribute('aria-label', t('lobby.nickAria'));
+  nickInput.placeholder = t('lobby.nickPlaceholder');
+  nickInput.maxLength = NICK_MAX_LENGTH;
+  const nickModalLang = buildLangSelect('lobby-nick-lang');
+  const nickActions = document.createElement('div');
+  nickActions.className = 'modal-actions';
+  const nickSaveBtn = document.createElement('button');
+  nickSaveBtn.type = 'button';
+  nickSaveBtn.className = 'lobby-nick-save-btn';
+  nickSaveBtn.textContent = t('lobby.nickSaveBtn');
+  const nickCancelBtn = document.createElement('button');
+  nickCancelBtn.type = 'button';
+  nickCancelBtn.className = 'lobby-nick-cancel-btn';
+  nickCancelBtn.textContent = t('lobby.nickCancelBtn');
+  nickActions.append(nickSaveBtn, nickCancelBtn);
+  nickDialog.append(nickTitle, nickModalMsg, nickInput, nickModalLang, nickActions);
+  nickModal.append(nickDialog);
+
+  card.append(header, message, room, disconnected, soloRow);
+  element.append(card, challengeModal, nickModal);
 
   // Přezdívka posledního úspěšného/pokusného vstupu – pro „Připojit znovu".
   let lastNick = '';
-  // `true`, jakmile jsme se aspoň jednou dostali do místnosti. Rozlišuje hlášku
-  // odpojení: pád PŘED vstupem = „nepodařilo se připojit" (server dole / timeout),
-  // pád PO vstupu = „spojení se přerušilo".
-  let joinedOnce = false;
+  // `true`, jakmile connect JEDNOU uspěl (dorazil první snímek/roster). Rozlišuje (a)
+  // hlášku odpojení: pád PŘED úspěšným connectem = „nepodařilo se připojit", PO něm =
+  // „spojení se přerušilo"; (b) zavíratelnost modalu přezdívky: dokud nemám funkční
+  // identitu, modal nejde zavřít bez nicku (jinak bych uvázl bez připojení). Chyby
+  // nicku (obsazený/dlouhý) PŘED prvním úspěchem míří do modalu, PO něm jsou to už
+  // chyby výzev/vstupu → notice v předsíni.
+  let connectedOnce = false;
   // Poslední all-roster snímek všech 4 lobby (fáze 104) – z něj akordeon kreslí
   // obsazení místností. Držíme ho, ať jde překreslit (disabled tlačítka „Vyzvat"
   // při změně odchozí výzvy, přepnutí rozbalené sekce) bez čekání na nový snímek.
@@ -457,9 +488,15 @@ export function createLobby(options: LobbyOptions): Lobby {
   let pendingSwitch = false;
   // `true`, dokud čeká MOJE odchozí výzva – tehdy nejdou vyzývat další (max-1).
   let outgoingPending = false;
-  // Aktuální pohled – rozhoduje, kam mířit serverovou chybu: PŘED vstupem na formulář
-  // nicku, PO vstupu (`joined`) jen jako hláška (viz `onError`).
-  let currentView: View = 'entry';
+  // `true`, dokud mám ŽIVÉ spojení do místnosti (dorazil snímek, ještě nespadlo). Řídí,
+  // jestli „Vstoupit" v akordeonu rovnou vstoupí, nebo napřed otevře modal přezdívky
+  // (bez připojení nemá `enter` kam jít). Mění se s connectem/pádem, ne jen jednou.
+  let connected = false;
+  // Aktuální pohled (fáze 108): `connecting` po odeslání connectu, `connected` v
+  // předsíni/místnosti, `disconnected` po pádu. Rozhoduje i směr serverové chyby
+  // (viz `onError`). Startuje `connecting`, protože při načtení buď rovnou auto-
+  // connectneme uloženým nickem, nebo čekáme na nick z modalu (bez živé chyby).
+  let currentView: View = 'connecting';
   // Handler chyb tahu za běhu PvP partie (registruje ho herní obrazovka přes `GameLink`).
   // Když je nastavený, chyby z room WS jdou do hry, ne do (odpojeného) pohledu místnosti.
   // `null` mimo partii → chyby řeší běžná cesta lobby (notice / formulář nicku).
@@ -478,7 +515,8 @@ export function createLobby(options: LobbyOptions): Lobby {
     {
       onJoined: (roster) => {
         // Roster = vstup do konkrétní lobby (enter/switch uspěl, fáze 106). Jsem člen.
-        joinedOnce = true;
+        connectedOnce = true;
+        connected = true;
         pendingSwitch = false; // úspěšný přechod dorazí jako roster cílové lobby
         // Přezdívku vezmi z rosteru (položka `isSelf`), fallback poslední zadaná.
         myNick = roster.find((r) => r.isSelf)?.nick ?? lastNick;
@@ -489,6 +527,12 @@ export function createLobby(options: LobbyOptions): Lobby {
         // All-roster snímek všech 4 lobby (fáze 104) – jediný zdroj obsazení pro akordeon.
         // Přijde i jako PRVNÍ odpověď na connect (fáze 106): tehdy nejsem v žádném
         // rosteru → `selfLobby` undefined → `myVariant=null` (předsíň).
+        // ZÁMĚRNĚ tu NEzavírám modal přezdívky: `submitNick` ho zavírá optimisticky už
+        // při Uložit, takže při úspěchu je stejně zavřený. Naopak DOBROVOLNĚ otevřený
+        // modal změny nicku (jsem připojen) by tenhle broadcast (kdokoli join/left →
+        // `lobbies` všem) jinak zavíral uprostřed psaní.
+        connectedOnce = true; // první snímek = connect uspěl (i pro předsíň bez vstupu)
+        connected = true;
         currentLobbies = lobbies;
         const selfLobby = lobbies.find((l) => l.players.some((p) => p.isSelf));
         myVariant = selfLobby?.variant ?? null;
@@ -516,6 +560,9 @@ export function createLobby(options: LobbyOptions): Lobby {
         renderOutgoing(pending);
       },
       onChallengeAccepted: (info) => {
+        // Přechod do hry: zavři případný otevřený modal přezdívky, ať se s odpojeným
+        // lobby.element nepřenese do hry a zpět (jsem připojen → jen skrýt, bez resetu).
+        closeNickModal();
         // Most zpět k živému room WS pro herní obrazovku. `move`/`resign`/remízové
         // příkazy uzavírají `gameId` této partie; `onError` směruje chyby (odmítnutý
         // tah i odmítnutý příkaz remízy) do hry, dokud je registrovaný.
@@ -614,11 +661,16 @@ export function createLobby(options: LobbyOptions): Lobby {
         showNotice(text);
       },
       onNickTaken: (suggestion) => {
-        setView('entry');
+        // Obsazená přezdívka (i při AUTO-connectu z LocalStorage – např. dvě záložky
+        // se stejným nickem). Řeší se V MODALU (fáze 108): otevři ho s návrhem a hláškou.
+        // `suggestion` posílá server jako DATA – lokalizuje se jen okolní věta. Modal je
+        // tu VŽDY nezavíratelný: nick-taken znamená, že aktuální pokus o connect NEuspěl,
+        // takže NEMÁM živou identitu (u změny nicku jsme starou při Uložit už odpojili).
+        // „Zrušit" ji zavře → padnu na nepřipojenou stránku se sólem a „Přihlásit se ke
+        // hře s lidmi" (žádná past), takže modal je zavíratelný jako všude jinde.
+        openNickModal();
         nickInput.value = suggestion;
-        // Náhradní přezdívku (`suggestion`) posílá server jako DATA; klient jen
-        // skládá okolní hlášku – ta se lokalizuje, `suggestion` se dosadí doslova.
-        setMessage(t('lobby.nickTaken', { suggestion }));
+        setNickModalMsg(t('lobby.nickTaken', { suggestion }));
         nickInput.focus();
         nickInput.select();
       },
@@ -643,20 +695,22 @@ export function createLobby(options: LobbyOptions): Lobby {
           return;
         }
         // Server posílá `error` i pro CHYBY VÝZEV (vyzvaný už hraje, dvojitá/křížová
-        // výzva, „výzva už neplatí") a chyby vstupu do lobby (`enter`). Když už jsem
-        // připojen (předsíň i členství), NEvyhazuj na formulář nicku (re-connect by
-        // byl no-op → zásek na „Připojuji…") – ukaž jen hlášku a zůstaň v pohledu
-        // místnosti. Formulář je jen pro chyby PŘED připojením (nick).
-        if (currentView === 'connected') {
+        // výzva, „výzva už neplatí") a chyby vstupu do lobby (`enter`). Když mám ŽIVÉ
+        // spojení (`connected`), je to provozní chyba → jen hláška v předsíni (notice),
+        // zůstaň připojený. Když spojení NEmám (probíhal connect – první, změna nicku
+        // i reconnect), je to chyba přezdívky (moc dlouhá apod.) → do MODALU přezdívky,
+        // ať uživatel neuvázne v „Připojuji…" bez cesty ven.
+        if (connected) {
           showNotice(text);
           return;
         }
-        setView('entry');
-        setMessage(text);
+        openNickModal();
+        setNickModalMsg(text);
         nickInput.focus();
       },
       onDisconnected: () => {
-        disconnectedMsg.textContent = joinedOnce
+        connected = false;
+        disconnectedMsg.textContent = connectedOnce
           ? t('lobby.disconnectedAfter')
           : t('lobby.disconnectedBefore');
         setView('disconnected');
@@ -674,30 +728,27 @@ export function createLobby(options: LobbyOptions): Lobby {
     message.classList.toggle('hidden', text === '');
   }
 
-  /** Přepne viditelné sekce a stav formuláře podle stavu obrazovky. */
+  /**
+   * Přepne viditelné sekce podle stavu obrazovky (fáze 108). `room` (jedna vstupní
+   * stránka) je vidět v `connecting` i `connected`; skryje ho jen `disconnected`
+   * pohled. `connecting` ukáže hlášku „Připojuji…" a vyčistí stav výzev z případného
+   * padlého spojení; `connected`/`disconnected` hlášku smažou. Přepínač jazyka je
+   * teď VŽDY vidět (viz `buildLangSelect`) – po rebuildu se auto-connectne.
+   */
   function setView(view: View): void {
     currentView = view;
-    const showForm = view === 'entry' || view === 'connecting';
-    form.classList.toggle('hidden', !showForm);
-    room.classList.toggle('hidden', view !== 'connected');
+    room.classList.toggle('hidden', view === 'disconnected');
     disconnected.classList.toggle('hidden', view !== 'disconnected');
-    // Přepínač jazyka jen v `entry`: mimo něj (connecting/joined/disconnected) žije
-    // room WS a jeho rebuild přes `onLocaleChange` by spojení zavřel (fáze 84).
-    langSelect.classList.toggle('hidden', view !== 'entry');
-    const connecting = view === 'connecting';
-    nickInput.disabled = connecting;
-    joinBtn.disabled = connecting;
-    if (connecting) {
+    if (view === 'connecting') {
       setMessage(t('lobby.connecting'));
-      // Nový pokus o vstup: zahoď stav výzev z předchozího (padlého) spojení –
+      // Nový pokus o připojení: zahoď stav výzev z předchozího (padlého) spojení –
       // room-client ho interně taky vyčistil, ale prázdné seznamy sám neposílá.
       renderIncoming([]);
       renderOutgoing(null);
       showNotice('');
-    } else if (view === 'connected' || view === 'disconnected') {
+    } else {
       setMessage('');
     }
-    // `entry` hlášku nemaže – nese případný důvod (obsazený nick / chyba validace).
   }
 
   /**
@@ -709,7 +760,11 @@ export function createLobby(options: LobbyOptions): Lobby {
    * inkrementální diff (rostery jsou malé, jednoduchost > úspora).
    */
   function renderRoom(): void {
-    nickLine.textContent = myNick === '' ? '' : t('lobby.loggedInAs', { nick: myNick });
+    // Tlačítko nad akordeonem, VŽDY viditelné (klik = otevřít modal přezdívky): mám-li
+    // nick, „Jsi přihlášen jako X" (změna nicku); bez nicku „Přihlásit se ke hře s
+    // lidmi" (přihlášení). Je to jediná cesta, jak modal znovu otevřít po jeho zavření –
+    // proto se neschovává (jinak by se solo-hráč po zavření modalu k PvP už nedostal).
+    nickLine.textContent = myNick === '' ? t('lobby.signIn') : t('lobby.loggedInAs', { nick: myNick });
     accordion.replaceChildren(...VARIANT_IDS.map((id) => buildSection(id)));
   }
 
@@ -775,6 +830,14 @@ export function createLobby(options: LobbyOptions): Lobby {
       enterBtn.className = 'lobby-enter-btn';
       enterBtn.textContent = t('lobby.enterLobbyBtn');
       enterBtn.addEventListener('click', () => {
+        // Nepřipojen (solo-hráč zavřel modal přezdívky) → „Vstoupit" nemá kam jít
+        // (`enter` guarduje na připojení). Místo mrtvého tlačítka otevři modal
+        // přihlášení; po připojení už vstup funguje běžně.
+        if (!connected) {
+          nickInput.value = myNick;
+          openNickModal();
+          return;
+        }
         // Po vstupu ať sekce zůstane rozbalená (ukáže Vyzvat). Server přesune členství
         // a pošle nový snímek (onLobbies), který myVariant přepočítá.
         expandedVariant = id;
@@ -884,46 +947,133 @@ export function createLobby(options: LobbyOptions): Lobby {
     notice.classList.toggle('hidden', text === '');
   }
 
-  /** Odešle PŘIPOJENÍ do předsíně s aktuální přezdívkou (prázdnou odmítne už klient). */
-  function submitJoin(): void {
-    const nick = nickInput.value.trim();
-    if (nick === '') {
-      setView('entry');
-      setMessage(t('lobby.enterNick'));
-      nickInput.focus();
-      return;
-    }
-    lastNick = nick;
-    // Přezdívku ukaž v labelu hned po připojení – server ji jen trimuje, takže se
-    // shoduje. V předsíni ještě nejsem v žádném rosteru, odkud by ji šlo dopočítat.
-    myNick = nick;
-    saveNick(nick);
-    setView('connecting');
-    room_client.connect(nick);
-  }
-
-  form.addEventListener('submit', (event) => {
-    event.preventDefault(); // formulář neposílat HTTP requestem, řešíme přes WS
-    submitJoin();
-  });
-  reconnectBtn.addEventListener('click', () => {
-    myNick = lastNick;
-    setView('connecting');
-    room_client.connect(lastNick); // reconnect → zpět do PŘEDSÍNĚ (ne auto-re-enter)
-  });
-  disconnectBtn.addEventListener('click', () => {
-    // Záměrné odpojení: zavři spojení a vrať se do form-first (klient zůstává
-    // použitelný, další connect otevře čerstvý socket). Vyresetuj i lokální stav
-    // předsíně/členství, ať se po dalším připojení nemíchá se starým snímkem.
-    room_client.disconnect();
+  /** Vyresetuje lokální stav předsíně/členství před (re)connectem, ať se snímky nemíchají. */
+  function resetPresence(): void {
     myVariant = null;
     currentLobbies = [];
     hasAutoExpanded = false;
-    joinedOnce = false;
-    renderIncoming([]); // zavři případný modal výzvy
+    renderIncoming([]); // zavři případný modal příchozí výzvy
     renderOutgoing(null);
     showNotice('');
-    setView('entry');
+  }
+
+  /**
+   * (RE)connect s přezdívkou `nick`: zapamatuj ji, ukaž hned v labelu, ulož do
+   * LocalStorage (příště AUTO-connect), zahoď starou identitu i stav předsíně a otevři
+   * čerstvé spojení. Sdílené prvním připojením, ZMĚNOU nicku i reconnectem po pádu.
+   * `disconnect()` před `connect()` zavře případný starý socket (u změny nicku); bez
+   * socketu (první connect) je to neškodný no-op.
+   */
+  function startConnect(nick: string): void {
+    lastNick = nick;
+    myNick = nick;
+    saveNick(nick);
+    connected = false; // stará identita padá; `connected` naskočí až s prvním snímkem
+    room_client.disconnect();
+    resetPresence();
+    setView('connecting');
+    renderRoom(); // ukaž „Jsi přihlášen jako X" hned (label + prázdný akordeon)
+    room_client.connect(nick);
+  }
+
+  /** Text hlášky uvnitř modalu přezdívky (obsazený/dlouhý nick); prázdná ji skryje. */
+  function setNickModalMsg(text: string): void {
+    nickModalMsg.textContent = text;
+    nickModalMsg.classList.toggle('hidden', text === '');
+  }
+
+  /**
+   * Otevře modal přezdívky. VŽDY zavíratelný (Zrušit/Esc/klik mimo): „Hrát proti
+   * počítači" jde i bez přihlášení, takže modal nesmí být past – po zavření zůstane
+   * stránka použitelná (solo + „Přihlásit se ke hře s lidmi" pro pozdější PvP). Nezmění
+   * už vyplněný input (volající si ho nastaví: návrh serveru / aktuální nick).
+   */
+  function openNickModal(): void {
+    setNickModalMsg('');
+    if (nickInput.value.trim() === '') {
+      nickInput.value = myNick !== '' ? myNick : loadSavedNick();
+    }
+    nickModal.classList.remove('hidden');
+    nickInput.focus();
+    nickInput.select();
+  }
+
+  /** Zavře modal přezdívky (a vyčistí jeho hlášku). Nesahá na stav spojení – používá
+   *  ho i `submitNick` těsně PŘED `startConnect` (optimistické zavření při Uložit). */
+  function closeNickModal(): void {
+    nickModal.classList.add('hidden');
+    setNickModalMsg('');
+  }
+
+  /**
+   * UŽIVATELSKÉ zavření modalu (Zrušit/Esc/klik mimo). Když jsem u toho NEBYL připojený
+   * (dismiss na prvním načtení nebo na NEZDAŘENÉM connectu – nick-taken/chyba, kde
+   * room-client drží půlotevřený socket), zahoď rozdělaný pokus a vrať stránku do
+   * čistého NEPŘIHLÁŠENÉHO stavu: žádné lživé „Jsi přihlášen jako X" a žádné zaseklé
+   * „Připojuji…". Jinak (změna nicku za živa) jen zavře.
+   */
+  function dismissNickModal(): void {
+    closeNickModal();
+    if (!connected) {
+      room_client.disconnect(); // zavři půlotevřený socket nezdařeného connectu
+      myNick = '';
+      setMessage('');
+      renderRoom(); // label zpět na „Přihlásit se ke hře s lidmi"
+    }
+  }
+
+  /**
+   * Uloží nick z modalu a připojí. Prázdný odmítne (hláška v modalu, nezavírá).
+   * Změna na TÝŽ nick (a už jsem připojen) jen zavře – žádný zbytečný reconnect.
+   * Jinak zavři OPTIMISTICKY a připoj; `nick-taken`/chyba modal zase otevře.
+   */
+  function submitNick(): void {
+    const nick = nickInput.value.trim();
+    if (nick === '') {
+      setNickModalMsg(t('lobby.enterNick'));
+      nickInput.focus();
+      return;
+    }
+    if (connected && nick === myNick) {
+      closeNickModal(); // připojen pod týmž nickem → nic neměň, jen zavři
+      return;
+    }
+    closeNickModal();
+    startConnect(nick);
+  }
+
+  nickSaveBtn.addEventListener('click', submitNick);
+  // Input je mimo `<form>` (celý modal je CSP-safe overlay) → Enter obsloužíme ručně.
+  nickInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      submitNick();
+    }
+  });
+  nickCancelBtn.addEventListener('click', dismissNickModal);
+  // Klik na ztmavené pozadí i Esc zavřou modal (vždy – viz `openNickModal`).
+  nickModal.addEventListener('click', (event) => {
+    if (event.target === nickModal) {
+      dismissNickModal();
+    }
+  });
+  const onNickModalKeydown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && !nickModal.classList.contains('hidden')) {
+      dismissNickModal();
+    }
+  };
+  document.addEventListener('keydown', onNickModalKeydown);
+
+  // Tlačítko nad akordeonem → otevři modal přezdívky (přihlášení / změna nicku).
+  // Předvyplň aktuální nick, ať uživatel jen upraví (prázdný u nepřihlášeného).
+  nickLine.addEventListener('click', () => {
+    nickInput.value = myNick;
+    openNickModal();
+  });
+
+  reconnectBtn.addEventListener('click', () => {
+    // Znovupřipojení po pádu: connect posledním/uloženým nickem zpět do PŘEDSÍNĚ.
+    startConnect(lastNick !== '' ? lastNick : loadSavedNick());
   });
   soloBtn.addEventListener('click', () => {
     // Jediný zdroj varianty = picker; LocalStorage je jen jeho odraz (ulož TEĎ, ať
@@ -933,11 +1083,22 @@ export function createLobby(options: LobbyOptions): Lobby {
     options.onPlayVsComputer(variant);
   });
 
-  setView('entry');
+  // Init (fáze 108): uložená přezdívka → rovnou AUTO-connect (žádný modal, předsíň
+  // s živými počty). Bez ní → rovnou nabídni modal přezdívky (zavíratelný – kdo chce
+  // hrát jen proti počítači, ho zavře a stránku dál používá; PvP si otevře přes
+  // „Přihlásit se ke hře s lidmi").
+  renderRoom(); // podklad: „Přihlásit se…" + prázdný akordeon (počty dorovná první snímek)
+  const savedNick = loadSavedNick();
+  if (savedNick !== '') {
+    startConnect(savedNick);
+  } else {
+    openNickModal();
+  }
 
   return {
     element,
     dispose: () => {
+      document.removeEventListener('keydown', onNickModalKeydown); // globální listener nesmí přežít lobby
       room_client.dispose();
     },
   };

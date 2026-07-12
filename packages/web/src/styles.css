@@ -732,30 +732,53 @@ body {
   flex-direction: column;
 }
 
-/* Hlavička místnosti (fáze 106): přezdívka vlevo, Odpojit vpravo. */
+/* Hlavička místnosti (fáze 108): jen „Jsi přihlášen jako X" vlevo (Odpojit zrušeno). */
 .lobby-room-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.6rem;
   margin-bottom: 0.6rem;
 }
 
-/* Přezdívka nad akordeonem (fáze 104). */
-.lobby-nick-line {
+/* „Jsi přihlášen jako {nick}" (fáze 108): TLAČÍTKO, ale vypadá jako klikatelný text
+   (klik = změnit přezdívku). Zruší se mu chrome z obecného `.lobby-card button`
+   (proto vyšší specificita `button.lobby-nick-line`); podtržení napoví klikatelnost. */
+button.lobby-nick-line {
   margin: 0;
+  padding: 0.1rem 0;
   font-size: 1rem;
   font-weight: 600;
   color: #cdd;
+  background: none;
+  border: none;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-/* Odpojit (fáze 106): decentní, ať netahá pozornost od akordeonu. */
-.lobby-disconnect-btn {
-  flex: none;
+button.lobby-nick-line:hover {
+  color: #fff;
+  background: none;
+}
+
+/* Modal přezdívky (fáze 108): input a přepínač jazyka na plnou šířku dialogu. */
+.modal-dialog .lobby-nick {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.lobby-nick-lang {
+  padding: 0.4rem 0.5rem;
   font-size: 0.9rem;
-  padding: 0.4rem 0.7rem;
+  border: 1px solid #666;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
 }
 
 /* --- Akordeon 4 varianta-lobby (fáze 104) -------------------------------- */
