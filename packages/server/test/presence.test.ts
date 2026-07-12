@@ -272,3 +272,84 @@ describe('Lobbies.remove / switchLobby', () => {
     expect(lobbies.switchLobby('neznam', 'russian').status).toBe('not-joined');
   });
 });
+
+describe('Lobbies.connect / enter – předsíň (fáze 105)', () => {
+  it('connect zaregistruje identitu BEZ členství (nejsem v žádném rosteru, totalCount roste)', () => {
+    const lobbies = new Lobbies();
+    const c = lobbies.connect('Honza', fakeSocket());
+    expect(c.status).toBe('ok');
+    if (c.status !== 'ok') return;
+    // Připojen (identita existuje), ale ne-člen: variantOf je null, žádná lobby ho nemá.
+    expect(lobbies.totalCount()).toBe(1);
+    expect(lobbies.variantOf(c.player.id)).toBeNull();
+    for (const v of ['american', 'pool', 'russian', 'czech'] as const) {
+      expect(lobbies.room(v).has(c.player.id)).toBe(false);
+    }
+  });
+
+  it('globální unikátnost nicku platí i pro connect (přes lobby i předsíň)', () => {
+    const lobbies = new Lobbies();
+    lobbies.connect('Honza', fakeSocket());
+    // Druhý connect téhož nicku (case-insensitive) → nick-taken.
+    expect(lobbies.connect('honza', fakeSocket()).status).toBe('nick-taken');
+    // A join téhož nicku taky (sdílený registr identit).
+    expect(lobbies.join('HONZA', 'russian', fakeSocket()).status).toBe('nick-taken');
+  });
+
+  it('connect validuje nick stejně jako join (prázdný/dlouhý → invalid)', () => {
+    const lobbies = new Lobbies();
+    expect(lobbies.connect('   ', fakeSocket()).status).toBe('invalid');
+    expect(lobbies.connect('x'.repeat(NICK_MAX_LENGTH + 1), fakeSocket()).status).toBe('invalid');
+    expect(lobbies.totalCount()).toBe(0); // nic se nezapsalo
+  });
+
+  it('enter přidá ne-člena do rosteru zvolené lobby (null → člen)', () => {
+    const lobbies = new Lobbies();
+    const sock = fakeSocket();
+    const c = lobbies.connect('Honza', sock);
+    if (c.status !== 'ok') throw new Error('setup');
+
+    const res = lobbies.enter(c.player.id, 'russian');
+    expect(res.status).toBe('ok');
+    if (res.status !== 'ok') return;
+    expect(res.variant).toBe('russian');
+    expect(lobbies.variantOf(c.player.id)).toBe('russian');
+    expect(lobbies.room('russian').has(c.player.id)).toBe(true);
+    // Socket cestuje s identitou → broadcast v lobby ho zasáhne.
+    lobbies.room('russian').broadcast('ahoj');
+    expect(sock.sent).toEqual(['ahoj']);
+  });
+
+  it('enter neznámé identity → not-joined', () => {
+    const lobbies = new Lobbies();
+    expect(lobbies.enter('neznam', 'russian').status).toBe('not-joined');
+  });
+
+  it('remove ne-člena (předsíň) jen zahodí identitu, žádná room ho neřeší', () => {
+    const lobbies = new Lobbies();
+    const c = lobbies.connect('Honza', fakeSocket());
+    if (c.status !== 'ok') throw new Error('setup');
+    expect(() => lobbies.remove(c.player.id)).not.toThrow();
+    expect(lobbies.totalCount()).toBe(0);
+    // Přezdívka se uvolní globálně.
+    expect(lobbies.connect('Honza', fakeSocket()).status).toBe('ok');
+  });
+
+  it('sendTo ne-členu doručí přímo na jeho socket (není v žádné room)', () => {
+    const lobbies = new Lobbies();
+    const sock = fakeSocket();
+    const c = lobbies.connect('Honza', sock);
+    if (c.status !== 'ok') throw new Error('setup');
+    expect(lobbies.sendTo(c.player.id, 'primo')).toBe(true);
+    expect(sock.sent).toEqual(['primo']);
+  });
+
+  it('broadcastAll zasáhne i ne-člena předsíně (dostane all-roster snímek)', () => {
+    const lobbies = new Lobbies();
+    const sock = fakeSocket();
+    const c = lobbies.connect('Host', sock);
+    if (c.status !== 'ok') throw new Error('setup');
+    lobbies.broadcastAll('snimek');
+    expect(sock.sent).toEqual(['snimek']);
+  });
+});

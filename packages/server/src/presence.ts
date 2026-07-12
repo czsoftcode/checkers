@@ -305,10 +305,15 @@ export class RoomPresence {
   }
 }
 
-/** Globální identita hráče: přezdívka + lobby (varianta), ve které je + socket. */
+/**
+ * Globální identita hráče: přezdívka + socket + lobby, ve které je člen. `variant`
+ * je `null` u PŘEDSÍNĚ (fáze 105): hráč je připojený (`connect`), má přezdívku a
+ * dostává all-roster snímek, ale NENÍ členem žádné lobby (v žádném rosteru) – dokud
+ * nezvolí lobby přes `enter`. Legacy `join` (fáze 103) přiřadí členství rovnou.
+ */
 interface Identity {
   readonly nick: string;
-  readonly variant: VariantId;
+  readonly variant: VariantId | null;
   readonly socket: RoomSocket;
 }
 
@@ -354,6 +359,25 @@ export class Lobbies {
    * návrhem) nebo `invalid` (s důvodem).
    */
   join(rawNick: string, variant: VariantId, socket: RoomSocket): JoinResult {
+    // Legacy join (fáze 103) = connect + okamžité členství. Skládá se z `connect`
+    // (register + validace) a `assignLobby` (null → člen), aby validace nicku žila
+    // na JEDNOM místě. Chování pro stávající klienty/testy je beze změny.
+    const result = this.connect(rawNick, socket);
+    if (result.status !== 'ok') {
+      return result;
+    }
+    this.assignLobby(result.player.id, variant);
+    return result;
+  }
+
+  /**
+   * PŘEDSÍŇ (fáze 105): zaregistruje GLOBÁLNÍ identitu BEZ členství (`variant=null`).
+   * Trim → validace → globální kontrola obsazenosti (stejná jako `join`). Při úspěchu
+   * přidělí session `id`, zapíše identitu s `variant=null` a vrátí `ok`. Hráč NENÍ v
+   * žádném rosteru (žádná room), ale `broadcastAll` ho zasáhne (iteruje identity), takže
+   * all-roster snímek dostane. Do lobby vstoupí až přes {@link enter}.
+   */
+  connect(rawNick: string, socket: RoomSocket): JoinResult {
     const nick = rawNick.trim();
     if (nick.length === 0) {
       return { status: 'invalid', reason: 'Přezdívka nesmí být prázdná.' };
@@ -368,9 +392,19 @@ export class Lobbies {
       return { status: 'nick-taken', suggestion: this.suggestFreeNick(nick) };
     }
     const id = randomUUID();
-    this.identities.set(id, { nick, variant, socket });
-    this.room(variant).add({ id, nick }, socket);
+    this.identities.set(id, { nick, variant: null, socket });
     return { status: 'ok', player: { id, nick } };
+  }
+
+  /**
+   * PRVNÍ vstup do lobby z předsíně (fáze 105): připojený ne-člen (`variant=null`)
+   * se stane členem lobby `target` (add do room). Sdílí jádro se {@link switchLobby}
+   * ({@link assignLobby}), takže zvládne i (nepravděpodobný) přechod člena – app to
+   * ale volá jen pro ne-člena. `not-joined` když identita neexistuje; `same` když už
+   * je v cílové lobby.
+   */
+  enter(id: string, target: VariantId): SwitchLobbyResult {
+    return this.assignLobby(id, target);
   }
 
   /**
@@ -383,11 +417,18 @@ export class Lobbies {
       return;
     }
     this.identities.delete(id);
-    this.room(identity.variant).remove(id);
+    // Ne-člen předsíně (`variant=null`) není v žádné room → nic neodebírej (fáze 105).
+    if (identity.variant !== null) {
+      this.room(identity.variant).remove(id);
+    }
   }
 
-  /** Varianta (lobby) hráče `id`, nebo `undefined` když není přihlášen. */
-  variantOf(id: string): VariantId | undefined {
+  /**
+   * Lobby hráče `id`: `VariantId` když je člen, `null` když je připojen v předsíni
+   * (bez členství, fáze 105), `undefined` když není přihlášen. Volající MUSÍ null
+   * odlišit od varianty (ne-člen nejde vyzvat / nepatří do rosteru).
+   */
+  variantOf(id: string): VariantId | null | undefined {
     return this.identities.get(id)?.variant;
   }
 
@@ -399,6 +440,17 @@ export class Lobbies {
    * registr hry nezná (proto sem přechod za běhu partie vůbec nesmí dorazit).
    */
   switchLobby(id: string, target: VariantId): SwitchLobbyResult {
+    return this.assignLobby(id, target);
+  }
+
+  /**
+   * Sdílené jádro {@link enter} a {@link switchLobby} (fáze 105): přiřadí hráči `id`
+   * členství v lobby `target`. Z předsíně (`variant=null`) jen PŘIDÁ do room; z jiné
+   * lobby (člen) nejdřív odebere ze staré a pak přidá do cílové (chování `switchLobby`
+   * z fáze 103 je pro člena BYTE-IDENTICKÉ – null větev se ho netýká). `not-joined`
+   * když identita neexistuje; `same` když už je v cílové lobby (no-op).
+   */
+  private assignLobby(id: string, target: VariantId): SwitchLobbyResult {
     const identity = this.identities.get(id);
     if (identity === undefined) {
       return { status: 'not-joined' };
@@ -406,7 +458,10 @@ export class Lobbies {
     if (identity.variant === target) {
       return { status: 'same' };
     }
-    this.room(identity.variant).remove(id);
+    // Člen: opusť starou lobby. Ne-člen předsíně (null): není odkud odejít – jen se přidá.
+    if (identity.variant !== null) {
+      this.room(identity.variant).remove(id);
+    }
     this.identities.set(id, { nick: identity.nick, variant: target, socket: identity.socket });
     this.room(target).add({ id, nick: identity.nick }, identity.socket);
     return { status: 'ok', variant: target };
@@ -421,6 +476,21 @@ export class Lobbies {
     const identity = this.identities.get(id);
     if (identity === undefined) {
       return false;
+    }
+    // Ne-člen předsíně (`variant=null`) není v žádné room → doruč přímo na jeho socket
+    // (fáze 105). V tomto řezu sem směrovaná zpráva pro ne-člena nechodí (výzvy jsou pro
+    // ne-členy zakázané), ale přímé doručení je bezpečné a nemaskuje null defaultem.
+    if (identity.variant === null) {
+      if (identity.socket.readyState !== WS_OPEN) {
+        return false;
+      }
+      try {
+        identity.socket.send(payload);
+        return true;
+      } catch (error) {
+        console.error(`Lobbies: přímé odeslání ne-členu ${id} selhalo:`, error);
+        return false;
+      }
     }
     return this.room(identity.variant).sendTo(id, payload);
   }

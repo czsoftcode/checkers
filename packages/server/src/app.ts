@@ -261,7 +261,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       // Nick držíme kvůli výzvám (fáze 68): `challenged` nese přezdívku vyzyvatele.
       // `variant` = lobby, ve které hráč je (fáze 103) – rozhoduje o rosteru,
       // broadcastu a scope výzev; drží se tu, ať se při `close` ví, kam poslat `left`.
-      let me: { id: string; nick: string; variant: VariantId } | null = null;
+      // `null` = PŘEDSÍŇ (fáze 105): připojen (`connect`), ale ještě nečlen žádné lobby.
+      let me: { id: string; nick: string; variant: VariantId | null } | null = null;
 
       const send = (message: RoomServerMessage): void => {
         try {
@@ -310,6 +311,63 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         broadcastLobbies();
       };
 
+      // PŘEDSÍŇ (fáze 105): připojení pod přezdívkou BEZ vstupu do lobby. Register
+      // globální identity (nick-uniqueness jako u join), `me.variant=null` (nikde nečlen).
+      // Hned pošli all-roster snímek, ať klient vidí obsazení všech 4 lobby a vybere si.
+      // Připojení ne-člena NEmění žádný roster → ostatním se nic neposílá.
+      const handleConnect = (nick: unknown): void => {
+        if (typeof nick !== 'string') {
+          send({ type: 'error', message: 'Chybí přezdívka.' });
+          return;
+        }
+        if (me !== null) {
+          send({ type: 'error', message: 'Už jsi připojen.' });
+          return;
+        }
+        const result = lobbies.connect(nick, socket);
+        if (result.status === 'invalid') {
+          send({ type: 'error', message: result.reason });
+          return;
+        }
+        if (result.status === 'nick-taken') {
+          send({ type: 'nick-taken', suggestion: result.suggestion });
+          return;
+        }
+        me = { id: result.player.id, nick: result.player.nick, variant: null };
+        send({ type: 'lobbies', lobbies: lobbies.allRosters() });
+      };
+
+      // PRVNÍ vstup do lobby z předsíně (fáze 105): ne-člen (`me.variant=null`) → člen
+      // lobby `variant`. Odmítne, když ještě není připojen nebo už V lobby je (ten
+      // přechází přes `switch-lobby`). Úspěch: přidá do room, pošle si echo `roster`
+      // cílové lobby, ostatním v ní `joined` a všem all-roster snímek.
+      const handleEnter = (variant: unknown): void => {
+        if (me === null) {
+          send({ type: 'error', message: 'Nejdřív se připoj.' });
+          return;
+        }
+        if (!isVariantId(variant)) {
+          send({ type: 'error', message: 'Neznámá varianta lobby.' });
+          return;
+        }
+        if (me.variant !== null) {
+          send({ type: 'error', message: 'Už jsi v lobby.' });
+          return;
+        }
+        const result = lobbies.enter(me.id, variant);
+        if (result.status === 'not-joined') {
+          // Nedosažitelné: `me !== null` znamená připojený. Backstop pro úplnost.
+          send({ type: 'error', message: 'Nejsi přihlášen.' });
+          return;
+        }
+        me = { id: me.id, nick: me.nick, variant };
+        send({ type: 'roster', players: lobbies.room(variant).roster(), variant });
+        lobbies
+          .room(variant)
+          .broadcast(JSON.stringify({ type: 'joined', player: { id: me.id, nick: me.nick } }), me.id);
+        broadcastLobbies();
+      };
+
       // Přechod do jiné varianta-lobby BEZ ztráty identity (fáze 103). Server op –
       // klientské UI ho zavolá v D3b. Odmítnut, když hráč PRÁVĚ HRAJE (busy): jako
       // se nemění varianta uprostřed partie, nesmí se přejít do jiné lobby v běžící
@@ -322,6 +380,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         }
         if (!isVariantId(variant)) {
           send({ type: 'error', message: 'Neznámá varianta lobby.' });
+          return;
+        }
+        // Ne-člen předsíně (`variant=null`) nepřepíná – do své první lobby vstupuje přes
+        // `enter` (fáze 105). Bez tohoto guardu by `me.variant` níž bylo null a
+        // `room(null)` by spadl RangeError.
+        if (me.variant === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do lobby.' });
           return;
         }
         if (challenges.isBusy(me.id)) {
@@ -380,6 +445,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           send({ type: 'error', message: 'Chybí id vyzvaného hráče.' });
           return;
         }
+        // Ne-člen předsíně (`variant=null`) nevyzývá – není v žádné lobby (fáze 105).
+        // Guard i proti pádu `room(null)`. (Ne-člena zároveň nejde vyzvat: není v žádném
+        // rosteru, takže `has()` cizí lobby je pro něj false.)
+        if (me.variant === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do lobby.' });
+          return;
+        }
         // Vyzvat lze JEN hráče v TÉŽE lobby (fáze 103). Cross-variant výzva padne
         // přirozeně: cíl v jiné lobby → `has` je false → „není v místnosti".
         if (!lobbies.room(me.variant).has(targetId)) {
@@ -410,6 +482,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       const handleAccept = (challengeId: unknown): void => {
         if (me === null) {
           send({ type: 'error', message: 'Nejdřív vstup do místnosti.' });
+          return;
+        }
+        // Ne-člen předsíně (`variant=null`, fáze 105) nemůže mít příchozí výzvu (nejde
+        // ho vyzvat), takže tudy legálně neprojde – guard zároveň zúží `me.variant` na
+        // `VariantId` pro `createPvp` níž (partie dědí variantu lobby dvojice).
+        if (me.variant === null) {
+          send({ type: 'error', message: 'Nejdřív vstup do lobby.' });
           return;
         }
         if (typeof challengeId !== 'string') {
@@ -922,6 +1001,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           path?: unknown;
         };
         switch (msg.type) {
+          case 'connect':
+            handleConnect(msg.nick);
+            return;
+          case 'enter':
+            handleEnter(msg.variant);
+            return;
           case 'join':
             handleJoin(msg.nick, msg.variant);
             return;
@@ -977,8 +1062,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         const id = me.id;
         const lobby = me.variant;
         lobbies.remove(id);
-        // `left` zbylým V JEHO lobby – hráč už je odebraný, except není třeba.
-        lobbies.room(lobby).broadcast(JSON.stringify({ type: 'left', player: { id } }));
+        // `left` zbylým V JEHO lobby – hráč už je odebraný, except není třeba. Ne-člen
+        // předsíně (`variant=null`, fáze 105) není v žádné room → žádné room-left, jen
+        // all-roster snímek (odchod z předsíně nemění rostery, ale kontrakt drží konzistentní).
+        if (lobby !== null) {
+          lobbies.room(lobby).broadcast(JSON.stringify({ type: 'left', player: { id } }));
+        }
         // Odchod mění obsazení jeho lobby → all-roster snímek zbylým (fáze 104). Odcházející
         // socket je zavřený, broadcastAll ho přeskočí (readyState), takže mu nic neposílá.
         broadcastLobbies();

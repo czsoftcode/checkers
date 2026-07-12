@@ -7,6 +7,15 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.76.0] - 2026-07-12
+
+### Changed
+
+- **Na hráče může čekat jen jedna výzva naráz.** Když někoho vyzvete, ale ten už má
+  čekající výzvu od jiného hráče, dostanete hlášku, že právě zvažuje jinou výzvu (dřív
+  mu mohlo přijít víc výzev naráz). První výzva platí, dokud ji nepřijme, neodmítne nebo
+  vyzyvatel neodejde. Připravuje čistý modal příchozí výzvy v nové úvodní obrazovce.
+
 ## [0.75.0] - 2026-07-12
 
 ### Added

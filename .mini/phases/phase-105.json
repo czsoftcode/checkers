@@ -1,0 +1,34 @@
+{
+  "id": 105,
+  "title": "Server: PvP předsíň a pravidlo výzev",
+  "goal": "Serverový základ pro novou lobby UX (klient = 106). ADITIVNĚ (join z 103 zůstává funkční, ať web mezi 105 a 106 nespadne a stávající ws testy jsou zelené): (1) B2 předsíň - Identity.variant nullable, nová zpráva connect{nick} = register bez členství + all-roster snímek, enter{variant} = první členství (null->člen); (2) pravidlo první-výzva-vyhrává - ChallengeRegistry.create odmítne, když vyzvaný už má čekající příchozí výzvu (nový důvod obsazen), max jedna příchozí na hráče. Guardy pro ne-člena (variant=null): nejde vyzvat ani nevyzývá; close ne-člena jen zahodí identitu + broadcast. Gate = testy (connect/enter, challenge-busy, ne-člen) + zelené stávající ws testy, NE UI. Legacy join a migrace testů = fáze 106.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "presence.ts: nullable clenstvi + connect/enter",
+      "status": "done",
+      "detail": "Identity.variant: VariantId|null. Nove metody Lobbies.connect(nick, socket) (register globalni identity BEZ clenstvi, variant=null -> JoinResult) a Lobbies.enter(id, target) (null->clen: add do room). remove/sendTo/switchLobby osetrit na null (NEmaskovat defaultem na american; switchLobby zustava member->member). Unit test: connect zaregistruje bez clenstvi (nejsem v zadnem rosteru, totalCount roste), enter me prida do rosteru; globalni nick-uniqueness plati i pro connect."
+    },
+    {
+      "title": "app.ts: zpravy connect/enter + guardy ne-clena",
+      "status": "done",
+      "detail": "Nove case connect/enter v dispatch -> handleConnect(nick) (register, posle all-roster snimek, me.variant=null) a handleEnter(variant) (null->clen, broadcast joined + all-roster + echo roster). me typ variant: VariantId|null. close handler: null variant -> jen remove + broadcastLobbies (zadny room-left). handleChallenge a switch-lobby guard pro ne-clena (null): nevyziva a nejde ho vyzvat. Legacy join/switch-lobby/challenge pro cleny BEZE ZMENY."
+    },
+    {
+      "title": "challenges.ts: prvni vyzva vyhrava",
+      "status": "done",
+      "detail": "ChallengeRegistry.create odmitne, kdyz challengedId uz ma cekajici PRICHOZI vyzvu (od kohokoli) -> novy duvod (string, jiny nez uz hraje). Novy helper hasPendingIncoming(id). Unit test: druha vyzva na tehoz vyzvaneho -> rejected s duvodem, prvni plati; po odmitnuti/odchodu prvniho jde druha; pravidla self/pending-between/busy beze zmeny."
+    },
+    {
+      "title": "WS integracni testy: predsin + busy vyzva",
+      "status": "done",
+      "detail": "Nove ws testy: (a) connect -> dostanu all-roster snimek a NEJSEM v zadnem rosteru; enter -> objevim se v rosteru lobby a jde me vyzvat. (b) vyzvu hrace s cekajici prichozi vyzvou -> obsazen, prvni vyzva plati dal. (c) ne-clen (po connect bez enter) nejde vyzvat ani sam nevyziva. Stavajici challenge-ws/room-ws/pvp-*-ws ZUSTAVAJI zelene beze zmeny."
+    }
+  ],
+  "startedAt": "2026-07-12T12:14:50.887Z",
+  "completedAt": "2026-07-12T12:35:18.836Z",
+  "autoCommit": {
+    "preSha": "93a9ce6bd9357fef0a97cf3e8ec118d78e42bb52",
+    "subject": "Phase 105: Server: PvP předsíň a pravidlo výzev"
+  }
+}

@@ -522,6 +522,11 @@
       "id": 104,
       "title": "Klient: čtyři varianta-lobby (UI)",
       "status": "done"
+    },
+    {
+      "id": 105,
+      "title": "Server: PvP předsíň a pravidlo výzev",
+      "status": "done"
     }
   ]
 }

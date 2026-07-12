@@ -61,6 +61,40 @@ describe('ChallengeRegistry – vytvoření výzvy', () => {
     expect(reg.create('A', 'C').status).toBe('ok');
     expect(reg.pendingCount()).toBe(2);
   });
+
+  it('první výzva vyhrává: druhý vyzyvatel na téhož vyzvaného → rejected (jiný důvod než busy)', () => {
+    const reg = new ChallengeRegistry();
+    const first = reg.create('A', 'B');
+    expect(first.status).toBe('ok');
+    // C zkusí vyzvat B, který už má čekající příchozí výzvu (od A) → odmítnut.
+    const second = reg.create('C', 'B');
+    expect(second.status).toBe('rejected');
+    if (second.status !== 'rejected') return;
+    // Důvod se LIŠÍ od „už hraje" (busy) – vyzvaný jen zvažuje jinou výzvu.
+    expect(second.reason).not.toMatch(/hraje/i);
+    expect(second.reason).toMatch(/zvažuje|jinou/i);
+    // První výzva pořád platí (nezanikla), druhá se nezapsala.
+    expect(reg.pendingCount()).toBe(1);
+    expect(reg.hasPendingIncoming('B')).toBe(true);
+  });
+
+  it('po odmítnutí první výzvy jde druhá na téhož vyzvaného', () => {
+    const reg = new ChallengeRegistry();
+    const first = reg.create('A', 'B');
+    if (first.status !== 'ok') throw new Error('setup');
+    reg.reject('B', first.challenge.id); // B odmítl A
+    // Teď B nemá příchozí → C ho smí vyzvat.
+    expect(reg.create('C', 'B').status).toBe('ok');
+  });
+
+  it('po odchodu prvního vyzyvatele jde druhá na téhož vyzvaného', () => {
+    const reg = new ChallengeRegistry();
+    const first = reg.create('A', 'B');
+    if (first.status !== 'ok') throw new Error('setup');
+    reg.removePlayer('A'); // A odešel → jeho výzva na B zanikla
+    expect(reg.hasPendingIncoming('B')).toBe(false);
+    expect(reg.create('C', 'B').status).toBe('ok');
+  });
 });
 
 describe('ChallengeRegistry – přijetí', () => {
@@ -92,16 +126,18 @@ describe('ChallengeRegistry – přijetí', () => {
 
   it('spárování zruší VEDLEJŠÍ výzvy obou hráčů a vrátí je (protějšky se uvědomí)', () => {
     const reg = new ChallengeRegistry();
-    // A→B (bude přijata), A→C a D→B (vedlejší, mají zaniknout).
+    // A→B (bude přijata), A→C a B→D (vedlejší, mají zaniknout). POZOR (fáze 105):
+    // druhá PŘÍCHOZÍ na B (např. D→B) je nově zakázaná pravidlem „první výzva vyhrává",
+    // proto vedlejší výzva B je B jako VYZYVATEL (B→D), ne jako vyzvaný.
     const ab = reg.create('A', 'B');
     reg.create('A', 'C');
-    reg.create('D', 'B');
+    reg.create('B', 'D');
     if (ab.status !== 'ok') throw new Error('setup');
     const r = reg.accept('B', ab.challenge.id);
     if (r.status !== 'ok') throw new Error('accept měl uspět');
-    // Zrušené vedlejší výzvy: A→C a D→B.
+    // Zrušené vedlejší výzvy: A→C a B→D.
     const pairs = r.cancelled.map((c) => `${c.challengerId}->${c.challengedId}`).sort();
-    expect(pairs).toEqual(['A->C', 'D->B']);
+    expect(pairs).toEqual(['A->C', 'B->D']);
     expect(reg.pendingCount()).toBe(0); // nic nezůstalo viset
   });
 });

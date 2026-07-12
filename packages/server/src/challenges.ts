@@ -72,6 +72,14 @@ export class ChallengeRegistry {
     if (this.hasPendingBetween(challengerId, challengedId)) {
       return { status: 'rejected', reason: 'Výzva mezi vámi už čeká na odpověď.' };
     }
+    // Pravidlo „první výzva vyhrává" (fáze 105): vyzvaný smí mít NEJVÝŠ JEDNU čekající
+    // PŘÍCHOZÍ výzvu (od kohokoli). Když už jednu má, další vyzyvatel je odmítnut jiným
+    // důvodem než „už hraje" – vyzvaný zatím jen zvažuje. Efekt: klient (fáze 106) ukáže
+    // v modalu vždy právě jednu výzvu, žádná fronta. Kontrola je AŽ za `hasPendingBetween`,
+    // ať dvojitá A→B dostane přesnější „mezi vámi už čeká".
+    if (this.hasPendingIncoming(challengedId)) {
+      return { status: 'rejected', reason: 'Vyzvaný hráč právě zvažuje jinou výzvu.' };
+    }
     const challenge: Challenge = { id: randomUUID(), challengerId, challengedId };
     this.pending.set(challenge.id, challenge);
     return { status: 'ok', challenge };
@@ -141,6 +149,20 @@ export class ChallengeRegistry {
   /** Počet čekajících výzev – pro testy (deterministické čekání bez sleepu). */
   pendingCount(): number {
     return this.pending.size;
+  }
+
+  /**
+   * Má hráč `id` čekající PŘÍCHOZÍ výzvu (je něčí `challengedId`)? Jádro pravidla
+   * „první výzva vyhrává" (fáze 105) – druhý vyzyvatel na téhož vyzvaného je odmítnut.
+   * Veřejné pro obranné kontroly a testy.
+   */
+  hasPendingIncoming(id: string): boolean {
+    for (const c of this.pending.values()) {
+      if (c.challengedId === id) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private hasPendingBetween(a: string, b: string): boolean {
