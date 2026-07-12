@@ -177,9 +177,17 @@ const cs = {
   // sekce (jedna = jedna varianta). Rozbalená sekce ukáže roster + akci (Vyzvat v MÉ
   // lobby, Vstoupit v ostatních). Názvy místností = názvy variant (`variant.*`, D2).
   'lobby.loggedInAs': 'Jsi tu jako {nick}',
+  'lobby.disconnectBtn': 'Odpojit',
   'lobby.enterLobbyBtn': 'Vstoupit',
   'lobby.hereBadge': 'Jsi tady',
   'lobby.emptyLobby': 'Zatím tu nikdo není',
+
+  // Modal příchozí výzvy (fáze 106): nahradil řádek v seznamu. Server garantuje
+  // nejvýš JEDNU příchozí výzvu, takže modal ukáže vždy právě jednu; jen Přijmout/
+  // Odmítnout (Esc ani klik mimo nic nedělají). Zavře se přijetím/odmítnutím,
+  // spárováním (přechod do hry) nebo zánikem výzvy.
+  'lobby.challengeModalTitle': 'Výzva na partii',
+  'lobby.challengeModalAria': 'Příchozí výzva na partii',
 
   // Názvy variant pravidel (fáze 102) – zobrazovací popisky pickeru v lobby (u „Hrát
   // proti počítači"). Interní id (american/pool/russian/czech) jde po drátě/kódu
@@ -307,9 +315,13 @@ const en = {
   'lobby.variantAria': 'Game variant against the computer',
 
   'lobby.loggedInAs': 'You are here as {nick}',
+  'lobby.disconnectBtn': 'Disconnect',
   'lobby.enterLobbyBtn': 'Enter',
   'lobby.hereBadge': "You're here",
   'lobby.emptyLobby': 'No one here yet',
+
+  'lobby.challengeModalTitle': 'Game challenge',
+  'lobby.challengeModalAria': 'Incoming game challenge',
 
   'variant.american': 'American',
   'variant.pool': 'Pool',

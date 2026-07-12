@@ -1,0 +1,47 @@
+{
+  "id": 106,
+  "title": "Klient: úvodní předsíň a modal výzvy",
+  "goal": "Přepnout klienta na protokol z fáze 105 (connect{nick} = předsíň bez členství, enter{variant} = vstup) a sloučit vstupní obrazovku s akordeonem do jedné (nick nahoře + živý akordeon pod ním, vstup do místnosti přes Vstoupit v sekci); příchozí výzvu ukázat jako modal místo řádku v seznamu; odstranit z klienta legacy join a přemigrovat ws testy na connect/enter; i18n texty cs/en. Brána: dva prohlížeče přistanou v předsíni, uvidí obsazenost všech 4 lobby, vstoupí do téže, vyzvou se modalem a odehrají; třetí výzva na obsazeného ukáže obsazen; americký tok zůstává hratelný. Otevřené pro discuss: kdy přesně proběhne connect (potvrzení nicku, prázdný/obsazený nick); přepínač jazyka (rebuild po připojení shodí WS); přezdívka jako label po připojení.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "room-client: pridat connect/enter + stavy",
+      "status": "done",
+      "detail": "Do room-client.ts pridat connect(nick) (posila {type:connect,nick}) a enter(variant) ({type:enter,variant}); join zatim NECHAT (at lobby.ts compiluje). Stavovy automat: pripojen/prochazim = prisel prvni lobbies (myVariant=null), clen = prisel roster; connectTimeout definitivni odpoved = lobbies/nick-taken/error. Unit test: connect -> onLobbies a nejsem clen; enter -> onRoster/onJoined."
+    },
+    {
+      "title": "i18n: klice predsin a modal (cs/en)",
+      "status": "done",
+      "detail": "Nove klice do i18n.ts (cs i en): titulek/aria modalu vyzvy, odpojit/zmenit prezdivku, pripadne stavy predsine. Zadne natvrdo retezce. Vystup: i18n parita testy zelene."
+    },
+    {
+      "title": "lobby.ts: form-first predsin a Vstoupit",
+      "status": "done",
+      "detail": "Sloucit entry+joined do jedne obrazovky: nick form -> connect -> pod tim zivy akordeon. myVariant nullable: v predsini vsechny 4 sekce Vstoupit->enter; po vstupu moje sekce Vyzvat, ostatni Vstoupit->switchLobby. Prezdivka po pripojeni jako label + odpojit; langSelect jen pred pripojenim; reconnect->predsin. lobby.ts PRESTANE volat room_client.join (-> connect/enter/switch). AIvP soloBtn beze zmeny. Vystup: lobby testy upravene zelene, join vola uz jen test."
+    },
+    {
+      "title": "Modal prichozi vyzvy misto seznamu",
+      "status": "done",
+      "detail": "Nahradit incomingList <ul> modalem (.modal-overlay/.modal-dialog): otevrit pri neprazdnem seznamu prichozich, zavrit pri prazdnem; jen Prijmout/Odmitnout (Esc/klik-mimo nic); zavrit i na challenge-accepted (-> hra) a challenge-cancelled. Vystup: test otevreni/zavreni modalu; v predsini (ne-clen) se modal neobjevi."
+    },
+    {
+      "title": "Migrace ws testu na connect/enter",
+      "status": "done",
+      "detail": "Prepsat room-ws, variant-lobby-ws, pvp-move-ws, pvp-archive-ws, challenge-ws, pvp-resign-draw-ws a presence.test.ts z join{nick,variant} na connect{nick}+enter{variant}. Server porad ma obe cesty -> testy zelene. Overit realny tok connect->enter->challenge->hra + treti vyzva na obsazeneho -> obsazen."
+    },
+    {
+      "title": "Odstranit legacy join (klient + server)",
+      "status": "done",
+      "detail": "Smazat Lobbies.join, handleJoin, dispatch case join (server) a metodu join z room-clientu. NEJDRIV grep overit, ze join uz nikdo (kod ani test) nevola. Vystup: grep join cisty, build + cela test suite zelena - jeden pravdivy protokol."
+    }
+  ],
+  "startedAt": "2026-07-12T13:08:23.044Z",
+  "resolvedVerify": [
+    "Vizuál a UX form-first předsíně a modalu výzvy v reálném prohlížeči"
+  ],
+  "completedAt": "2026-07-12T14:03:19.329Z",
+  "autoCommit": {
+    "preSha": "215e6783a86563bc8c0c42571069eb2b5dc96863",
+    "subject": "Phase 106: Klient: úvodní předsíň a modal výzvy"
+  }
+}

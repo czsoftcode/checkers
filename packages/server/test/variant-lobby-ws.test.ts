@@ -126,7 +126,11 @@ async function join(
 }> {
   const ws = await openRoom(port);
   const received = collectRoom(ws);
-  ws.send(JSON.stringify(variant === undefined ? { type: 'join', nick } : { type: 'join', nick, variant }));
+  // Fáze 106: connect (předsíň) → enter (zvolená lobby, default americká). Legacy
+  // join{nick,variant} je pryč – protokol je connect+enter.
+  ws.send(JSON.stringify({ type: 'connect', nick }));
+  await takeMessage(received, 'lobbies');
+  ws.send(JSON.stringify({ type: 'enter', variant: variant ?? 'american' }));
   const roster = await takeMessage(received, 'roster');
   const mine = roster.players.find((p) => p.nick === nick);
   if (mine === undefined) {
@@ -267,25 +271,32 @@ describe('Varianta-lobby – autorita: nelegální tah v dané variantě (fáze 
   });
 });
 
-describe('Varianta-lobby – zpětná kompatibilita joinu (fáze 103)', () => {
-  it('join BEZ varianty → americká lobby (echo american v rosteru)', async () => {
+describe('Varianta-lobby – enter validuje variantu (fáze 106)', () => {
+  it('enter do americké lobby → echo american v rosteru, hráč je členem', async () => {
     const port = await start();
-    const a = await join(port, 'Alice'); // bez varianty (stávající klient)
+    const a = await join(port, 'Alice', 'american');
     expect(a.roster.variant).toBe('american');
     expect(lobbies().variantOf(a.id)).toBe('american');
     // Dekorace `roomPresence` ukazuje na americkou lobby – hráč tam je.
     expect(lobbies().room('american').has(a.id)).toBe(true);
   });
 
-  it('neznámá varianta v joinu → degraduje na american (žádný pád)', async () => {
+  it('neznámá varianta v enteru → error (žádná degradace na american, žádný pád)', async () => {
     const port = await start();
     const ws = await openRoom(port);
     const received = collectRoom(ws);
-    ws.send(JSON.stringify({ type: 'join', nick: 'Alice', variant: 'klingonská' }));
-    const roster = await takeMessage(received, 'roster');
-    expect(roster.type).toBe('roster');
-    if (roster.type !== 'roster') return;
-    expect(roster.variant).toBe('american');
+    ws.send(JSON.stringify({ type: 'connect', nick: 'Alice' }));
+    await takeMessage(received, 'lobbies');
+    // Legacy join tiše degradoval neznámou variantu na american; enter je STRIKTNÍ.
+    ws.send(JSON.stringify({ type: 'enter', variant: 'klingonská' }));
+    const err = await takeMessage(received, 'error');
+    expect(err.message).toMatch(/neznám. variant/i);
+    // Zůstal v předsíni: připojen (identita existuje), ale ne-člen žádné lobby.
+    await delay(50);
+    expect(lobbies().totalCount()).toBe(1);
+    for (const v of ['american', 'pool', 'russian', 'czech'] as const) {
+      expect(lobbies().room(v).count()).toBe(0);
+    }
   });
 });
 

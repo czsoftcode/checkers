@@ -7,6 +7,18 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.77.0] - 2026-07-12
+
+### Changed
+
+- **Multiplayer: nová úvodní obrazovka (předsíň) a modal výzvy.** Po zadání přezdívky
+  se rovnou připojíte do předsíně a hned vidíte obsazenost všech čtyř místností
+  (americká, pool, ruská, česká); do konkrétní vstoupíte tlačítkem „Vstoupit" v její
+  sekci. Vstupní formulář a přehled místností jsou teď jedna obrazovka – nahoře „Jsi tu
+  jako …" s tlačítkem „Odpojit". Příchozí výzva na partii se ukáže jako modal
+  (Přijmout/Odmítnout) místo řádku v seznamu. Po ztrátě spojení i po odpojení se
+  vracíte do předsíně (ne rovnou do poslední místnosti).
+
 ## [0.76.0] - 2026-07-12
 
 ### Changed

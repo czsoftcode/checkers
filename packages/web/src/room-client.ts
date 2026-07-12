@@ -1,8 +1,8 @@
 /**
  * Klient společné MÍSTNOSTI přes WebSocket (`/room/ws`). Je to jediná vrstva
  * webového klienta, která mluví po WS (dnešní deska jede přes REST polling – to
- * je jiný řez). Server je autorita nad obsazeností místnosti; klient jen posílá
- * `join{nick}` a reaguje na drátové zprávy.
+ * je jiný řez). Server je autorita nad obsazeností místnosti; klient posílá
+ * `connect{nick}` / `enter{variant}` a reaguje na drátové zprávy.
  *
  * Drátový kontrakt (server → klient) je ručně držená kopie tvaru z
  * `packages/server/src/presence.ts` – web na balíček server ZÁMĚRNĚ nezávisí
@@ -10,17 +10,20 @@
  * ruční e2e a serverové testy; tady se každá příchozí zpráva tvarově ověří PŘED
  * přístupem k polím, ať rozbitá/cizí zpráva klienta neshodí.
  *
- * Životní cyklus a stav `joined`:
- *  - `join(nick)` otevře socket (když žádný neběží / je zavřený) a na `open` pošle
- *    `join{nick}` PRÁVĚ JEDNOU. Server drží socket otevřený i při obsazené
- *    přezdívce (`nick-taken`), takže než join uspěje, smí klient poslat join
- *    znovu (opakování s jiným nickem) po TÉMŽE socketu – to server dovolí.
- *  - Jakmile přijde `roster` (join uspěl → `joined=true`), další `join` se ignoruje:
- *    server by na druhý join po úspěchu vrátil `error` „Už jsi v místnosti".
+ * Životní cyklus a stavy `connected` / `joined` (form-first, fáze 106 – legacy
+ * `join` s okamžitým členstvím je pryč, protokol je connect+enter):
+ *  - `connect(nick)` otevře socket (když žádný neběží / je zavřený) a na `open` pošle
+ *    `connect{nick}` PRÁVĚ JEDNOU. Server drží socket otevřený i při obsazené
+ *    přezdívce (`nick-taken`), takže než connect uspěje, smí klient poslat connect
+ *    znovu (jiný nick) po TÉMŽE socketu. Úspěch = přišel první `lobbies` snímek
+ *    (`connected=true`, PŘEDSÍŇ – hráč ještě není v žádné lobby).
+ *  - `enter(variant)` z předsíně pošle `enter{variant}`; úspěch = `roster` cílové
+ *    lobby (`joined=true`, jsem člen). Další connect po úspěchu se ignoruje.
  *  - `left`/`joined`/`roster` udržují lokální roster (podle `id`). „Ty" v rosteru
- *    se pozná porovnáním na přezdívku, se kterou join uspěl (server ji jen trimuje).
+ *    se pozná porovnáním na přezdívku, se kterou connect uspěl (server ji jen trimuje).
  *  - Pád spojení (`onerror`/`onclose`) → `onDisconnected` (právě jednou; obě
- *    události se sloučí). `join(nick)` po pádu otevře čerstvý socket a zkusí znovu.
+ *    události se sloučí). `connect(nick)` po pádu otevře čerstvý socket (reconnect →
+ *    zpět do PŘEDSÍNĚ, ne auto-re-enter). `disconnect()` zavře spojení bez pádu.
  *  - `dispose()` odregistruje handlery a zavře socket; po něm už žádný callback
  *    (ani `onDisconnected` z právě zavíraného socketu).
  */
@@ -167,7 +170,7 @@ export interface RoomClientOptions {
   readonly socketFactory?: RoomSocketFactory;
   /**
    * Limit (ms), do kdy musí po otevření dorazit DEFINITIVNÍ odpověď serveru na
-   * join (`roster`/`nick-taken`/`error`). Když nepřijde – mrtvé (half-open)
+   * connect (`lobbies`/`nick-taken`/`error`). Když nepřijde – mrtvé (half-open)
    * spojení NEBO tvarově vadná odpověď, kterou parser tiše zahodí – spojení se
    * shodí a ohlásí `onDisconnected`, ať UI neuvázne navěky v „Připojuji…". Výchozí
    * {@link DEFAULT_CONNECT_TIMEOUT_MS}; test si dá krátký s fake časovači.
@@ -181,13 +184,29 @@ export const DEFAULT_CONNECT_TIMEOUT_MS = 12000;
 /** Ovládání klienta místnosti. `dispose` zavře socket a odmlčí callbacky. */
 export interface RoomClient {
   /**
-   * Vstup do místnosti pod přezdívkou do zvolené varianta-lobby (fáze 104).
-   * `variant` je volitelná: když chybí, join se pošle bez ní a server zařadí do
-   * AMERICKÉ lobby (zpětná kompatibilita). Otevře socket (nebo použije už otevřený,
-   * pokud join ještě neuspěl – opakování po `nick-taken`/`error`) a pošle
-   * `join{nick, variant?}`. Po úspěšném joinu je no-op (server by druhý join odmítl).
+   * PŘEDSÍŇ (fáze 106): připojení pod přezdívkou BEZ vstupu do lobby. Otevře socket
+   * (nebo použije už otevřený, pokud connect ještě neuspěl – opakování po
+   * `nick-taken`/`error`) a na `open` pošle `connect{nick}`. Úspěch = přijde první
+   * `lobbies` snímek (`onLobbies`, `myVariant=null`) – hráč vidí obsazenost všech 4
+   * lobby a teprve pak zvolí konkrétní přes {@link enter}. Po úspěšném connectu je
+   * další connect no-op (server by druhé připojení odmítl); pád spojení resetuje stav
+   * a connect po pádu otevře čerstvý socket (reconnect → zpět do předsíně).
    */
-  join(nick: string, variant?: VariantId): void;
+  connect(nick: string): void;
+  /**
+   * PRVNÍ vstup do lobby z předsíně (fáze 106): pošle `enter{variant}`. Smí jen
+   * připojený ne-člen (po connectu, před vstupem do jakékoli lobby); jinak no-op
+   * (už-člen přechází přes {@link switchLobby}, nepřipojený nemá kam vstoupit).
+   * Server odpoví scoped `roster` cílové lobby (→ `onJoined`) a všem all-roster snímek.
+   */
+  enter(variant: VariantId): void;
+  /**
+   * Deliberátní odpojení BEZ dispose (fáze 106, „Odpojit" z předsíně): zavře socket
+   * a vyresetuje stav (připojen/člen, výzvy), ale klient zůstává použitelný – další
+   * {@link connect} otevře čerstvé spojení. NEohlásí `onDisconnected` (to je jen pro
+   * PÁD spojení; tohle je záměr uživatele → UI se samo vrátí do formuláře).
+   */
+  disconnect(): void;
   /**
    * Přejde do jiné varianta-lobby BEZ opuštění místnosti (fáze 104) – pošle
    * `switch-lobby{variant}`. Smí jen zapsaný hráč otevřeným socketem; jinak no-op.
@@ -323,16 +342,15 @@ export function createRoomClient(
   // Roster drží Map podle `id`: zachovává pořadí vložení (roster/joined) a dává
   // O(1) mazání na `left`. `id` je autoritní klíč (přezdívka je jen jmenovka).
   const players = new Map<string, RoomPlayer>();
-  // Přezdívka, se kterou join NAPOSLEDY poslán (trimnutá klientem stejně jako server).
-  // Po úspěchu (`roster`) je to moje přezdívka → podle ní se v rosteru pozná „ty".
+  // Přezdívka, se kterou connect NAPOSLEDY poslán (trimnutá klientem stejně jako server).
+  // Po úspěchu (`lobbies`/`roster`) je to moje přezdívka → podle ní se v rosteru pozná „ty".
   let pendingNick = '';
-  // Varianta lobby, do které se posílá NEJBLIŽŠÍ join (fáze 104). `undefined` =
-  // join bez varianty → server zařadí do americké (zpětná kompatibilita). Přechod
-  // mezi lobby po vstupu jde přes `switchLobby`, ne přes re-join, takže tohle je
-  // jen počáteční lobby (a přežije reconnect – join po pádu ji pošle znovu).
-  let pendingVariant: VariantId | undefined;
   let myNick: string | null = null;
-  // `true` po úspěšném joinu (přišel `roster`). Blokuje další join (server by ho
+  // `true` po úspěšném CONNECTU (přišel první `lobbies` snímek, fáze 106) NEBO po
+  // enteru (člen je taky připojen). Blokuje druhý connect (server by ho odmítl)
+  // a je definitivní odpověď na connect pro connectTimeout (lobbies/nick-taken/error).
+  let connected = false;
+  // `true` po úspěšném enteru (přišel `roster`). Blokuje další enter (server by ho
   // po úspěchu odmítl) a rozliší „spadlo spojení po vstupu" od „nikdy nevstoupil".
   let joined = false;
   // Příchozí výzvy podle `challengeId` (může jich čekat víc naráz – B i C mě vyzvou,
@@ -384,10 +402,12 @@ export function createRoomClient(
     }
   }
 
-  /** Otevře čerstvý socket a navěsí handlery. `join{pendingNick}` se pošle až na `open`. */
+  /** Otevře čerstvý socket a navěsí handlery. Úvodní zpráva (`connect`/`join`) se pošle až na `open`. */
   function openSocket(): void {
     teardownSocket();
     joined = false;
+    connected = false;
+    myNick = null; // čerstvé spojení: identita se ustaví až z definitivní odpovědi (lobbies/roster)
     down = false;
     // Stav výzev z předchozího (padlého) spojení je neplatný – session id umřelo.
     incoming.clear();
@@ -396,7 +416,7 @@ export function createRoomClient(
     const sock = factory(target);
     socket = sock;
     sock.onopen = (): void => {
-      sendJoin();
+      sendConnect(); // vstup do místnosti je vždy form-first: connect → předsíň (fáze 106)
     };
     sock.onmessage = (event): void => {
       handleMessage(event.data);
@@ -410,29 +430,19 @@ export function createRoomClient(
   }
 
   /**
-   * Pošle `join{pendingNick}` po otevřeném socketu a nasadí limit na odpověď.
-   * Server je autorita nad validací. Časovač běží při KAŽDÉM joinu (prvním i
-   * opakovaném po `nick-taken`), ať ani hang na druhý pokus neuvázne.
+   * Pošle `connect{pendingNick}` po otevřeném socketu a nasadí limit na odpověď
+   * (fáze 106). Definitivní odpověď serveru = `lobbies` (úspěch, předsíň) /
+   * `nick-taken` / `error`; než přijde, běží {@link connectTimeoutMs} limit stejně
+   * jako u joinu – hang na half-open spojení tak neuvázne v „Připojuji…".
    */
-  function sendJoin(): void {
+  function sendConnect(): void {
     if (socket?.readyState !== WS_OPEN) {
       return;
     }
-    // Variantu přidej jen když je zadaná – bez ní server default (americká), ať
-    // stará cesta (join bez varianty) jede beze změny (fáze 104).
-    socket.send(
-      JSON.stringify(
-        pendingVariant === undefined
-          ? { type: 'join', nick: pendingNick }
-          : { type: 'join', nick: pendingNick, variant: pendingVariant },
-      ),
-    );
-    // Server musí do limitu odpovědět (roster/nick-taken/error). Když ne (mrtvé
-    // spojení nebo tvarově vadná, tiše zahozená odpověď), spojení shodíme a
-    // ohlásíme odpojení – UI se tak dostane z „Připojuji…" ven a půjde zkusit znovu.
+    socket.send(JSON.stringify({ type: 'connect', nick: pendingNick }));
     clearConnectTimer();
     connectTimer = setTimeout(() => {
-      teardownSocket(); // zavře socket + vynuluje handlery (a sám tento timer)
+      teardownSocket();
       handleDown();
     }, connectTimeoutMs);
   }
@@ -500,13 +510,14 @@ export function createRoomClient(
         if (!Array.isArray(msg.players) || !msg.players.every(isRoomPlayer)) {
           return;
         }
-        clearConnectTimer(); // platná odpověď serveru – join dořešen
+        clearConnectTimer(); // platná odpověď serveru – join/enter dořešen
         players.clear();
         for (const p of msg.players) {
           players.set(p.id, p);
         }
         joined = true;
-        myNick = pendingNick; // join uspěl → tenhle nick jsem já
+        connected = true; // člen je taky připojen (blokuje případný druhý connect)
+        myNick = pendingNick; // join/enter uspěl → tenhle nick jsem já
         handlers.onJoined?.(rosterEntries());
         return;
       }
@@ -514,25 +525,37 @@ export function createRoomClient(
         // All-roster snímek všech 4 lobby (fáze 104). Vadnou/cizí položku → zahoď
         // CELÝ snímek (guard), ať se do akordeonu nedostane undefined/neznámá
         // varianta. `isSelf` se počítá z mého nicku – v jednom rosteru jsem, tam mě
-        // akordeon najde.
+        // akordeon najde (v předsíni v žádném → nikdo není isSelf).
         if (!Array.isArray(msg.lobbies)) {
           return;
         }
-        const mine = myNick?.toLowerCase() ?? null;
-        const views: LobbyView[] = [];
+        // Validuj CELÝ snímek PŘED jakýmkoli efektem: vadný nech connect-timer
+        // vypršet (stejně jako vadný roster), ať tichý drop nezasekne „Připojuji…".
         for (const entry of msg.lobbies as unknown[]) {
           if (!isWireLobbyRoster(entry)) {
             return;
           }
-          views.push({
-            variant: entry.variant,
-            players: entry.players.map((p) => ({
-              id: p.id,
-              nick: p.nick,
-              isSelf: mine !== null && p.nick.toLowerCase() === mine,
-            })),
-          });
         }
+        // Platný snímek = definitivní odpověď na connect (fáze 106): dořeš connect
+        // (zruš limit) a označ „připojen". Idempotentní pro pozdější snímky prezence.
+        clearConnectTimer();
+        connected = true;
+        // Definitivní odpověď na connect → moje přezdívka je `pendingNick` (poslední
+        // connect; server ji jen trimuje). NASTAV ji BEZPODMÍNEČNĚ, ne `?? pendingNick`:
+        // po odpojení a připojení pod JINÝM nickem by starý (non-null) myNick zůstal a
+        // `isSelf` by chybně označilo hráče se starým jménem (→ špatné myVariant, soft-lock).
+        myNick = pendingNick;
+        const mine = myNick.toLowerCase();
+        const views: LobbyView[] = (
+          msg.lobbies as { variant: VariantId; players: RoomPlayer[] }[]
+        ).map((entry) => ({
+          variant: entry.variant,
+          players: entry.players.map((p) => ({
+            id: p.id,
+            nick: p.nick,
+            isSelf: p.nick.toLowerCase() === mine,
+          })),
+        }));
         handlers.onLobbies?.(views);
         return;
       }
@@ -691,23 +714,45 @@ export function createRoomClient(
   }
 
   return {
-    join(nick: string, variant?: VariantId): void {
+    connect(nick: string): void {
       if (disposed) {
         return;
       }
       pendingNick = nick.trim();
-      pendingVariant = variant; // undefined → join bez varianty (server default american)
       if (socket !== null && socket.readyState === WS_OPEN) {
-        if (joined) {
-          return; // už jsem v místnosti – druhý join by server odmítl
+        if (connected) {
+          return; // už připojen – druhý connect by server odmítl
         }
-        sendJoin(); // otevřený socket, join ještě neuspěl → opakuj (nick-taken/error)
+        sendConnect(); // otevřený socket, connect ještě neuspěl → opakuj (nick-taken/error)
         return;
       }
       if (socket !== null && socket.readyState === 0 /* CONNECTING */) {
-        return; // socket se otevírá – join se pošle na `open` s aktuálním pendingNick
+        return; // socket se otevírá – connect se pošle na `open` s aktuálním pendingNick
       }
-      openSocket(); // žádný / zavřený socket → čerstvé spojení, join na `open`
+      openSocket(); // žádný / zavřený socket → čerstvé spojení, connect na `open`
+    },
+    enter(variant: VariantId): void {
+      // Vstoupit do lobby smí jen připojený ne-člen (po connectu, před vstupem).
+      // Nepřipojený (!connected) nemá kam vstoupit; už-člen (joined) přechází přes
+      // switchLobby – server by `enter` v obou případech odmítl `error`.
+      if (disposed || !connected || joined) {
+        return;
+      }
+      if (socket?.readyState !== WS_OPEN) {
+        return;
+      }
+      socket.send(JSON.stringify({ type: 'enter', variant }));
+    },
+    disconnect(): void {
+      // Záměrné odpojení (ne pád): zavři socket a vyresetuj stav, ale NE `disposed` –
+      // klient zůstává použitelný, další connect otevře čerstvé spojení. Bez
+      // `onDisconnected` (to je jen pro pád; návrat do formuláře řídí UI samo).
+      teardownSocket();
+      joined = false;
+      connected = false;
+      down = false;
+      incoming.clear();
+      outgoing = null;
     },
     switchLobby(variant: VariantId): void {
       // Přejít smí jen zapsaný hráč otevřeným socketem. Server je autorita: přechod

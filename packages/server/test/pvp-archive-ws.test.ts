@@ -108,7 +108,10 @@ async function join(
 ): Promise<{ ws: WebSocket; id: string; received: RoomServerMessage[] }> {
   const ws = await openRoom(port);
   const received = collectRoom(ws);
-  ws.send(JSON.stringify({ type: 'join', nick }));
+  // Fáze 106: connect (předsíň) → enter (americká lobby). Roster = potvrzení členství.
+  ws.send(JSON.stringify({ type: 'connect', nick }));
+  await takeMessage(received, 'lobbies');
+  ws.send(JSON.stringify({ type: 'enter', variant: 'american' }));
   const roster = await takeMessage(received, 'roster');
   const mine = roster.players.find((p) => p.nick === nick);
   if (mine === undefined) {

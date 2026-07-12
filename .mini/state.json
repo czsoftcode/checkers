@@ -527,6 +527,11 @@
       "id": 105,
       "title": "Server: PvP předsíň a pravidlo výzev",
       "status": "done"
+    },
+    {
+      "id": 106,
+      "title": "Klient: úvodní předsíň a modal výzvy",
+      "status": "done"
     }
   ]
 }

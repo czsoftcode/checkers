@@ -1,17 +1,21 @@
 /**
- * Úvodní obrazovka MÍSTNOSTI: hráč zadá přezdívku, připojí se přes `/room/ws`
- * (viz {@link createRoomClient}) a vidí živý seznam přítomných. Párování výzvou a
- * start partie jsou VĚDOMĚ mimo tento řez – lobby zatím jen zpřítomňuje místnost.
+ * Úvodní obrazovka MÍSTNOSTI (form-first, fáze 106): hráč zadá přezdívku a PŘIPOJÍ
+ * se do PŘEDSÍNĚ přes `/room/ws` (`connect{nick}`, viz {@link createRoomClient}).
+ * Po připojení vidí ŽIVÝ akordeon 4 varianta-lobby s obsazeností a teprve pak
+ * vstoupí do konkrétní přes „Vstoupit" (`enter{variant}` z předsíně / `switch-lobby`
+ * mezi lobby). Vstupní formulář a akordeon jsou JEDNA obrazovka: formulář nahoře, po
+ * připojení nahrazený labelem „Jsi tu jako X" + Odpojit, akordeon pod tím.
  *
  * Vedle vstupu do místnosti nabízí i „Hrát proti počítači" (sólo cesta proti
  * enginu), která přezdívku NEvyžaduje – přepnutí na desku řídí caller přes
  * `onPlayVsComputer` (viz `main.ts`). Odchod do sóla lobby disposne, čímž se zavře
  * i room WS (v místnosti nejsi, dokud hraješ sólo).
  *
- * Stav obrazovky (`view`): `entry` (formulář nicku), `connecting` (čekám na odpověď
- * serveru, formulář zamčený), `joined` (jsem v místnosti, vidím roster),
- * `disconnected` (spadlo spojení → „Připojit znovu"). Obsazená přezdívka / chyba
- * validace vrací do `entry` s hláškou – socket server drží, stačí poslat znovu.
+ * Stav obrazovky (`view`): `entry` (formulář nicku + přepínač jazyka), `connecting`
+ * (čekám na odpověď serveru, formulář zamčený), `connected` (jsem PŘIPOJEN – předsíň
+ * i členství, vidím akordeon), `disconnected` (spadlo spojení → „Připojit znovu").
+ * Obsazená přezdívka / chyba validace vrací do `entry` s hláškou – socket server
+ * drží, stačí poslat znovu. Příchozí výzva se ukáže jako MODAL (ne řádek v seznamu).
  *
  * Žádné inline styly ani skripty (CSP) – vzhled je ve `styles.css`.
  *
@@ -252,7 +256,15 @@ function saveNick(nick: string): void {
   }
 }
 
-type View = 'entry' | 'connecting' | 'joined' | 'disconnected';
+/**
+ * Stav obrazovky (fáze 106, form-first): `entry` (formulář přezdívky + přepínač
+ * jazyka, akordeon skrytý), `connecting` (čekám na odpověď serveru), `connected`
+ * (jsem PŘIPOJEN – předsíň i členství: nahoře „Jsi tu jako X" + Odpojit, pod tím
+ * ŽIVÝ akordeon 4 lobby), `disconnected` (spadlo spojení → „Připojit znovu"). Předsíň
+ * (`myVariant=null`) a členství sdílí view `connected`; liší se jen akce v sekcích
+ * (Vstoupit→enter/switch-lobby vs. Vyzvat), viz {@link buildSectionBody}.
+ */
+type View = 'entry' | 'connecting' | 'connected' | 'disconnected';
 
 /** Postaví obrazovku místnosti. Vrací kořenový prvek k vložení do stránky. */
 export function createLobby(options: LobbyOptions): Lobby {
@@ -357,13 +369,22 @@ export function createLobby(options: LobbyOptions): Lobby {
   const message = document.createElement('p');
   message.className = 'lobby-msg hidden';
 
-  // Pohled místnosti (`joined`): nahoře přezdívka, stav výzev, pak AKORDEON 4 lobby.
+  // Pohled místnosti (`connected` – předsíň i členství): nahoře přezdívka + Odpojit,
+  // stav výzev, pak ŽIVÝ AKORDEON 4 lobby (fáze 106).
   const room = document.createElement('div');
   room.className = 'lobby-room hidden';
 
-  // Řádek s mou přezdívkou nad akordeonem (fáze 104): „Jsi tu jako {nick}".
+  // Hlavička místnosti: „Jsi tu jako {nick}" (fáze 104) + tlačítko Odpojit (fáze 106,
+  // návrat do form-first bez pádu spojení).
+  const roomHeader = document.createElement('div');
+  roomHeader.className = 'lobby-room-header';
   const nickLine = document.createElement('p');
   nickLine.className = 'lobby-nick-line';
+  const disconnectBtn = document.createElement('button');
+  disconnectBtn.type = 'button';
+  disconnectBtn.className = 'lobby-disconnect-btn';
+  disconnectBtn.textContent = t('lobby.disconnectBtn');
+  roomHeader.append(nickLine, disconnectBtn);
 
   // Stav MÉ odchozí výzvy (čekám na odpověď) – skrytý, když žádná neběží.
   const outgoing = document.createElement('p');
@@ -373,17 +394,27 @@ export function createLobby(options: LobbyOptions): Lobby {
   const notice = document.createElement('p');
   notice.className = 'lobby-notice hidden';
 
-  // Příchozí výzvy (může jich čekat víc naráz), každá s Přijmout/Odmítnout.
-  const incomingList = document.createElement('ul');
-  incomingList.className = 'lobby-challenges';
-
   // Akordeon 4 varianta-lobby (fáze 104). Sekce se generují z registru variant
   // (`VARIANT_IDS`) v `renderRoom` – přidání varianty je nový záznam v registru,
   // ne zásah sem. Obsah (rostery, MOJE lobby, rozbalená sekce) plyne z all-roster
   // snímku `onLobbies`.
   const accordion = document.createElement('div');
   accordion.className = 'lobby-accordion';
-  room.append(nickLine, outgoing, notice, incomingList, accordion);
+  room.append(roomHeader, outgoing, notice, accordion);
+
+  // Modal PŘÍCHOZÍ VÝZVY (fáze 106): nahradil řádek v seznamu. Server garantuje nejvýš
+  // JEDNU příchozí výzvu, takže dialog ukáže vždy právě jednu (Přijmout/Odmítnout).
+  // Esc ani klik mimo NIC nedělají (žádné listenery) – zavírá se jen tlačítkem, nebo
+  // z kódu (spárování/zánik výzvy → `renderIncoming([])`). Znovupoužívá CSP-bezpečné
+  // třídy `.modal-overlay`/`.modal-dialog` jako modaly u hry (žádné inline styly).
+  const challengeModal = document.createElement('div');
+  challengeModal.className = 'modal-overlay hidden';
+  const challengeDialog = document.createElement('div');
+  challengeDialog.className = 'modal-dialog';
+  challengeDialog.setAttribute('role', 'dialog');
+  challengeDialog.setAttribute('aria-modal', 'true');
+  challengeDialog.setAttribute('aria-label', t('lobby.challengeModalAria'));
+  challengeModal.append(challengeDialog);
 
   // Pohled odpojení (`disconnected`): hláška + ruční znovupřipojení (žádný auto-reconnect).
   const disconnected = document.createElement('div');
@@ -407,7 +438,7 @@ export function createLobby(options: LobbyOptions): Lobby {
   soloRow.append(soloVariant.element, soloBtn);
 
   card.append(header, form, message, room, disconnected, soloRow);
-  element.append(card);
+  element.append(card, challengeModal);
 
   // Přezdívka posledního úspěšného/pokusného vstupu – pro „Připojit znovu".
   let lastNick = '';
@@ -459,26 +490,35 @@ export function createLobby(options: LobbyOptions): Lobby {
   const room_client = createRoomClient(
     {
       onJoined: (roster) => {
+        // Roster = vstup do konkrétní lobby (enter/switch uspěl, fáze 106). Jsem člen.
         joinedOnce = true;
         pendingSwitch = false; // úspěšný přechod dorazí jako roster cílové lobby
         // Přezdívku vezmi z rosteru (položka `isSelf`), fallback poslední zadaná.
         myNick = roster.find((r) => r.isSelf)?.nick ?? lastNick;
-        setView('joined');
+        setView('connected');
         renderRoom(); // skeleton akordeonu; obsah rosterů dorovná onLobbies (přijde hned po)
       },
       onLobbies: (lobbies) => {
         // All-roster snímek všech 4 lobby (fáze 104) – jediný zdroj obsazení pro akordeon.
+        // Přijde i jako PRVNÍ odpověď na connect (fáze 106): tehdy nejsem v žádném
+        // rosteru → `selfLobby` undefined → `myVariant=null` (předsíň).
         currentLobbies = lobbies;
         const selfLobby = lobbies.find((l) => l.players.some((p) => p.isSelf));
+        myVariant = selfLobby?.variant ?? null;
         if (selfLobby !== undefined) {
-          myVariant = selfLobby.variant;
           myNick = selfLobby.players.find((p) => p.isSelf)?.nick ?? myNick;
         }
-        // Výchozí rozbalená sekce = MOJE lobby, ale JEN poprvé – pak už respektuj
-        // uživatelovu volbu (sbalení/rozbalení se nesmí resetovat příštím snímkem).
+        // Výchozí rozbalená sekce = MOJE lobby, ale JEN poprvé (po vstupu) – pak už
+        // respektuj uživatelovu volbu (sbalení/rozbalení se nesmí resetovat snímkem).
+        // V předsíni (`myVariant=null`) nic nerozbaluj: obsazenost je vidět z počtů
+        // v hlavičkách sekcí, uživatel si sekci otevře sám.
         if (!hasAutoExpanded && myVariant !== null) {
           expandedVariant = myVariant;
           hasAutoExpanded = true;
+        }
+        // Connect uspěl (nebo přišel snímek prezence) → jsem v pohledu místnosti.
+        if (currentView !== 'connected') {
+          setView('connected');
         }
         renderRoom();
       },
@@ -616,10 +656,11 @@ export function createLobby(options: LobbyOptions): Lobby {
           return;
         }
         // Server posílá `error` i pro CHYBY VÝZEV (vyzvaný už hraje, dvojitá/křížová
-        // výzva, „výzva už neplatí"). Když už jsem v místnosti, NEvyhazuj na formulář
-        // nicku (re-join by byl no-op → zásek na „Připojuji…") – ukaž jen hlášku a
-        // zůstaň v pohledu místnosti. Formulář je jen pro chyby PŘED vstupem (nick).
-        if (currentView === 'joined') {
+        // výzva, „výzva už neplatí") a chyby vstupu do lobby (`enter`). Když už jsem
+        // připojen (předsíň i členství), NEvyhazuj na formulář nicku (re-connect by
+        // byl no-op → zásek na „Připojuji…") – ukaž jen hlášku a zůstaň v pohledu
+        // místnosti. Formulář je jen pro chyby PŘED připojením (nick).
+        if (currentView === 'connected') {
           showNotice(text);
           return;
         }
@@ -651,7 +692,7 @@ export function createLobby(options: LobbyOptions): Lobby {
     currentView = view;
     const showForm = view === 'entry' || view === 'connecting';
     form.classList.toggle('hidden', !showForm);
-    room.classList.toggle('hidden', view !== 'joined');
+    room.classList.toggle('hidden', view !== 'connected');
     disconnected.classList.toggle('hidden', view !== 'disconnected');
     // Přepínač jazyka jen v `entry`: mimo něj (connecting/joined/disconnected) žije
     // room WS a jeho rebuild přes `onLocaleChange` by spojení zavřel (fáze 84).
@@ -666,7 +707,7 @@ export function createLobby(options: LobbyOptions): Lobby {
       renderIncoming([]);
       renderOutgoing(null);
       showNotice('');
-    } else if (view === 'joined' || view === 'disconnected') {
+    } else if (view === 'connected' || view === 'disconnected') {
       setMessage('');
     }
     // `entry` hlášku nemaže – nese případný důvod (obsazený nick / chyba validace).
@@ -737,7 +778,10 @@ export function createLobby(options: LobbyOptions): Lobby {
       }
     }
     body.append(list);
-    // Cizí lobby (ne moje) = jen ke čtení + tlačítko Vstoupit (přechod přes switchLobby).
+    // Ne-MOJE sekce = tlačítko Vstoupit. „Vstoupit" má DVĚ serverové operace podle
+    // stavu (fáze 106): z PŘEDSÍNĚ (`myVariant=null`) je to `enter` (první vstup),
+    // z JINÉ lobby (člen) `switch-lobby` (přechod). Splést je nesmím – server by
+    // `switch-lobby` v předsíni odmítl a UX by se zaseklo.
     if (!isMine) {
       const enterBtn = document.createElement('button');
       enterBtn.type = 'button';
@@ -745,11 +789,18 @@ export function createLobby(options: LobbyOptions): Lobby {
       enterBtn.textContent = t('lobby.enterLobbyBtn');
       enterBtn.addEventListener('click', () => {
         // Po vstupu ať sekce zůstane rozbalená (ukáže Vyzvat). Server přesune členství
-        // a pošle nový snímek (onLobbies), který myVariant přepočítá. `pendingSwitch`
-        // hlídá závod s přijetím výzvy (viz `onError`).
+        // a pošle nový snímek (onLobbies), který myVariant přepočítá.
         expandedVariant = id;
-        pendingSwitch = true;
-        room_client.switchLobby(id);
+        if (myVariant === null) {
+          // Předsíň → PRVNÍ vstup. Ne-člena nejde vyzvat (server guard), takže tu
+          // není závod s přijetím výzvy – žádný `pendingSwitch`.
+          room_client.enter(id);
+        } else {
+          // Člen jiné lobby → přechod. `pendingSwitch` hlídá závod „soupeř přijal mou
+          // výzvu dřív, než dorazil switch" (viz `onError`).
+          pendingSwitch = true;
+          room_client.switchLobby(id);
+        }
       });
       body.append(enterBtn);
     }
@@ -788,32 +839,47 @@ export function createLobby(options: LobbyOptions): Lobby {
     return li;
   }
 
-  /** Vykreslí příchozí výzvy; každá má tlačítka Přijmout/Odmítnout na svoje id. */
+  /**
+   * Řídí MODAL příchozí výzvy (fáze 106). Otevře ho při neprázdném seznamu (ukáže
+   * PRVNÍ výzvu – server garantuje nejvýš jednu), zavře při prázdném. Zavření řídí
+   * VÝHRADNĚ tenhle stav: prázdný seznam přijde po přijetí/odmítnutí, po spárování
+   * (`challenge-accepted` → room-client pošle prázdný seznam) i po zániku výzvy
+   * (`challenge-cancelled`). Esc ani klik mimo se nevěší – jen tlačítka v dialogu.
+   * V předsíni (ne-člen) sem nikdy nedorazí neprázdný seznam (server výzvu ne-členu
+   * nepošle), takže se modal neobjeví.
+   */
   function renderIncoming(challenges: IncomingChallenge[]): void {
-    const items = challenges.map((c) => {
-      const li = document.createElement('li');
-      li.className = 'lobby-challenge-item';
-      const label = document.createElement('span');
-      label.className = 'lobby-challenge-label';
-      label.textContent = t('lobby.challengeFrom', { nick: c.challengerNick });
-      const accept = document.createElement('button');
-      accept.type = 'button';
-      accept.className = 'lobby-accept-btn';
-      accept.textContent = t('lobby.acceptBtn');
-      accept.addEventListener('click', () => {
-        room_client.accept(c.id);
-      });
-      const reject = document.createElement('button');
-      reject.type = 'button';
-      reject.className = 'lobby-reject-btn';
-      reject.textContent = t('lobby.rejectBtn');
-      reject.addEventListener('click', () => {
-        room_client.reject(c.id);
-      });
-      li.append(label, accept, reject);
-      return li;
+    const c = challenges[0];
+    if (c === undefined) {
+      challengeModal.classList.add('hidden');
+      return;
+    }
+    const title = document.createElement('h2');
+    title.className = 'modal-msg';
+    title.textContent = t('lobby.challengeModalTitle');
+    const label = document.createElement('p');
+    label.className = 'modal-notice';
+    label.textContent = t('lobby.challengeFrom', { nick: c.challengerNick });
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+    const accept = document.createElement('button');
+    accept.type = 'button';
+    accept.className = 'lobby-accept-btn';
+    accept.textContent = t('lobby.acceptBtn');
+    accept.addEventListener('click', () => {
+      room_client.accept(c.id);
     });
-    incomingList.replaceChildren(...items);
+    const reject = document.createElement('button');
+    reject.type = 'button';
+    reject.className = 'lobby-reject-btn';
+    reject.textContent = t('lobby.rejectBtn');
+    reject.addEventListener('click', () => {
+      room_client.reject(c.id);
+    });
+    actions.append(accept, reject);
+    challengeDialog.replaceChildren(title, label, actions);
+    challengeModal.classList.remove('hidden');
+    accept.focus();
   }
 
   /** Ukáže/skryje stav odchozí výzvy a přepočítá zámek tlačítek „Vyzvat". */
@@ -831,7 +897,7 @@ export function createLobby(options: LobbyOptions): Lobby {
     notice.classList.toggle('hidden', text === '');
   }
 
-  /** Odešle vstup do místnosti s aktuální přezdívkou (prázdnou odmítne už klient). */
+  /** Odešle PŘIPOJENÍ do předsíně s aktuální přezdívkou (prázdnou odmítne už klient). */
   function submitJoin(): void {
     const nick = nickInput.value.trim();
     if (nick === '') {
@@ -841,9 +907,12 @@ export function createLobby(options: LobbyOptions): Lobby {
       return;
     }
     lastNick = nick;
+    // Přezdívku ukaž v labelu hned po připojení – server ji jen trimuje, takže se
+    // shoduje. V předsíni ještě nejsem v žádném rosteru, odkud by ji šlo dopočítat.
+    myNick = nick;
     saveNick(nick);
     setView('connecting');
-    room_client.join(nick);
+    room_client.connect(nick);
   }
 
   form.addEventListener('submit', (event) => {
@@ -851,8 +920,23 @@ export function createLobby(options: LobbyOptions): Lobby {
     submitJoin();
   });
   reconnectBtn.addEventListener('click', () => {
+    myNick = lastNick;
     setView('connecting');
-    room_client.join(lastNick);
+    room_client.connect(lastNick); // reconnect → zpět do PŘEDSÍNĚ (ne auto-re-enter)
+  });
+  disconnectBtn.addEventListener('click', () => {
+    // Záměrné odpojení: zavři spojení a vrať se do form-first (klient zůstává
+    // použitelný, další connect otevře čerstvý socket). Vyresetuj i lokální stav
+    // předsíně/členství, ať se po dalším připojení nemíchá se starým snímkem.
+    room_client.disconnect();
+    myVariant = null;
+    currentLobbies = [];
+    hasAutoExpanded = false;
+    joinedOnce = false;
+    renderIncoming([]); // zavři případný modal výzvy
+    renderOutgoing(null);
+    showNotice('');
+    setView('entry');
   });
   soloBtn.addEventListener('click', () => {
     // Jediný zdroj varianty = picker; LocalStorage je jen jeho odraz (ulož TEĎ, ať

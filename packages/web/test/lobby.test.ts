@@ -80,7 +80,8 @@ function mountLobby() {
     form: q<HTMLFormElement>('.lobby-join'),
     nick: q<HTMLInputElement>('.lobby-nick'),
     room: q<HTMLElement>('.lobby-room'),
-    challenges: q<HTMLUListElement>('.lobby-challenges'),
+    challengeModal: q<HTMLElement>('.modal-overlay'),
+    disconnectBtn: q<HTMLButtonElement>('.lobby-disconnect-btn'),
     outgoing: q<HTMLElement>('.lobby-outgoing'),
     notice: q<HTMLElement>('.lobby-notice'),
     accordion: q<HTMLElement>('.lobby-accordion'),
@@ -227,7 +228,7 @@ describe('createLobby', () => {
     expect(h.sockets).toHaveLength(1);
 
     h.sockets[0]!.open();
-    expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Jan' })]);
+    expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'connect', nick: 'Jan' })]);
 
     h.sockets[0]!.message({
       type: 'roster',
@@ -412,12 +413,12 @@ describe('createLobby', () => {
     expect(h.msg.textContent).toContain('Zadej přezdívku');
   });
 
-  it('join se posílá BEZ varianty (počáteční lobby = server default american)', () => {
+  it('připojení posílá connect{nick} (form-first předsíň, bez varianty)', () => {
     const h = mountLobby();
     h.nick.value = 'Jan';
     submit(h.form);
     h.sockets[0]!.open();
-    expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Jan' })]);
+    expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'connect', nick: 'Jan' })]);
   });
 
   it('obsazená přezdívka vrátí formulář s návrhem předvyplněným v poli', () => {
@@ -445,7 +446,8 @@ describe('createLobby', () => {
     h.reconnectBtn.click();
     expect(h.sockets).toHaveLength(2); // zavřený socket → nové spojení
     h.sockets[1]!.open();
-    expect(h.sockets[1]!.sent).toEqual([JSON.stringify({ type: 'join', nick: 'Jan' })]);
+    // reconnect → zpět do PŘEDSÍNĚ (connect), ne auto-re-enter do poslední lobby.
+    expect(h.sockets[1]!.sent).toEqual([JSON.stringify({ type: 'connect', nick: 'Jan' })]);
   });
 
   it('pád spojení PŘED vstupem hlásí „nepodařilo se připojit" (ne „přerušilo")', () => {
@@ -558,20 +560,22 @@ describe('createLobby – výzvy', () => {
     }
   });
 
-  it('příchozí výzva ukáže banner; Přijmout pošle accept a challenge-accepted spustí přechod', () => {
+  it('příchozí výzva otevře MODAL; Přijmout pošle accept, challenge-accepted spustí přechod a zavře modal', () => {
     const h = joinedLobby();
+    expect(h.challengeModal.classList.contains('hidden')).toBe(true); // zavřený, dokud výzva nepřijde
     h.sockets[0]!.message({
       type: 'challenged',
       challenge: { id: 'c1', challengerId: '2', challengerNick: 'Eva' },
     });
-    const banner = h.challenges.querySelectorAll('.lobby-challenge-item');
-    expect(banner).toHaveLength(1);
-    expect(banner[0]!.textContent).toContain('Eva');
+    expect(h.challengeModal.classList.contains('hidden')).toBe(false);
+    expect(h.challengeModal.textContent).toContain('Eva');
 
-    banner[0]!.querySelector<HTMLButtonElement>('.lobby-accept-btn')!.click();
+    h.challengeModal.querySelector<HTMLButtonElement>('.lobby-accept-btn')!.click();
     expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'accept', challengeId: 'c1' })]);
 
     h.sockets[0]!.message({ type: 'challenge-accepted', gameId: 'g1', color: 'white', opponentId: '2' });
+    // Přechod do hry → room-client pošle prázdný seznam příchozích → modal se zavře.
+    expect(h.challengeModal.classList.contains('hidden')).toBe(true);
     expect(h.onGameStart).toHaveBeenCalledTimes(1);
     expect(h.onGameStart.mock.calls[0]![0]).toEqual({
       gameId: 'g1',
@@ -720,15 +724,15 @@ describe('createLobby – výzvy', () => {
     expect(h.notice.textContent).toBe('Výzva už neplatí.');
   });
 
-  it('Odmítnout pošle reject a banner zmizí', () => {
+  it('Odmítnout pošle reject a modal se zavře', () => {
     const h = joinedLobby();
     h.sockets[0]!.message({
       type: 'challenged',
       challenge: { id: 'c1', challengerId: '2', challengerNick: 'Eva' },
     });
-    h.challenges.querySelector<HTMLButtonElement>('.lobby-reject-btn')!.click();
+    h.challengeModal.querySelector<HTMLButtonElement>('.lobby-reject-btn')!.click();
     expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'reject', challengeId: 'c1' })]);
-    expect(h.challenges.querySelectorAll('.lobby-challenge-item')).toHaveLength(0);
+    expect(h.challengeModal.classList.contains('hidden')).toBe(true);
   });
 
   it('challenge-rejected schová „čekám", odemkne tlačítka a ukáže notice', () => {
@@ -766,15 +770,15 @@ describe('createLobby – výzvy', () => {
     expect(h.msg.textContent).toContain('moc dlouhá');
   });
 
-  it('challenge-cancelled odebere příchozí banner (soupeř zrušil/odešel)', () => {
+  it('challenge-cancelled zavře modal příchozí výzvy (soupeř zrušil/odešel)', () => {
     const h = joinedLobby();
     h.sockets[0]!.message({
       type: 'challenged',
       challenge: { id: 'c1', challengerId: '2', challengerNick: 'Eva' },
     });
-    expect(h.challenges.querySelectorAll('.lobby-challenge-item')).toHaveLength(1);
+    expect(h.challengeModal.classList.contains('hidden')).toBe(false);
     h.sockets[0]!.message({ type: 'challenge-cancelled', challengeId: 'c1' });
-    expect(h.challenges.querySelectorAll('.lobby-challenge-item')).toHaveLength(0);
+    expect(h.challengeModal.classList.contains('hidden')).toBe(true);
   });
 
   it('challenge-cancelled na mou odchozí ji zruší (soupeř odešel během čekání)', () => {
@@ -784,5 +788,102 @@ describe('createLobby – výzvy', () => {
     h.sockets[0]!.message({ type: 'challenge-cancelled', challengeId: 'serverové-id' });
     expect(h.outgoing.classList.contains('hidden')).toBe(true);
     expect(h.notice.textContent).toContain('Eva');
+  });
+});
+
+/**
+ * Připojí do PŘEDSÍNĚ (fáze 106): connect + all-roster snímek, kde já (Jan) NEJSEM
+ * v žádné lobby (myVariant=null). Akordeon ukazuje obsazenost, každá sekce nabídne
+ * Vstoupit (→ `enter`). Sekce startují sbalené (v předsíni se nic auto-nerozbaluje).
+ */
+function foyer(): Handle {
+  const h = mountLobby();
+  h.nick.value = 'Jan';
+  submit(h.form);
+  h.sockets[0]!.open();
+  h.sockets[0]!.message(lobbiesMsg({ american: [['2', 'Eva']], russian: [['9', 'Olga']] }));
+  h.sockets[0]!.sent.length = 0; // zahoď connect
+  return h;
+}
+
+describe('createLobby – předsíň (form-first, fáze 106)', () => {
+  it('po connectu jsem v předsíni: akordeon vidí obsazenost všech 4 lobby, nejsem člen', () => {
+    const h = foyer();
+    expect(h.room.classList.contains('hidden')).toBe(false);
+    expect(h.form.classList.contains('hidden')).toBe(true);
+    expect(h.nickLine.textContent).toContain('Jan');
+    // Žádná sekce není moje (v předsíni nejsem v žádném rosteru).
+    expect(sections(h).some((s) => s.classList.contains('is-mine'))).toBe(false);
+    // Počty v hlavičkách ukazují obsazenost i bez rozbalení.
+    expect(sectionByName(h, 'Americká').querySelector('.lobby-section-count')!.textContent).toBe('1');
+    expect(sectionByName(h, 'Ruská').querySelector('.lobby-section-count')!.textContent).toBe('1');
+    expect(sectionByName(h, 'Pool').querySelector('.lobby-section-count')!.textContent).toBe('0');
+  });
+
+  it('Vstoupit v předsíni pošle enter{variant} (ne switch-lobby)', () => {
+    const h = foyer();
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    sectionByName(h, 'Ruská').querySelector<HTMLButtonElement>('.lobby-enter-btn')!.click();
+    expect(h.sockets[0]!.sent).toEqual([JSON.stringify({ type: 'enter', variant: 'russian' })]);
+  });
+
+  it('rozbalená cizí sekce v předsíni má Vstoupit a NEMÁ Vyzvat', () => {
+    const h = foyer();
+    sectionByName(h, 'Americká').querySelector<HTMLButtonElement>('.lobby-section-header')!.click();
+    const am = sectionByName(h, 'Americká');
+    expect(am.querySelector('.lobby-enter-btn')).not.toBeNull();
+    expect(am.querySelector('.lobby-challenge-btn')).toBeNull();
+  });
+
+  it('modal příchozí výzvy je v předsíni zavřený (ne-členovi výzva nechodí)', () => {
+    const h = foyer();
+    expect(h.challengeModal.classList.contains('hidden')).toBe(true);
+  });
+
+  it('po vstupu z předsíně (roster) se moje sekce označí a nabídne Vyzvat', () => {
+    const h = foyer();
+    // Server přijme enter → pošle roster cílové lobby + nový all-roster snímek.
+    h.sockets[0]!.message({
+      type: 'roster',
+      variant: 'russian',
+      players: [
+        { id: '1', nick: 'Jan' },
+        { id: '9', nick: 'Olga' },
+      ],
+    });
+    h.sockets[0]!.message(
+      lobbiesMsg({
+        american: [['2', 'Eva']],
+        russian: [
+          ['1', 'Jan'],
+          ['9', 'Olga'],
+        ],
+      }),
+    );
+    const russian = sectionByName(h, 'Ruská');
+    expect(russian.classList.contains('is-mine')).toBe(true);
+    expect(russian.classList.contains('is-expanded')).toBe(true);
+    const olga = Array.from(russian.querySelectorAll<HTMLElement>('.lobby-roster-item')).find((li) =>
+      li.textContent?.includes('Olga'),
+    )!;
+    expect(olga.querySelector('.lobby-challenge-btn')).not.toBeNull();
+  });
+
+  it('Odpojit zavře socket a vrátí do form-first', () => {
+    const h = foyer();
+    h.disconnectBtn.click();
+    expect(h.sockets[0]!.closed).toBe(true);
+    expect(h.form.classList.contains('hidden')).toBe(false);
+    expect(h.room.classList.contains('hidden')).toBe(true);
+  });
+
+  it('po Odpojit další připojení otevře čerstvý socket a pošle connect', () => {
+    const h = foyer();
+    h.disconnectBtn.click();
+    h.nick.value = 'Jan';
+    submit(h.form);
+    expect(h.sockets).toHaveLength(2);
+    h.sockets[1]!.open();
+    expect(h.sockets[1]!.sent).toEqual([JSON.stringify({ type: 'connect', nick: 'Jan' })]);
   });
 });

@@ -249,12 +249,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       },
     );
 
-    // Místnost přítomnosti (fáze 67). Vstup je ZPRÁVOU, ne připojením: klient po
-    // otevření pošle `{ type:'join', nick }`. Server přidělí session id, zapíše
-    // hráče a pošle mu `roster` (vč. sebe), ostatním `joined`. Duplicita →
-    // `nick-taken` (socket zůstává, klient zkusí návrh). Prázdná/dlouhá → `error`.
-    // Dvojí join na tomtéž socketu → `error` (přejmenování není v tomto řezu).
-    // `close` odhlásí a rozešle `left` – JEN pokud se hráč opravdu zapsal.
+    // Místnost přítomnosti (fáze 67). Vstup jsou dvě ZPRÁVY (form-first, fáze 106):
+    // klient po otevření pošle `{ type:'connect', nick }` (PŘEDSÍŇ – server přidělí
+    // session id, zaregistruje identitu bez členství a pošle all-roster `lobbies`
+    // snímek), pak `{ type:'enter', variant }` (vstup do konkrétní lobby → `roster`
+    // jemu, `joined` ostatním). Duplicita nicku → `nick-taken` (socket zůstává, klient
+    // zkusí návrh). Prázdná/dlouhá → `error`. Druhý connect na tomtéž socketu → `error`.
+    // `close` odhlásí a rozešle `left` – JEN pokud se hráč opravdu zapsal do lobby.
     instance.get('/room/ws', { websocket: true }, (socket) => {
       // Referencí na zapsaného hráče se drží stav spojení: null = ještě nevstoupil
       // (nebo dostal nick-taken/error a zkouší znovu). Autorita nad tímto socketem.
@@ -270,45 +271,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         } catch (error) {
           console.error('Místnost: odeslání příchozímu selhalo:', error);
         }
-      };
-
-      // Vstup pod přezdívkou do zvolené varianta-lobby (fáze 103). `variant` je
-      // volitelná: chybí / není platné `VariantId` → americká lobby (zpětná
-      // kompatibilita se stávajícím klientem, který variantu neposílá). Set `me` =
-      // zapsaný hráč (vč. nicku a lobby).
-      const handleJoin = (nick: unknown, variant: unknown): void => {
-        if (typeof nick !== 'string') {
-          send({ type: 'error', message: 'Chybí přezdívka.' });
-          return;
-        }
-        if (me !== null) {
-          send({ type: 'error', message: 'Už jsi v místnosti.' });
-          return;
-        }
-        // Neznámá/chybějící varianta → american (default). Neplatný cizí string
-        // se NEodmítá, jen degraduje na american – stávající klient bez varianty
-        // tak hraje beze změny a nový klient dostane echo skutečné lobby v `roster`.
-        const lobby: VariantId = isVariantId(variant) ? variant : 'american';
-        const result = lobbies.join(nick, lobby, socket);
-        if (result.status === 'invalid') {
-          send({ type: 'error', message: result.reason });
-          return;
-        }
-        if (result.status === 'nick-taken') {
-          send({ type: 'nick-taken', suggestion: result.suggestion });
-          return;
-        }
-        // Úspěch. Pořadí: hráč už je v rosteru své lobby (join ho zapsal) → pošli
-        // `roster` JEN jemu (vč. sebe a echo varianty lobby), teprve pak `joined`
-        // OSTATNÍM V TÉŽE lobby (except = já), ať nedostane vlastní příchod dvakrát.
-        me = { id: result.player.id, nick: result.player.nick, variant: lobby };
-        send({ type: 'roster', players: lobbies.room(lobby).roster(), variant: lobby });
-        lobbies
-          .room(lobby)
-          .broadcast(JSON.stringify({ type: 'joined', player: result.player }), result.player.id);
-        // All-roster snímek VŠEM (vč. příchozího): jeho vstup mění obsazení jeho
-        // lobby, což akordeon ostatních (i v jiné lobby) musí vidět (fáze 104).
-        broadcastLobbies();
       };
 
       // PŘEDSÍŇ (fáze 105): připojení pod přezdívkou BEZ vstupu do lobby. Register
@@ -1006,9 +968,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
             return;
           case 'enter':
             handleEnter(msg.variant);
-            return;
-          case 'join':
-            handleJoin(msg.nick, msg.variant);
             return;
           case 'switch-lobby':
             handleSwitchLobby(msg.variant);

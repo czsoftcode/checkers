@@ -79,7 +79,7 @@ export const NICK_MAX_LENGTH = 24;
  *  - `left`       – zbylým V TÉŽE lobby, odchozí hráč (jen `id`),
  *  - `nick-taken` – příchozímu, přezdívka obsazená + návrh volné varianty,
  *  - `error`      – příchozímu, lidský důvod (prázdná/dlouhá přezdívka, dvojí
- *                   join, nevalidní zpráva); socket zůstává otevřený.
+ *                   connect, nevalidní zpráva); socket zůstává otevřený.
  */
 export interface RosterMessage {
   readonly type: 'roster';
@@ -309,7 +309,7 @@ export class RoomPresence {
  * Globální identita hráče: přezdívka + socket + lobby, ve které je člen. `variant`
  * je `null` u PŘEDSÍNĚ (fáze 105): hráč je připojený (`connect`), má přezdívku a
  * dostává all-roster snímek, ale NENÍ členem žádné lobby (v žádném rosteru) – dokud
- * nezvolí lobby přes `enter`. Legacy `join` (fáze 103) přiřadí členství rovnou.
+ * nezvolí lobby přes `enter` (fáze 105).
  */
 interface Identity {
   readonly nick: string;
@@ -352,27 +352,8 @@ export class Lobbies {
   }
 
   /**
-   * Pokus o vstup do lobby `variant` pod přezdívkou. Trim → validace (prázdná /
-   * >{@link NICK_MAX_LENGTH}) → GLOBÁLNÍ kontrola obsazenosti (case-insensitive,
-   * přes všechny lobby). Při úspěchu přidělí session `id`, zapíše identitu i
-   * členství v lobby a vrátí `ok`. Jinak NIC nemění a vrátí `nick-taken` (s
-   * návrhem) nebo `invalid` (s důvodem).
-   */
-  join(rawNick: string, variant: VariantId, socket: RoomSocket): JoinResult {
-    // Legacy join (fáze 103) = connect + okamžité členství. Skládá se z `connect`
-    // (register + validace) a `assignLobby` (null → člen), aby validace nicku žila
-    // na JEDNOM místě. Chování pro stávající klienty/testy je beze změny.
-    const result = this.connect(rawNick, socket);
-    if (result.status !== 'ok') {
-      return result;
-    }
-    this.assignLobby(result.player.id, variant);
-    return result;
-  }
-
-  /**
    * PŘEDSÍŇ (fáze 105): zaregistruje GLOBÁLNÍ identitu BEZ členství (`variant=null`).
-   * Trim → validace → globální kontrola obsazenosti (stejná jako `join`). Při úspěchu
+   * Trim → validace → globální kontrola obsazenosti. Při úspěchu
    * přidělí session `id`, zapíše identitu s `variant=null` a vrátí `ok`. Hráč NENÍ v
    * žádném rosteru (žádná room), ale `broadcastAll` ho zasáhne (iteruje identity), takže
    * all-roster snímek dostane. Do lobby vstoupí až přes {@link enter}.
@@ -546,7 +527,7 @@ export class Lobbies {
   /**
    * Nejnižší volná varianta `nick_1`, `nick_2`, … (case-insensitive, GLOBÁLNĚ).
    * Kdyby návrh přesáhl {@link NICK_MAX_LENGTH}, základ se zkrátí, ať návrh projde
-   * validací při opakovaném `join`. Smyčka je konečná: přihlášených je konečně,
+   * validací při opakovaném `connect`. Smyčka je konečná: přihlášených je konečně,
    * takže nějaké `n` je vždy volné.
    */
   private suggestFreeNick(nick: string): string {

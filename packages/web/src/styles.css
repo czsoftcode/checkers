@@ -732,12 +732,30 @@ body {
   flex-direction: column;
 }
 
+/* Hlavička místnosti (fáze 106): přezdívka vlevo, Odpojit vpravo. */
+.lobby-room-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
 /* Přezdívka nad akordeonem (fáze 104). */
 .lobby-nick-line {
-  margin: 0 0 0.6rem;
+  margin: 0;
   font-size: 1rem;
   font-weight: 600;
   color: #cdd;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Odpojit (fáze 106): decentní, ať netahá pozornost od akordeonu. */
+.lobby-disconnect-btn {
+  flex: none;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.7rem;
 }
 
 /* --- Akordeon 4 varianta-lobby (fáze 104) -------------------------------- */

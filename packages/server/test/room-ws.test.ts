@@ -1,15 +1,16 @@
 /**
  * Integrační test místnosti přítomnosti (fáze 67) přes SKUTEČNÉ spojení:
  * server `listen({ port: 0 })` + reálný `ws` klient (`app.inject` WS neumí).
- * Vstup je ZPRÁVOU `{ type:'join', nick }`, ne připojením.
+ * Vstup jsou dvě ZPRÁVY (fáze 106): `connect{nick}` (předsíň) → `enter{variant}`
+ * (vstup do lobby), ne připojením.
  *
  * Zuby:
- *   - B po join vidí A v rosteru; A dostane `joined(B)`; po zavření A dostane
+ *   - B po vstupu vidí A v rosteru; A dostane `joined(B)`; po zavření A dostane
  *     B `left(A)` (kdyby broadcast/close chyběl, padne),
  *   - duplicitní přezdívka → `nick-taken` s návrhem, druhý se NEzapíše, první
  *     NEdostane nic (izolace: obsazenost nevpustí dvojníka),
  *   - prázdná / příliš dlouhá přezdívka → `error`, žádný zápis,
- *   - dvojí join na tomtéž socketu → `error`,
+ *   - druhý connect na tomtéž socketu → `error`,
  *   - izolace od herní WS (fáze 66): odběratel `/games/:id/ws` nedostane nic
  *     z místnosti.
  *
@@ -95,14 +96,23 @@ function collectMessages(ws: WebSocket): RoomServerMessage[] {
   return received;
 }
 
-/** Připojí hráče: otevře, pošle join a počká na jeho `roster`. Vrátí socket + roster. */
+/**
+ * Připojí hráče do AMERICKÉ lobby (fáze 106): connect (předsíň → `lobbies`) → enter
+ * (americká → `roster`). Vrátí socket + roster cílové lobby. Trailing `lobbies` z
+ * broadcastu po enteru se doručí ve stejné I/O dávce jako roster a bez posluchače
+ * zahodí (stejně jako u legacy joinu), takže následné `nextMessage` čeká na skutečně
+ * novou zprávu.
+ */
 async function joinRoom(
   port: number,
   nick: string,
 ): Promise<{ ws: WebSocket; roster: RoomServerMessage }> {
   const ws = await openRoom(port);
+  const lobbiesMsg = nextMessage(ws);
+  ws.send(JSON.stringify({ type: 'connect', nick }));
+  await lobbiesMsg;
   const rosterMsg = nextMessage(ws);
-  ws.send(JSON.stringify({ type: 'join', nick }));
+  ws.send(JSON.stringify({ type: 'enter', variant: 'american' }));
   const roster = await rosterMsg;
   return { ws, roster };
 }
@@ -153,7 +163,7 @@ describe('Místnost – přítomnost přes WS', () => {
 
     const ws = await openRoom(port);
     const reply = nextMessage(ws);
-    ws.send(JSON.stringify({ type: 'join', nick: 'honza' })); // jiná velikost
+    ws.send(JSON.stringify({ type: 'connect', nick: 'honza' })); // jiná velikost
     const msg = await reply;
 
     expect(msg.type).toBe('nick-taken');
@@ -170,24 +180,24 @@ describe('Místnost – přítomnost přes WS', () => {
 
     const ws1 = await openRoom(port);
     const r1 = nextMessage(ws1);
-    ws1.send(JSON.stringify({ type: 'join', nick: '   ' }));
+    ws1.send(JSON.stringify({ type: 'connect', nick: '   ' }));
     expect((await r1).type).toBe('error');
 
     const ws2 = await openRoom(port);
     const r2 = nextMessage(ws2);
-    ws2.send(JSON.stringify({ type: 'join', nick: 'x'.repeat(100) }));
+    ws2.send(JSON.stringify({ type: 'connect', nick: 'x'.repeat(100) }));
     expect((await r2).type).toBe('error');
 
     await delay(50);
     expect(presence().count()).toBe(0);
   });
 
-  it('dvojí join na tomtéž socketu → error', async () => {
+  it('druhý connect na tomtéž socketu → error', async () => {
     const port = await start();
     const { ws } = await joinRoom(port, 'Karel');
 
     const second = nextMessage(ws);
-    ws.send(JSON.stringify({ type: 'join', nick: 'Karel2' }));
+    ws.send(JSON.stringify({ type: 'connect', nick: 'Karel2' })); // už připojen
     const msg = await second;
     expect(msg.type).toBe('error');
 
@@ -217,10 +227,10 @@ describe('Místnost – přítomnost přes WS', () => {
     ws.send(JSON.stringify({ type: 'neznamy' }));
     expect((await r2).type).toBe('error');
 
-    // Socket žije: platný join po chybách projde.
+    // Socket žije: platný connect po chybách projde (předsíň → lobbies).
     const r3 = nextMessage(ws);
-    ws.send(JSON.stringify({ type: 'join', nick: 'Eva' }));
-    expect((await r3).type).toBe('roster');
+    ws.send(JSON.stringify({ type: 'connect', nick: 'Eva' }));
+    expect((await r3).type).toBe('lobbies');
   });
 
   it('izolace od herní WS (fáze 66): odběratel partie nedostane nic z místnosti', async () => {
