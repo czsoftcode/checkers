@@ -419,6 +419,20 @@ export function legalMoves(position: Position, ruleset: Ruleset = AMERICAN_RULES
         return kingJumps;
       }
     }
+    // POVINNÉ MAXIMUM BRANÍ (italská, FID pravidlo 7 – KVANTITA): existuje-li
+    // víc skoků, hráč MUSÍ zvolit ten s NEJVÍCE branými kameny. Metrika je
+    // `captures.length` (počet braných polí = počet kamenů; každý kámen = 1,
+    // BEZ vážení dámy). Ponechá se MNOŽINA všech skoků s rovným maximem –
+    // ne jeden tah; kvalitativní FID priorita (dáma > muž, víc dam, pořadí
+    // braní) je IT-4 a operuje až NAD touto max-množinou. Blok je samostatný
+    // vedle kingCapturePriority (v této vlně se nikdy nepotkají) a běží jen
+    // uvnitř `jumps.length > 0`, takže `Math.max` nedostane prázdné pole.
+    // Flag-vázané: pro !mustCaptureMaximum (american/pool/russian/czech) se
+    // blok přeskočí → výstup je bajt-identický a perft se nehne.
+    if (ruleset.mustCaptureMaximum) {
+      const maxCaptures = Math.max(...jumps.map((move) => move.captures.length));
+      return jumps.filter((move) => move.captures.length === maxCaptures);
+    }
     return jumps;
   }
   return generateSimpleMoves(position, ruleset);

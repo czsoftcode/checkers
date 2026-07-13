@@ -4,10 +4,11 @@
  * Většina polí reálně čte generátor / apply / legalMoves. ČÁSTEČNÁ VÝJIMKA
  * (italská): `manCannotCaptureKing` už AKTIVNÍ JE – generátor skoků
  * (`extendJumps` v moves.ts, fáze 112) podle něj prořezává braní muže přes dámu.
- * Zbylá dvě pole `mustCaptureMaximum` a `capturePriority` zatím SPÍ – deklarují
- * se a plní defaulty do všech variant, ale žádný čtenář je ještě nečte (maximum
- * a FID priorita dorazí ve fázích IT-3/IT-4). Ostatní varianty mají všechna tři
- * pole na defaultu, takže se jejich chování nemění.
+ * `mustCaptureMaximum` je AKTIVNÍ od fáze IT-3 (moves.ts, `legalMoves` filtruje
+ * jen skoky s maximálním počtem braných kamenů). Poslední pole `capturePriority`
+ * zatím SPÍ – deklaruje se a plní default do všech variant, ale žádný čtenář ho
+ * ještě nečte (FID kvalitativní priorita dorazí ve fázi IT-4). Ostatní varianty
+ * mají všechna tři pole na defaultu, takže se jejich chování nemění.
  *
  * Varianta patří do GameState / metadat místnosti, NE do hashované Position
  * (Zobrist zůstává position-only) – Ruleset se proto protahuje parametrem,
@@ -43,8 +44,9 @@ export interface Ruleset {
   /**
    * Pravidlo MAXIMA braní (italská, mezinárodní): existuje-li více braní,
    * hráč MUSÍ zvolit to, které bere NEJVÍC kamenů. `false` = žádné maximum,
-   * stačí brát cokoli (americká, pool, ruská, česká). Fáze 111 pole jen
-   * deklaruje; `legalMoves` ho zatím NEČTE (vynucení přijde v IT-2..IT-5).
+   * stačí brát cokoli (americká, pool, ruská, česká). AKTIVNÍ (fáze IT-3):
+   * `legalMoves` po posbírání skoků ponechá jen množinu s maximem `captures.length`
+   * (KVANTITA, bez vážení dámy). Flag-vázané – pro `false` se filtr nespustí.
    */
   readonly mustCaptureMaximum: boolean;
   /**
@@ -152,9 +154,11 @@ export const CZECH_RULESET: Ruleset = {
  * dámu (`manCannotCaptureKing: true`).
  *
  * ČÁSTEČNĚ AKTIVNÍ: `manCannotCaptureKing` už generátor skoků respektuje
- * (fáze 112 – muž nepřeskočí dámu). `mustCaptureMaximum` a `capturePriority`
- * zatím SPÍ (maximum a FID priorita dorazí v IT-3/IT-4). Ruleset se tedy chová
- * jako „muž vpřed + krátká dáma + muž nebere dámu", ale bez maxima a priority.
+ * (fáze 112 – muž nepřeskočí dámu) a `mustCaptureMaximum` už `legalMoves`
+ * vynucuje (fáze IT-3 – jen maximum braných kamenů). Poslední pole
+ * `capturePriority` zatím SPÍ (FID kvalitativní priorita dorazí v IT-4).
+ * Ruleset se tedy chová jako „muž vpřed + krátká dáma + muž nebere dámu +
+ * povinné maximum", ale bez kvalitativní priority.
  * Registruje se mimo `VARIANT_IDS` (viz variant.ts) – je ZNÁMÝ
  * (`isVariantId('italian')=true`), ale NENÍ v nabídce lobby, takže k němu
  * nevede dosažitelná herní cesta a nehotová legalita nemůže tiše rozehrát partii.

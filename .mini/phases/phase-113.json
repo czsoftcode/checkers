@@ -1,0 +1,29 @@
+{
+  "id": 113,
+  "title": "Italská: povinné maximum braní",
+  "goal": "V legalMoves (packages/rules/src/moves.ts) při zapnutém mustCaptureMaximum ponechat jen skoky s MAXIMÁLNÍM počtem braných kamenů (metrika = move.captures.length přes všechny plné cesty, vyfiltrovat kratší). Striktně ADITIVNÍ větev, aktivní JEN italským flagem (mustCaptureMaximum=true) - ostatní varianty (flag=false) beze změny. Řeší JEN kvantitu (nejvíc kamenů); kvalitativní FID priorita (dáma>muž, víc dam, pořadí braní) přijde v IT-4 a NENÍ součástí této fáze. Neinteragovat se stávajícím kingCapturePriority filtrem (českou) - italská ho nemá (má capturePriority='italianFull'), ohlídat že se české chování nezmění. Brána: fixture kde 2-braní se v legalMoves NEobjeví když existuje 3-braní (adversariálně - kratší braní odmítnuto), a kde více rovných maxim zůstane zachováno; perft 1-6 american/pool/russian/czech BEZE ZMĚNY čísel; celá suita zelená; tsc čistý.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Filtr maxima v legalMoves",
+      "status": "done",
+      "detail": "V packages/rules/src/moves.ts do legalMoves (uvnitř větve jumps.length > 0, vedle stávajícího kingCapturePriority bloku, NE do něj) přidat samostatný if (ruleset.mustCaptureMaximum): spočítat max přes move.captures.length a vrátit MNOŽINU všech skoků s tou délkou (ne jeden tah). Krátký komentář (FID kvantita pravidlo 7, bez vážení dámy, kvalita je IT-4, blok běží jen při existujících skocích). Ostatní varianty flag=false → blok se přeskočí. Výstup: blok na místě, tsc čistý."
+    },
+    {
+      "title": "Fixture: tři zuby maxima",
+      "status": "done",
+      "detail": "Nový behavior test (styl czech-king-priority.test.ts) v packages/rules/test/. Přes legalMoves s ITALIAN_RULESET: (a) pozice s 3-braním a jiným 2-braním → legalMoves obsahuje jen 3-braní, 2-braní CHYBÍ (adversariálně); (b) pozice se dvěma různými 3-braními → OBĚ zůstanou (množina, ne jeden); (c) KONTROLA: pozice z (a) s AMERICAN_RULESET → přítomné 2 i 3 braní (flag-vázanost, americká netknutá). Výstup: test zelený, (c) prokazatelně jiný výsledek než (a)."
+    },
+    {
+      "title": "Brána: perft + suita + tsc",
+      "status": "done",
+      "detail": "perft 1-6 american (7/49/302/1469/7361/36768)/pool/russian/czech BEZE ZMĚNY čísel; celá vitest suita (rules+web+server) zelená včetně czech-king-priority; tsc čistý. Potvrzuje, že aditivní filtr nezasáhl ostatní varianty (flag=false → blok se přeskočí)."
+    }
+  ],
+  "startedAt": "2026-07-13T08:25:02.587Z",
+  "completedAt": "2026-07-13T08:41:21.893Z",
+  "autoCommit": {
+    "preSha": "b8748670e0944d5aa615ec55c84d3ea44d5197fc",
+    "subject": "Phase 113: Italská: povinné maximum braní"
+  }
+}
