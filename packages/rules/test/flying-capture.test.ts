@@ -45,6 +45,9 @@ const POOL_RULESET: Ruleset = {
   king: 'flying',
   promoteMidCapture: false,
   kingCapturePriority: false,
+  mustCaptureMaximum: false,
+  capturePriority: 'none',
+  manCannotCaptureKing: false,
 };
 
 describe('flying braní – volba dopadu', () => {

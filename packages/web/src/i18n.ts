@@ -213,6 +213,9 @@ const cs = {
   'variant.pool': 'Pool dáma',
   'variant.russian': 'Ruská dáma',
   'variant.czech': 'Česká dáma',
+  // Italská (fáze 111) je zatím SPÍCÍ – v nabídce lobby NENÍ (mimo VARIANT_IDS),
+  // ale `VARIANT_LABEL_KEYS` je úplná mapa přes VariantId, tak klíč musí existovat.
+  'variant.italian': 'Italská dáma',
 
   // Itch build (fáze 89): AI-only publikace. Hra s člověkem tady neběží (server je
   // cross-origin, mrtvý WS) → tlačítko místo místnosti otevře modal s odkazem na
@@ -353,6 +356,7 @@ const en = {
   'variant.pool': 'Pool checkers',
   'variant.russian': 'Russian checkers',
   'variant.czech': 'Czech checkers',
+  'variant.italian': 'Italian checkers',
 
   'itch.humanBtn': 'Play against a human',
   'itch.modalTitle': 'Human vs human is on the full version',
@@ -456,6 +460,7 @@ const VARIANT_LABEL_KEYS: Record<VariantId, MessageKey> = {
   pool: 'variant.pool',
   russian: 'variant.russian',
   czech: 'variant.czech',
+  italian: 'variant.italian',
 };
 
 /**

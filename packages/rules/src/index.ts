@@ -23,7 +23,13 @@ export { initialPosition } from './position.js';
 // jumpMovesFrom, generateSimpleMoves) se záměrně neexportují – ignorují
 // povinnost braní a napojení na ně by tiše nabízelo nelegální tahy.
 export { legalMoves } from './moves.js';
-export { AMERICAN_RULESET, POOL_RULESET, RUSSIAN_RULESET, CZECH_RULESET } from './ruleset.js';
+export {
+  AMERICAN_RULESET,
+  POOL_RULESET,
+  RUSSIAN_RULESET,
+  CZECH_RULESET,
+  ITALIAN_RULESET,
+} from './ruleset.js';
 export type { Ruleset } from './ruleset.js';
 export { VARIANT_IDS, isVariantId, rulesetForVariant } from './variant.js';
 export type { VariantId } from './variant.js';

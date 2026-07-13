@@ -552,6 +552,11 @@
       "id": 110,
       "title": "Zkrátit tlačítka nad hrací deskou",
       "status": "done"
+    },
+    {
+      "id": 111,
+      "title": "Italská: Ruleset a registr",
+      "status": "done"
     }
   ]
 }

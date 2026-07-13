@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AMERICAN_RULESET,
   CZECH_RULESET,
+  ITALIAN_RULESET,
   POOL_RULESET,
   RUSSIAN_RULESET,
   VARIANT_IDS,
@@ -22,11 +23,14 @@ import {
 import type { Ruleset, VariantId } from '../src/index.js';
 
 describe('rulesetForVariant – každé id mapuje na správný ruleset', () => {
+  // 'italian' je ZÁMĚRNĚ v seznamu (známá varianta), i když NENÍ ve VARIANT_IDS
+  // – mapování id→ruleset musí fungovat i pro spící variantu.
   const cases: [VariantId, Ruleset][] = [
     ['american', AMERICAN_RULESET],
     ['pool', POOL_RULESET],
     ['russian', RUSSIAN_RULESET],
     ['czech', CZECH_RULESET],
+    ['italian', ITALIAN_RULESET],
   ];
 
   for (const [id, expected] of cases) {
@@ -40,11 +44,24 @@ describe('rulesetForVariant – každé id mapuje na správný ruleset', () => {
       expect(rs.king).toBe(expected.king);
       expect(rs.promoteMidCapture).toBe(expected.promoteMidCapture);
       expect(rs.kingCapturePriority).toBe(expected.kingCapturePriority);
+      // Tři italská pole (fáze 111) – zuby na to, že se do mapy dostal ruleset
+      // se správnými novými vlajkami (u italské true/'italianFull'/true).
+      expect(rs.mustCaptureMaximum).toBe(expected.mustCaptureMaximum);
+      expect(rs.capturePriority).toBe(expected.capturePriority);
+      expect(rs.manCannotCaptureKing).toBe(expected.manCannotCaptureKing);
     });
   }
 
-  it('VARIANT_IDS pokrývá právě známá id (nic nechybí, nic navíc)', () => {
+  // Kontrakt „známé ⊋ nabízené": VARIANT_IDS je NABÍDKA lobby (přesně 4), NE
+  // seznam všech známých id. 'italian' je známé (viz níže), ale úmyslně mimo.
+  it('VARIANT_IDS = přesně 4 nabízené varianty a NEobsahuje italian', () => {
     expect([...VARIANT_IDS].sort()).toEqual(['american', 'czech', 'pool', 'russian']);
+    expect(VARIANT_IDS).not.toContain('italian');
+  });
+
+  it('italian je ZNÁMÁ varianta (isVariantId), i když není v nabídce', () => {
+    expect(isVariantId('italian')).toBe(true);
+    expect(rulesetForVariant('italian')).toBe(ITALIAN_RULESET);
   });
 });
 

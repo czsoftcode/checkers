@@ -1,11 +1,14 @@
 /**
  * Ruleset – parametry varianty, které mění chování generátoru tahů.
  *
- * Záměrně MINIMÁLNÍ: každé pole reálně čte generátor / apply / legalMoves –
- * žádný dead config. Nové pole se přidává teprve, až je čte kód (tak přibylo
- * `promoteMidCapture` pro ruskou a `kingCapturePriority` pro českou). Pravidlo
- * MAXIMA braní (musí brát nejvíc) záměrně chybí – žádná varianta této vlny ho
- * nepoužívá; dolije se, až bude na řadě mezinárodní dáma.
+ * Většina polí reálně čte generátor / apply / legalMoves. VÝJIMKA (fáze 111):
+ * `mustCaptureMaximum`, `capturePriority` a `manCannotCaptureKing` jsou tři
+ * pole italské varianty, která zatím PŘEDBÍHAJÍ svého čtenáře – deklarují se
+ * a plní defaulty do všech variant, ale `legalMoves` je ještě NEČTE. Italská
+ * pravidla (generační omezení, maximum, FID priorita) dorazí ve fázích IT-2
+ * až IT-5; do té doby jsou tato pole u italské SPÍCÍ (viz `ITALIAN_RULESET`
+ * a jeho registrace mimo `VARIANT_IDS`). Ostatní varianty je mají na defaultu,
+ * takže se jejich chování nemění.
  *
  * Varianta patří do GameState / metadat místnosti, NE do hashované Position
  * (Zobrist zůstává position-only) – Ruleset se proto protahuje parametrem,
@@ -38,6 +41,29 @@ export interface Ruleset {
    * (public gate), ne v generátoru – stavební bloky zůstávají beze změny.
    */
   readonly kingCapturePriority: boolean;
+  /**
+   * Pravidlo MAXIMA braní (italská, mezinárodní): existuje-li více braní,
+   * hráč MUSÍ zvolit to, které bere NEJVÍC kamenů. `false` = žádné maximum,
+   * stačí brát cokoli (americká, pool, ruská, česká). Fáze 111 pole jen
+   * deklaruje; `legalMoves` ho zatím NEČTE (vynucení přijde v IT-2..IT-5).
+   */
+  readonly mustCaptureMaximum: boolean;
+  /**
+   * PRIORITA braní podle italských pravidel (FID). `'italianFull'` = plná
+   * italská kaskáda kritérií (maximum → braní dámou → nejvíc dam → …).
+   * `'none'` = žádná italská priorita (americká, pool, ruská; česká má svou
+   * vlastní kvalitativní přednost přes `kingCapturePriority`, sem NEpatří).
+   * Enum je ZÁMĚRNĚ osekaný – `'kingQuality'` se nepřidává, nikdo by ho
+   * nepoužil. Fáze 111 pole jen deklaruje; `legalMoves` ho zatím NEČTE.
+   */
+  readonly capturePriority: 'none' | 'italianFull';
+  /**
+   * Zákaz braní dámy MUŽEM (italská): muž NESMÍ přeskočit (brát) dámu –
+   * takové braní je nelegální. `false` = muž bere dámu i kámen bez rozdílu
+   * (americká, pool, ruská, česká). Fáze 111 pole jen deklaruje; `legalMoves`
+   * ho zatím NEČTE (vynucení přijde v IT-2..IT-5).
+   */
+  readonly manCannotCaptureKing: boolean;
 }
 
 /**
@@ -50,6 +76,9 @@ export const AMERICAN_RULESET: Ruleset = {
   king: 'short',
   promoteMidCapture: false,
   kingCapturePriority: false,
+  mustCaptureMaximum: false,
+  capturePriority: 'none',
+  manCannotCaptureKing: false,
 };
 
 /**
@@ -66,6 +95,9 @@ export const POOL_RULESET: Ruleset = {
   king: 'flying',
   promoteMidCapture: false,
   kingCapturePriority: false,
+  mustCaptureMaximum: false,
+  capturePriority: 'none',
+  manCannotCaptureKing: false,
 };
 
 /**
@@ -81,6 +113,9 @@ export const RUSSIAN_RULESET: Ruleset = {
   king: 'flying',
   promoteMidCapture: true,
   kingCapturePriority: false,
+  mustCaptureMaximum: false,
+  capturePriority: 'none',
+  manCannotCaptureKing: false,
 };
 
 /**
@@ -100,4 +135,31 @@ export const CZECH_RULESET: Ruleset = {
   king: 'flying',
   promoteMidCapture: false,
   kingCapturePriority: true,
+  mustCaptureMaximum: false,
+  capturePriority: 'none',
+  manCannotCaptureKing: false,
+};
+
+/**
+ * Italská dáma (Italian draughts, „dama italiana"): muž bere JEN VPŘED
+ * (`manCaptureBackward: false`), dáma je KRÁTKÁ (`king: 'short'`, o 1 pole –
+ * NE létavá), proměna až na konci tahu (`promoteMidCapture: false`). Navíc tři
+ * italská specifika: MUSÍ se brát maximum kamenů (`mustCaptureMaximum: true`),
+ * plná FID priorita braní (`capturePriority: 'italianFull'`) a muž NESMÍ brát
+ * dámu (`manCannotCaptureKing: true`).
+ *
+ * SPÍCÍ (fáze 111): tři nová pole `legalMoves` zatím NEČTE, takže tenhle
+ * ruleset se chová jako „muž vpřed + krátká dáma", dokud nedorazí vynucení
+ * v IT-2..IT-5. Registruje se mimo `VARIANT_IDS` (viz variant.ts) – je ZNÁMÝ
+ * (`isVariantId('italian')=true`), ale NENÍ v nabídce lobby, takže k němu
+ * nevede dosažitelná herní cesta a spící vlajky nemůžou tiše rozehrát partii.
+ */
+export const ITALIAN_RULESET: Ruleset = {
+  manCaptureBackward: false,
+  king: 'short',
+  promoteMidCapture: false,
+  kingCapturePriority: false,
+  mustCaptureMaximum: true,
+  capturePriority: 'italianFull',
+  manCannotCaptureKing: true,
 };

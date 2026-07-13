@@ -32,6 +32,10 @@ const EVENT_NAME: Record<VariantId, string> = {
   pool: 'Pool Checkers',
   russian: 'Russian Draughts',
   czech: 'Czech Draughts',
+  // Italská (fáze 111) je SPÍCÍ – server pro ni PvP místnost nezakládá (mimo
+  // VARIANT_IDS), takže archiv ji reálně nikdy nedostane. Mapa je ale úplná
+  // přes VariantId, tak název musí existovat, aby typecheck prošel.
+  italian: 'Italian Draughts',
 };
 
 /**

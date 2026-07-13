@@ -1,0 +1,34 @@
+{
+  "id": 111,
+  "title": "Italská: Ruleset a registr",
+  "goal": "Rozšířit interface Ruleset (packages/rules/src/ruleset.ts) o pole mustCaptureMaximum (bool), capturePriority (enum none|kingQuality|italianFull) a manCannotCaptureKing (bool) + doplnit defaulty (mustCaptureMaximum=false, capturePriority=none, manCannotCaptureKing=false) do AMERICAN/POOL/RUSSIAN/CZECH rulesetů. Českou NEMIGROVAT - ponechat její stávající boolean kingCapturePriority beze změny (dočasná duplicita dvou mechanismů priority je na dev přijatelná). Přidat italian do VariantId/VARIANT_IDS/REGISTRY + nový ITALIAN_RULESET (manCaptureBackward=false, king=short, promoteMidCapture=false, mustCaptureMaximum=true, capturePriority=italianFull, manCannotCaptureKing=true). BEZ jakékoli nové logiky v legalMoves - jen deklarace polí a registrace; italská ještě NENÍ v lobby. Brána: perft 1-6 americké/pool/ruské/české beze změny čísel (žádná varianta se nedotýká); všechny stávající testy zelené; isVariantId('italian')=true; rulesetForVariant('italian') vrací ITALIAN_RULESET.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Rozšířit Ruleset interface + ITALIAN_RULESET",
+      "status": "done",
+      "detail": "Do interface Ruleset přidat 3 povinná readonly pole: mustCaptureMaximum: boolean, capturePriority: 'none' | 'italianFull', manCannotCaptureKing: boolean (bez 'kingQuality'). Doplnit defaulty (false/'none'/false) do AMERICAN/POOL/RUSSIAN/CZECH (česká: kingCapturePriority zůstává true). Přidat export ITALIAN_RULESET (manCaptureBackward=false, king='short', promoteMidCapture=false, mustCaptureMaximum=true, capturePriority='italianFull', manCannotCaptureKing=true). Přepsat zavádějící doc-komentář ř.4-8. Výstup: ruleset.ts kompiluje, 5 konstant, žádné 'kingQuality'."
+    },
+    {
+      "title": "Zaregistrovat italian mimo nabídku",
+      "status": "done",
+      "detail": "'italian' přidat do VariantId typu a do REGISTRY (→ ITALIAN_RULESET). VARIANT_IDS ZŮSTÁVÁ beze změny (jen 4 - italská NENÍ v nabídce). Aktualizovat doc-komentář VARIANT_IDS z 'všechna známá id' na 'varianty nabízené v lobby' (známé = klíče REGISTRY / typ VariantId). Výstup: rulesetForVariant('italian')===ITALIAN_RULESET, isVariantId('italian')===true, [...VARIANT_IDS] stále 4."
+    },
+    {
+      "title": "Testy: italian známá, ale mimo nabídku",
+      "status": "done",
+      "detail": "Ve variant.test.ts: přidat 'italian'→ITALIAN_RULESET do cases (kontrola všech polí vč. 3 nových = zuby na mapování). Přeformulovat test ř.46-47 na kontrakt known ⊋ offered: VARIANT_IDS = přesně 4 nabízené a NEobsahuje 'italian'; nový test že isVariantId('italian')===true. Ověřit, že i18n-variant.test.ts (iteruje VARIANT_IDS) a shape-loop nepadnou. Výstup: nové/upravené aserce zelené, zuby drží."
+    },
+    {
+      "title": "Brána: tsc + perft + celá suita",
+      "status": "done",
+      "detail": "tsc čistý; perft 1-6 american (7/49/302/1469/7361/36768)/pool/russian/czech BEZE ZMĚNY čísel; celá vitest suita (rules+web+server) zelená. Potvrzuje, že přidání polí + registrace nezměnilo chování žádné varianty a italská je spící, ale dosažitelná přes rulesetForVariant."
+    }
+  ],
+  "startedAt": "2026-07-13T06:32:16.731Z",
+  "completedAt": "2026-07-13T06:45:36.296Z",
+  "autoCommit": {
+    "preSha": "420bd0d086a18a5bce04e3eea1f434180b7b829e",
+    "subject": "Phase 111: Italská: Ruleset a registr"
+  }
+}

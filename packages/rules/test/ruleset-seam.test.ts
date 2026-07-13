@@ -22,6 +22,9 @@ const BACKWARD_CAPTURE: Ruleset = {
   king: 'short',
   promoteMidCapture: false,
   kingCapturePriority: false,
+  mustCaptureMaximum: false,
+  capturePriority: 'none',
+  manCannotCaptureKing: false,
 };
 
 describe('Ruleset seam – braní muže dozadu', () => {

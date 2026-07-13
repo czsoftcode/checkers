@@ -8,6 +8,9 @@ const FLYING: Ruleset = {
   king: 'flying',
   promoteMidCapture: false,
   kingCapturePriority: false,
+  mustCaptureMaximum: false,
+  capturePriority: 'none',
+  manCannotCaptureKing: false,
 };
 
 describe('notace – klouzavý prostý tah létavé dámy', () => {
@@ -47,6 +50,9 @@ const POOL: Ruleset = {
   king: 'flying',
   promoteMidCapture: false,
   kingCapturePriority: false,
+  mustCaptureMaximum: false,
+  capturePriority: 'none',
+  manCannotCaptureKing: false,
 };
 
 describe('notace – klouzavé braní létavé dámy (formatMove)', () => {

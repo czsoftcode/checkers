@@ -16,31 +16,40 @@
 import {
   AMERICAN_RULESET,
   CZECH_RULESET,
+  ITALIAN_RULESET,
   POOL_RULESET,
   RUSSIAN_RULESET,
 } from './ruleset.js';
 import type { Ruleset } from './ruleset.js';
 
-/** Identifikátor varianty (drát/kód). Výchozí všude, kde se nenastaví, je 'american'. */
-export type VariantId = 'american' | 'pool' | 'russian' | 'czech';
+/**
+ * Identifikátor varianty (drát/kód). Výchozí všude, kde se nenastaví, je
+ * 'american'. `'italian'` je ZNÁMÁ varianta (má záznam v REGISTRY), ale
+ * SPÍCÍ – záměrně chybí ve `VARIANT_IDS` (není v nabídce lobby, viz níže).
+ */
+export type VariantId = 'american' | 'pool' | 'russian' | 'czech' | 'italian';
 
 /**
- * Všechna známá id v jednom seznamu – zdroj pravdy pro `isVariantId` (runtime
- * validace vstupu zvenčí) i pro testy, které chtějí projít každou variantu.
- * Pořadí je jen kosmetické (nikde se na něj nespoléhá).
+ * Varianty NABÍZENÉ v lobby (AIvP picker + PvP accordion + server presence
+ * zakládá PvP místnost jen na těchto). Je to PODMNOŽINA známých id – 'italian'
+ * je v REGISTRY (tedy známé, projde `isVariantId`), ale ZDE NENÍ, protože ještě
+ * není hratelné (spící ruleset, fáze 111). Zdroj pravdy o „známém" je REGISTRY
+ * / typ `VariantId`, NE tenhle seznam. Pořadí je jen kosmetické.
  */
 export const VARIANT_IDS: readonly VariantId[] = ['american', 'pool', 'russian', 'czech'];
 
 /**
  * Mapa id → Ruleset. Úplná (každé `VariantId` má záznam) – TS to hlídá typem
  * `Record<VariantId, Ruleset>`, takže přidání varianty do `VariantId` bez
- * záznamu tady je chyba překladu, ne tichá díra za běhu.
+ * záznamu tady je chyba překladu, ne tichá díra za běhu. Obsahuje i 'italian'
+ * (SPÍCÍ, mimo `VARIANT_IDS`), takže `rulesetForVariant('italian')` funguje.
  */
 const REGISTRY: Record<VariantId, Ruleset> = {
   american: AMERICAN_RULESET,
   pool: POOL_RULESET,
   russian: RUSSIAN_RULESET,
   czech: CZECH_RULESET,
+  italian: ITALIAN_RULESET,
 };
 
 /** True, právě když `value` je známé `VariantId` (runtime brána pro vstup zvenčí). */
