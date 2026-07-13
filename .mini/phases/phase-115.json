@@ -1,0 +1,39 @@
+{
+  "id": 115,
+  "title": "Italská: perft proti FID",
+  "goal": "perft-italian.test.ts s hodnotami 1-6 ověřenými proti NEZÁVISLÉMU zdroji (NE vlastní výpočet zadrátovaný do testu - to nemá zuby, jen hlídá že se nezmění vlastní kód, ne že je správně). Central problem fáze = najít/postavit důvěryhodný oracle italských perft čísel; italská se od americké rozejde jakmile přijde braní různých délek (~hloubka 4-5, pravidlo maxima), takže americká čísla lze recyklovat nanejvýš pro pár nejmělčích hloubek. Oracle strategie se rozhodne v discuss (publikovaná čísla / druhá implementace / ruční ověření mělké hloubky + diferenciální cross-check s americkou). Plus explicitní doladicí fixtury: krátká dáma o 1 pole všesměr, muž i braní jen dopředu, proměna na poslední řadě UKONČÍ tah (nepokračuje jako dáma). BRÁNA JÁDRA: italská perft 1-6 sedí proti nezávislému zdroji; všechny italské fixtures IT-2..IT-4 (muž nebere dámu, maximum, FID priorita) zelené; ostatní varianty beze změny čísel; tsc čistý. Teprve po této bráně smí italská do UI. Scope-riziko: pokud nezávislý zdroj neexistuje a musí se stavět druhá implementace, může přerůst jednu fázi - pak rozdělit.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Rešerše třetí-stranného oracle (timeboxed)",
+      "status": "done",
+      "detail": "Rychlý pokus dohledat důvěryhodný externí zdroj italských perft čísel (jiný engine s perftem, publikovaná partie/tabulka). Výstup: buď nalezen zdroj + čísla zapsaná do hlavičky perft-italian.test.ts jako EXTRA cross-check, NEBO doloženo (v hlavičce testu), že nic důvěryhodného pro 8×8 italskou není → fallback na reference-gen jako u pool/ruské. NESMÍ blokovat fázi."
+    },
+    {
+      "title": "Nezávislý italian-reference-gen.ts",
+      "status": "done",
+      "detail": "Nový soubor packages/rules/test/italian-reference-gen.ts, souřadnice (row,col), BEZ importu logiky tahů z src/ (smí jen převod pozice à la fromPosition z pool-reference). Vlastní implementace: krátká dáma o 1 pole všesměr, muž vpřed, povinné braní, manCannotCaptureKing (muž nepřeskočí dámu), mustCaptureMaximum (kvantita), FID kvalita (dáma>muž → víc dam → nejdřív braná dáma v sekvenci). Export perftRef + převodní pomůcka. Výstup: kompiluje, drobná self-kontrola (ručně ověřená malá capture pozice sedí)."
+    },
+    {
+      "title": "perft-italian.test.ts: cross-check + bod divergence",
+      "status": "done",
+      "detail": "perft(ITALIAN_RULESET) z moves.ts == perftRef pro hloubky 1-6. Změřit a ZDOKUMENTOVAT (hlavička) hloubku, kde se italská POPRVÉ rozejde od americké (7/49/302/1469/7361/36768) - do té hloubky sedí na publikovaná americká čísla (cross-check, že se pravidla nespouští předčasně). Zafixovaná čísla se NEDOLAĎUJÍ podle generátoru; nesed = hledat rozdíl. Výstup: test zelený, bod divergence zdokumentován."
+    },
+    {
+      "title": "Doladicí fixtury ITALIAN_RULESET",
+      "status": "done",
+      "detail": "Behavior test (styl czech-king-priority.test.ts): krátká dáma se hýbe i bere o 1 pole VŠEMI směry (ne létavá); muž se hýbe i bere JEN vpřed; muž na poslední řadě se promění a tah KONČÍ (nepokračuje jako dáma). Výstup: test zelený, potvrzuje konfiguraci ITALIAN_RULESET (king=short, manCaptureBackward=false, promoteMidCapture=false)."
+    },
+    {
+      "title": "Brána jádra",
+      "status": "done",
+      "detail": "perft-italian zelený proti oraclu; italské fixtures IT-2/3/4 (italian-man-cannot-capture-king, italian-max-capture, italian-quality-priority) zelené; perft american/pool/russian/czech BEZE ZMĚNY čísel; celá vitest suita (rules+web+server) zelená; tsc čistý. Teprve po této bráně smí italská do UI (IT-6+)."
+    }
+  ],
+  "startedAt": "2026-07-13T09:53:41.420Z",
+  "completedAt": "2026-07-13T10:16:57.167Z",
+  "autoCommit": {
+    "preSha": "91e20c176d061bc9b071998a672c359e33f256fe",
+    "subject": "Phase 115: Italská: perft proti FID"
+  }
+}
