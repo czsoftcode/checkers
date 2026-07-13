@@ -136,9 +136,9 @@ function sectionByName(h: Handle, name: string): HTMLElement {
   return found;
 }
 
-/** All-roster snímek 4 lobby: `players` mapuje variantu → seznam [id, nick]. */
+/** All-roster snímek 5 lobby: `players` mapuje variantu → seznam [id, nick]. */
 function lobbiesMsg(players: Partial<Record<string, [string, string][]>>) {
-  const all = ['american', 'pool', 'russian', 'czech'] as const;
+  const all = ['american', 'pool', 'russian', 'czech', 'italian'] as const;
   return {
     type: 'lobbies',
     lobbies: all.map((variant) => ({
@@ -452,12 +452,12 @@ describe('createLobby – akordeon a předsíň', () => {
     expect(items[0]!.textContent).toContain('Jsi tady');
   });
 
-  it('akordeon má 4 sekce (registr variant), moje lobby je označená a rozbalená', () => {
+  it('akordeon má 5 sekcí (registr variant), moje lobby je označená a rozbalená', () => {
     const h = joinedLobby();
     const secs = sections(h);
-    expect(secs).toHaveLength(4);
+    expect(secs).toHaveLength(5);
     const names = secs.map((s) => s.querySelector('.lobby-section-name')?.textContent);
-    expect(names).toEqual(['Americká dáma', 'Pool dáma', 'Ruská dáma', 'Česká dáma']);
+    expect(names).toEqual(['Americká dáma', 'Pool dáma', 'Ruská dáma', 'Česká dáma', 'Italská dáma']);
     const american = sectionByName(h, 'Americká');
     expect(american.classList.contains('is-mine')).toBe(true);
     expect(american.classList.contains('is-expanded')).toBe(true);

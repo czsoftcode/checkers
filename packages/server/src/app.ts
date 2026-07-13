@@ -116,7 +116,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   // do budoucna i případné metriky. Není to veřejný HTTP kontrakt.
   app.decorate('gameHub', hub);
 
-  // Registr ČTYŘ varianta-lobby + globální identita (fáze 103, dřív jedna místnost
+  // Registr PĚTI varianta-lobby + globální identita (fáze 103, dřív jedna místnost
   // fáze 67). Dekorace `lobbies` zpřístupní registr novým testům; `roomPresence`
   // ukazuje na AMERICKOU lobby (default), aby dosavadní testy sahající na
   // `app.roomPresence.count()` zůstaly beze změny (bez varianty → americká lobby).
@@ -126,7 +126,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.decorate('roomPresence', lobbies.room('american'));
 
   /**
-   * Rozešle snímek rosterů VŠECH 4 lobby každému přihlášenému (fáze 104). Volá se
+   * Rozešle snímek rosterů VŠECH 5 lobby každému přihlášenému (fáze 104). Volá se
    * po KAŽDÉ změně prezence (join, switch-lobby, odchod), aby akordeon v klientu
    * viděl aktuální obsazení všech lobby i bez vstupu do nich. Fire-and-forget
    * (izolace chyb je v `Lobbies.broadcastAll`); scoped `roster`/`joined`/`left`
@@ -275,7 +275,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
       // PŘEDSÍŇ (fáze 105): připojení pod přezdívkou BEZ vstupu do lobby. Register
       // globální identity (nick-uniqueness jako u join), `me.variant=null` (nikde nečlen).
-      // Hned pošli all-roster snímek, ať klient vidí obsazení všech 4 lobby a vybere si.
+      // Hned pošli all-roster snímek, ať klient vidí obsazení všech 5 lobby a vybere si.
       // Připojení ne-člena NEmění žádný roster → ostatním se nic neposílá.
       const handleConnect = (nick: unknown): void => {
         if (typeof nick !== 'string') {

@@ -577,6 +577,11 @@
       "id": 115,
       "title": "Italská: perft proti FID",
       "status": "done"
+    },
+    {
+      "id": 116,
+      "title": "Italská: v nabídce + labely",
+      "status": "done"
     }
   ]
 }

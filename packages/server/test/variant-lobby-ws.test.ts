@@ -294,7 +294,7 @@ describe('Varianta-lobby – enter validuje variantu (fáze 106)', () => {
     // Zůstal v předsíni: připojen (identita existuje), ale ne-člen žádné lobby.
     await delay(50);
     expect(lobbies().totalCount()).toBe(1);
-    for (const v of ['american', 'pool', 'russian', 'czech'] as const) {
+    for (const v of ['american', 'pool', 'russian', 'czech', 'italian'] as const) {
       expect(lobbies().room(v).count()).toBe(0);
     }
   });
@@ -360,7 +360,7 @@ describe('Varianta-lobby – switch-lobby (fáze 103)', () => {
 });
 
 describe('Varianta-lobby – all-roster broadcast akordeonu (fáze 104)', () => {
-  it('změna v lobby A dorazí socketu v lobby B (snímek nese všechny 4 lobby)', async () => {
+  it('změna v lobby A dorazí socketu v lobby B (snímek nese všech 5 lobby)', async () => {
     const port = await start();
     const alice = await join(port, 'Alice', 'american');
     const bob = await join(port, 'Bob', 'russian');
@@ -376,6 +376,7 @@ describe('Varianta-lobby – all-roster broadcast akordeonu (fáze 104)', () => 
     expect(snapshot.lobbies.map((l) => l.variant).sort()).toEqual([
       'american',
       'czech',
+      'italian',
       'pool',
       'russian',
     ]);

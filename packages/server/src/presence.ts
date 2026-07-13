@@ -1,11 +1,11 @@
 /**
- * Prezence hráčů ve ČTYŘECH varianta-lobby (fáze 103). Dvě vrstvy:
+ * Prezence hráčů v PĚTI varianta-lobby (fáze 103, italská přidána 116). Dvě vrstvy:
  *
  *  - {@link RoomPresence} = transport JEDNÉ lobby: množina `{ id, nick, socket }`,
  *    roster, broadcast a směrované `sendTo`. NEřeší unikátnost přezdívky ani
  *    přidělování id – to je nově globální (viz níž). Vnitřek se od fáze 67 skoro
  *    nezměnil, jen se z něj VYTÁHLA identita.
- *  - {@link Lobbies} = registr 4 lobby + GLOBÁLNÍ identita. Přezdívka je jedna na
+ *  - {@link Lobbies} = registr 5 lobby + GLOBÁLNÍ identita. Přezdívka je jedna na
  *    CELÝ server (jeden registr nicků, ne 4× per-lobby), příprava na budoucí login.
  *    Hráč (identita) je v PRÁVĚ JEDNÉ lobby a smí PŘEJÍT do jiné (`switchLobby`)
  *    bez ztráty přezdívky/session. Cross-variant výzva pak padne přirozeně:
@@ -16,7 +16,7 @@
  * spojení (readyState).
  *
  * VĚDOMĚ mimo tento řez: stabilní identita/reconnection (todo 42), úklid
- * nečinných/zombie spojení a limity zpráv (todo 45), KLIENTSKÉ UI čtyř místností
+ * nečinných/zombie spojení a limity zpráv (todo 45), KLIENTSKÉ UI pěti místností
  * (D3b). Odhlášení hráče při `close` řeší WS route voláním {@link Lobbies.remove}.
  */
 
@@ -95,7 +95,7 @@ export interface LobbyRoster {
 }
 
 /**
- * Snímek rosterů VŠECH 4 lobby (fáze 104). Server ho pushuje KAŽDÉMU přihlášenému
+ * Snímek rosterů VŠECH 5 lobby (fáze 104). Server ho pushuje KAŽDÉMU přihlášenému
  * po každé změně prezence (join, switch-lobby, odchod), aby akordeon v klientu
  * viděl, kdo je v které lobby, i BEZ vstupu do ní. Je to čistě ČTENÍ (rostery na
  * displej); scoped `roster`/`joined`/`left` (jedna lobby) zůstávají pro logiku
@@ -318,12 +318,12 @@ interface Identity {
 }
 
 /**
- * Registr ČTYŘ varianta-lobby + GLOBÁLNÍ identita (fáze 103). Jeden zdroj pravdy
+ * Registr PĚTI varianta-lobby + GLOBÁLNÍ identita (fáze 103). Jeden zdroj pravdy
  * o tom, kdo je přihlášen (nick→lobby) a je autorita nad unikátností přezdívky
  * přes CELÝ server. Přezdívka je jedna na program (příprava na budoucí login),
  * NE na místnost: „Karel" nejde zaregistrovat dvakrát ani do různých lobby.
  *
- * Členství per lobby drží čtyři {@link RoomPresence} (transport). Route (app.ts)
+ * Členství per lobby drží pět {@link RoomPresence} (transport). Route (app.ts)
  * dostane výsledek operace a rozhodne, komu co poslat.
  */
 export class Lobbies {
@@ -332,14 +332,14 @@ export class Lobbies {
   private readonly identities = new Map<string, Identity>();
 
   constructor() {
-    // Všechny 4 lobby eagerly – registr je úplný, `room()` nikdy nevrátí undefined.
+    // Všech 5 lobby eagerly – registr je úplný, `room()` nikdy nevrátí undefined.
     for (const variant of VARIANT_IDS) {
       this.rooms.set(variant, new RoomPresence());
     }
   }
 
   /**
-   * Transport dané lobby. Registr je úplný (4 varianty), takže pro platné
+   * Transport dané lobby. Registr je úplný (5 variant), takže pro platné
    * `VariantId` nikdy nevrátí undefined; neznámá varianta (cizí cast) → RangeError,
    * ne tiché defaultnutí (stejná zásada jako `rulesetForVariant`).
    */
@@ -482,7 +482,7 @@ export class Lobbies {
   }
 
   /**
-   * Snímek rosterů VŠECH 4 lobby (fáze 104) v pořadí {@link VARIANT_IDS}. Pro
+   * Snímek rosterů VŠECH 5 lobby (fáze 104) v pořadí {@link VARIANT_IDS}. Pro
    * all-roster broadcast akordeonu – čistě čtení (bez socketů), volá se po každé
    * změně prezence. Registr je úplný, takže je vždy 4 položky.
    */

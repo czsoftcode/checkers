@@ -7,6 +7,14 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+
+- **Italská dáma v nabídce variant.** Do výběru přibyla pátá varianta „Italská dáma"
+  („Italian checkers") – je volitelná v hře proti počítači i v přehledu místností pro
+  hru proti člověku. Pravidla (povinné maximum braní, přednost braní dámou, krátká
+  dáma, muž nebere dámu) jsou ověřená; vzhled desky, síla počítače a hra proti člověku
+  se ještě dolaďují.
+
 ## [0.80.0] - 2026-07-12
 
 ### Changed

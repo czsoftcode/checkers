@@ -24,25 +24,35 @@ import type { Ruleset } from './ruleset.js';
 
 /**
  * Identifikátor varianty (drát/kód). Výchozí všude, kde se nenastaví, je
- * 'american'. `'italian'` je ZNÁMÁ varianta (má záznam v REGISTRY), ale
- * SPÍCÍ – záměrně chybí ve `VARIANT_IDS` (není v nabídce lobby, viz níže).
+ * 'american'.
  */
 export type VariantId = 'american' | 'pool' | 'russian' | 'czech' | 'italian';
 
 /**
  * Varianty NABÍZENÉ v lobby (AIvP picker + PvP accordion + server presence
- * zakládá PvP místnost jen na těchto). Je to PODMNOŽINA známých id – 'italian'
- * je v REGISTRY (tedy známé, projde `isVariantId`), ale ZDE NENÍ, protože ještě
- * není hratelné (spící ruleset, fáze 111). Zdroj pravdy o „známém" je REGISTRY
- * / typ `VariantId`, NE tenhle seznam. Pořadí je jen kosmetické.
+ * zakládá PvP místnost jen na těchto). Od fáze 116 je seznam ÚPLNÝ – kryje se
+ * se všemi známými id (typ `VariantId` / `REGISTRY`), protože jádro italské je
+ * perft-ověřené (IT-5) a smí do nabídky. Zdroj pravdy o „známém" je stále
+ * REGISTRY / typ `VariantId`, tento seznam je „co ukázat v lobby"; kdyby někdy
+ * přibyla další SPÍCÍ varianta (známá, ale ne v nabídce), oba se zase rozejdou.
+ * Přidání 'italian' rozsvítí variantu NARÁZ v AIvP i PvP (presence zakládá
+ * místnost na každou položku) – vědomě přijatý vedlejší efekt (fáze 116).
+ * Pořadí je jen kosmetické (určuje pořadí v pickeru/akordeonu).
  */
-export const VARIANT_IDS: readonly VariantId[] = ['american', 'pool', 'russian', 'czech'];
+export const VARIANT_IDS: readonly VariantId[] = [
+  'american',
+  'pool',
+  'russian',
+  'czech',
+  'italian',
+];
 
 /**
  * Mapa id → Ruleset. Úplná (každé `VariantId` má záznam) – TS to hlídá typem
  * `Record<VariantId, Ruleset>`, takže přidání varianty do `VariantId` bez
- * záznamu tady je chyba překladu, ne tichá díra za běhu. Obsahuje i 'italian'
- * (SPÍCÍ, mimo `VARIANT_IDS`), takže `rulesetForVariant('italian')` funguje.
+ * záznamu tady je chyba překladu, ne tichá díra za běhu. Od fáze 116 je 'italian'
+ * i ve `VARIANT_IDS` (nabízená), ale registr je na nabídce nezávislý – mapuje
+ * KAŽDÉ známé id, i kdyby zrovna nebylo v lobby.
  */
 const REGISTRY: Record<VariantId, Ruleset> = {
   american: AMERICAN_RULESET,

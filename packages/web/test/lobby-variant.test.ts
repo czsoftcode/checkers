@@ -61,13 +61,14 @@ afterEach(() => {
 });
 
 describe('lobby – picker varianty sólo hry', () => {
-  it('nabízí čtyři varianty registru, výchozí americká', () => {
+  it('nabízí pět variant registru (vč. italské), výchozí americká', () => {
     const { picker } = mount();
     expect(Array.from(picker.options).map((o) => o.value)).toEqual([
       'american',
       'pool',
       'russian',
       'czech',
+      'italian',
     ]);
     expect(picker.value).toBe('american');
   });
@@ -83,6 +84,7 @@ describe('lobby – picker varianty sólo hry', () => {
     expect(labels.pool).toBe('Pool dáma');
     expect(labels.russian).toBe('Ruská dáma');
     expect(labels.czech).toBe('Česká dáma');
+    expect(labels.italian).toBe('Italská dáma');
   });
 
   it('předvyplní naposledy uloženou variantu z LocalStorage', () => {

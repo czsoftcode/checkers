@@ -303,7 +303,7 @@ describe('Lobbies.connect / enter – předsíň (fáze 105)', () => {
     // Připojen (identita existuje), ale ne-člen: variantOf je null, žádná lobby ho nemá.
     expect(lobbies.totalCount()).toBe(1);
     expect(lobbies.variantOf(c.player.id)).toBeNull();
-    for (const v of ['american', 'pool', 'russian', 'czech'] as const) {
+    for (const v of ['american', 'pool', 'russian', 'czech', 'italian'] as const) {
       expect(lobbies.room(v).has(c.player.id)).toBe(false);
     }
   });

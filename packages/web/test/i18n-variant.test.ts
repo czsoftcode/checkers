@@ -9,6 +9,7 @@ const VARIANT_KEYS: Record<string, MessageKey> = {
   pool: 'variant.pool',
   russian: 'variant.russian',
   czech: 'variant.czech',
+  italian: 'variant.italian',
 };
 
 afterEach(() => {

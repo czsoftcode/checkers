@@ -62,8 +62,8 @@ describe('LocalClient – varianta partie', () => {
     expect(requests[0]?.variant).toBe('pool');
   });
 
-  it('všechny čtyři varianty protečou do GameDto i do requestu workeru', async () => {
-    for (const variant of ['american', 'pool', 'russian', 'czech'] as const) {
+  it('všech pět variant protečou do GameDto i do requestu workeru', async () => {
+    for (const variant of ['american', 'pool', 'russian', 'czech', 'italian'] as const) {
       const { worker, requests } = recordingWorker();
       const client = createLocalClient(worker, {
         rng: mulberry32(12345),

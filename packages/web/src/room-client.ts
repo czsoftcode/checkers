@@ -115,7 +115,7 @@ export interface RoomClientHandlers {
   readonly onJoined?: (roster: RosterEntry[]) => void;
   readonly onRoster?: (roster: RosterEntry[]) => void;
   /**
-   * All-roster snímek VŠECH 4 lobby (fáze 104) – přijde po připojení a po každé
+   * All-roster snímek VŠECH 5 lobby (fáze 104) – přijde po připojení a po každé
    * změně prezence kdekoli (i v jiné lobby). Akordeon z něj kreslí obsazení všech
    * místností a MOU lobby pozná podle položky s `isSelf`. Je to NAVÍC k scoped
    * `onJoined`/`onRoster` (jedna lobby, pro výzvy), ne jejich náhrada.
@@ -522,7 +522,7 @@ export function createRoomClient(
         return;
       }
       case 'lobbies': {
-        // All-roster snímek všech 4 lobby (fáze 104). Vadnou/cizí položku → zahoď
+        // All-roster snímek všech 5 lobby (fáze 104). Vadnou/cizí položku → zahoď
         // CELÝ snímek (guard), ať se do akordeonu nedostane undefined/neznámá
         // varianta. `isSelf` se počítá z mého nicku – v jednom rosteru jsem, tam mě
         // akordeon najde (v předsíni v žádném → nikdo není isSelf).

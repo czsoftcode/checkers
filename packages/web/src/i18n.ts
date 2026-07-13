@@ -177,8 +177,8 @@ const cs = {
   'lobby.langAria': 'Jazyk',
   'lobby.variantAria': 'Varianta hry proti počítači',
 
-  // Akordeon čtyř varianta-lobby (fáze 104): nahoře přezdívka, pod ní 4 přepínatelné
-  // sekce (jedna = jedna varianta). Rozbalená sekce ukáže roster + akci (Vyzvat v MÉ
+  // Akordeon pěti varianta-lobby (fáze 104, italská přidána 116): nahoře přezdívka,
+  // pod ní přepínatelné sekce (jedna = jedna varianta). Rozbalená sekce ukáže roster + akci (Vyzvat v MÉ
   // lobby, Vstoupit v ostatních). Názvy místností = názvy variant (`variant.*`, D2).
   'lobby.loggedInAs': 'Jsi přihlášen jako {nick}',
   // Výzva k přihlášení, když ještě nemám přezdívku (klik = otevřít modal přezdívky).
@@ -213,8 +213,8 @@ const cs = {
   'variant.pool': 'Pool dáma',
   'variant.russian': 'Ruská dáma',
   'variant.czech': 'Česká dáma',
-  // Italská (fáze 111) je zatím SPÍCÍ – v nabídce lobby NENÍ (mimo VARIANT_IDS),
-  // ale `VARIANT_LABEL_KEYS` je úplná mapa přes VariantId, tak klíč musí existovat.
+  // Italská je od fáze 116 v nabídce lobby (VARIANT_IDS); `VARIANT_LABEL_KEYS`
+  // je úplná mapa přes VariantId, tak klíč musí existovat pro každou variantu.
   'variant.italian': 'Italská dáma',
 
   // Itch build (fáze 89): AI-only publikace. Hra s člověkem tady neběží (server je

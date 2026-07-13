@@ -724,7 +724,7 @@ describe('createRoomClient – varianta-lobby (fáze 104)', () => {
     expect(sockets[0]!.sent).toEqual([JSON.stringify({ type: 'switch-lobby', variant: 'pool' })]);
   });
 
-  it('lobbies snímek → onLobbies se všemi 4 lobby a označením MÉ lobby (isSelf)', () => {
+  it('lobbies snímek → onLobbies se všemi 5 lobby a označením MÉ lobby (isSelf)', () => {
     const { sockets, events, client } = harness();
     client.connect('Jan');
     sockets[0]!.open();
@@ -736,11 +736,12 @@ describe('createRoomClient – varianta-lobby (fáze 104)', () => {
         { variant: 'pool', players: [] },
         { variant: 'russian', players: [{ id: '3', nick: 'Petr' }] },
         { variant: 'czech', players: [] },
+        { variant: 'italian', players: [] },
       ],
     });
     expect(events.lobbies).toHaveLength(1);
     const snap = events.lobbies[0]!;
-    expect(snap.map((l) => l.variant)).toEqual(['american', 'pool', 'russian', 'czech']);
+    expect(snap.map((l) => l.variant)).toEqual(['american', 'pool', 'russian', 'czech', 'italian']);
     const american = snap.find((l) => l.variant === 'american')!;
     // Jan jsem já (isSelf), Eva ne.
     expect(american.players.find((p) => p.nick === 'Jan')!.isSelf).toBe(true);

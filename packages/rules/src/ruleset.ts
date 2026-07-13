@@ -153,15 +153,14 @@ export const CZECH_RULESET: Ruleset = {
  * plná FID priorita braní (`capturePriority: 'italianFull'`) a muž NESMÍ brát
  * dámu (`manCannotCaptureKing: true`).
  *
- * ČÁSTEČNĚ AKTIVNÍ: `manCannotCaptureKing` už generátor skoků respektuje
- * (fáze 112 – muž nepřeskočí dámu) a `mustCaptureMaximum` už `legalMoves`
- * vynucuje (fáze IT-3 – jen maximum braných kamenů). Poslední pole
- * `capturePriority` zatím SPÍ (FID kvalitativní priorita dorazí v IT-4).
- * Ruleset se tedy chová jako „muž vpřed + krátká dáma + muž nebere dámu +
- * povinné maximum", ale bez kvalitativní priority.
- * Registruje se mimo `VARIANT_IDS` (viz variant.ts) – je ZNÁMÝ
- * (`isVariantId('italian')=true`), ale NENÍ v nabídce lobby, takže k němu
- * nevede dosažitelná herní cesta a nehotová legalita nemůže tiše rozehrát partii.
+ * PLNĚ AKTIVNÍ: `manCannotCaptureKing` respektuje generátor skoků (fáze 112 –
+ * muž nepřeskočí dámu), `mustCaptureMaximum` vynucuje `legalMoves` (fáze IT-3 –
+ * jen maximum braných kamenů) a `capturePriority: 'italianFull'` běží FID
+ * kvalitativní kaskádou (fáze IT-4). Jádro je perft-ověřené (fáze IT-5,
+ * perft-italian.test.ts) a od fáze 116 je italská ve `VARIANT_IDS` (v nabídce
+ * lobby, AIvP i PvP). Zbývající kroky (otočená deska/red-white assety, doladěná
+ * AI, ověřená PvP autorita) jsou IT-7+ – na dev je varianta hratelná, ale nic
+ * se nepublikuje před IT-11.
  */
 export const ITALIAN_RULESET: Ruleset = {
   manCaptureBackward: false,

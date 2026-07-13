@@ -1,0 +1,37 @@
+{
+  "id": 116,
+  "title": "Italská: v nabídce + labely",
+  "goal": "Zapnout italskou v nabídce: přidat 'italian' do VARIANT_IDS (to, co fáze 111 záměrně NEudělala - teď smí, jádro je perft-ověřené v IT-5). VEDLEJŠÍ EFEKT (vědomě přijatý): VARIANT_IDS řídí zároveň AIvP picker (lobby.ts:95) I PvP accordion (lobby.ts:776) I server presence (presence.ts:336/490 zakládá PvP místnost na variantu), takže italská naskočí NARÁZ do AIvP i PvP. Samotné zapnutí PvP je tím vedlejší efekt; IT-10 se posune na OVĚŘENÍ PvP autority + dvouklientské E2E. Doplnit labely napříč: variantLabel (packages/web/src/i18n.ts, cs/en), server EVENT_NAME pro PDN (packages/server/src/archive.ts), klientský PDN archiv (pokud má vlastní název varianty). Upravit variant.test.ts: přepsat aserci known ⊋ offered z fáze 111 (italská je teď NABÍZENÁ; exhaustivní VARIANT_IDS = pět; italská už není 'known ale ne offered'). NEROZDĚLOVAT VARIANT_IDS na AIvP vs PvP seznamy (nová vrstva, kterou projekt nechce) - jen být vědom vedlejšího efektu. Po IT-6 je italská hratelná, ale bez otočené desky/red-white assetů (IT-7), bez doladěné AI (IT-9), bez ověřené PvP autority (IT-10) - na dev OK, nic se nepublikuje před IT-11. Brána: italská volitelná v AIvP lobby; PDN dokončené italské partie nese správný název varianty; i18n-variant test (iteruje VARIANT_IDS, čeká label pro každou) zelený; perft ostatních variant beze změny; celá suita zelená; tsc čistý.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Přidat italian do VARIANT_IDS + ověřit labely",
+      "status": "done",
+      "detail": "V packages/rules/src/variant.ts přidat 'italian' do pole VARIANT_IDS. Ověřit, že labely už existují a čtou se rozumně: variant.italian (cs 'Italská dáma' / en 'Italian checkers') v packages/web/src/i18n.ts, EVENT_NAME.italian ('Italian Draughts') v packages/server/src/archive.ts. Výstup: VARIANT_IDS má 5 položek; labely potvrzené (nic nového se nepíše)."
+    },
+    {
+      "title": "Opravit enumerující testy na pět",
+      "status": "done",
+      "detail": "Projet celou suitu a upravit očekávání z '4 varianty/lobby' na 5. variant.test.ts: aserce 'přesně 4 … NEobsahuje italian' → 5 seřazených VČETNĚ italian + toContain('italian'); test mapování s polem cases ZŮSTÁVÁ (italská už tam je z 111). Dále lobby-variant.test.ts, local-client-variant.test.ts, i18n-variant.test.ts, server presence.test.ts/variant-lobby-ws.test.ts/room-client.test.ts; komentář 'všech 4 lobby' v presence.ts → 5. Žádná chytrost, jen očekávání na pět. Výstup: celá vitest suita zelená."
+    },
+    {
+      "title": "Ověřit AIvP klientský PDN + případné todo",
+      "status": "done",
+      "detail": "Ověřit, zda AIvP (klientský) archiv zapisuje do PDN název varianty / [Event]. Pokud ANO → nic. Pokud NE → pre-existující mezera pro VŠECHNY varianty → ZALOŽIT mini todo a nechat, v této fázi NEOPRAVOVAT (rozhodnutí a z discuss). Výstup: zjištění zdokumentované v reportu; mini todo založené jen při reálné mezeře."
+    },
+    {
+      "title": "Brána",
+      "status": "done",
+      "detail": "Italská vybíratelná v AIvP lobby (test-úrovní - lobby-variant obsahuje italskou option); celá vitest suita (rules+web+server) zelená; perft american/pool/russian/czech BEZE ZMĚNY čísel; tsc čistý. Výstup: brána splněna, italská zapnutá v nabídce."
+    }
+  ],
+  "startedAt": "2026-07-13T14:38:28.588Z",
+  "resolvedVerify": [
+    "Italská reálně v běžícím UI (AIvP picker + PvP akordeon) a partie se rozjede"
+  ],
+  "completedAt": "2026-07-13T15:05:03.519Z",
+  "autoCommit": {
+    "preSha": "ddc4cc96cac1a03eb7b530c136a2318502307fda",
+    "subject": "Phase 116: Italská: v nabídce + labely"
+  }
+}

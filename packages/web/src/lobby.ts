@@ -1,7 +1,7 @@
 /**
  * Úvodní obrazovka MÍSTNOSTI (form-first, fáze 106): hráč zadá přezdívku a PŘIPOJÍ
  * se do PŘEDSÍNĚ přes `/room/ws` (`connect{nick}`, viz {@link createRoomClient}).
- * Po připojení vidí ŽIVÝ akordeon 4 varianta-lobby s obsazeností a teprve pak
+ * Po připojení vidí ŽIVÝ akordeon 5 varianta-lobby s obsazeností a teprve pak
  * vstoupí do konkrétní přes „Vstoupit" (`enter{variant}` z předsíně / `switch-lobby`
  * mezi lobby). Vstupní formulář a akordeon jsou JEDNA obrazovka: formulář nahoře, po
  * připojení nahrazený labelem „Jsi tu jako X" + Odpojit, akordeon pod tím.
@@ -247,7 +247,7 @@ function saveNick(nick: string): void {
  * Stav obrazovky (fáze 108, jedna stránka): `connecting` (odeslán connect, čekám na
  * první snímek – akordeon je vidět s „Připojuji…", počty ještě prázdné), `connected`
  * (jsem PŘIPOJEN – předsíň i členství: nahoře „Jsi přihlášen jako X", pod tím ŽIVÝ
- * akordeon 4 lobby), `disconnected` (spadlo spojení → „Připojit znovu"). Zadání/změnu
+ * akordeon 5 lobby), `disconnected` (spadlo spojení → „Připojit znovu"). Zadání/změnu
  * přezdívky řeší MODAL nezávisle na tomto stavu; `entry` view z fáze 106 je zrušený.
  * Předsíň (`myVariant=null`) a členství sdílí view `connected`; liší se jen akce
  * v sekcích (Vstoupit→enter/switch-lobby vs. Vyzvat), viz {@link buildSectionBody}.
@@ -344,7 +344,7 @@ export function createLobby(options: LobbyOptions): Lobby {
 
   // JEDINÁ vstupní stránka (fáze 108): předsíň i členství sdílí jeden pohled. Nahoře
   // „Jsi přihlášen jako X" (klik = změnit přezdívku), pod tím stav výzev a ŽIVÝ
-  // AKORDEON 4 lobby. Žádný oddělený `entry` formulář ani „Odpojit" – identitu řeší
+  // AKORDEON 5 lobby. Žádný oddělený `entry` formulář ani „Odpojit" – identitu řeší
   // modal. `room` je viditelný pořád (skryje ho jen `disconnected` pohled).
   const room = document.createElement('div');
   room.className = 'lobby-room';
@@ -369,7 +369,7 @@ export function createLobby(options: LobbyOptions): Lobby {
   const notice = document.createElement('p');
   notice.className = 'lobby-notice hidden';
 
-  // Akordeon 4 varianta-lobby (fáze 104). Sekce se generují z registru variant
+  // Akordeon 5 varianta-lobby (fáze 104). Sekce se generují z registru variant
   // (`VARIANT_IDS`) v `renderRoom` – přidání varianty je nový záznam v registru,
   // ne zásah sem. Obsah (rostery, MOJE lobby, rozbalená sekce) plyne z all-roster
   // snímku `onLobbies`.
@@ -472,7 +472,7 @@ export function createLobby(options: LobbyOptions): Lobby {
   // nicku (obsazený/dlouhý) PŘED prvním úspěchem míří do modalu, PO něm jsou to už
   // chyby výzev/vstupu → notice v předsíni.
   let connectedOnce = false;
-  // Poslední all-roster snímek všech 4 lobby (fáze 104) – z něj akordeon kreslí
+  // Poslední all-roster snímek všech 5 lobby (fáze 104) – z něj akordeon kreslí
   // obsazení místností. Držíme ho, ať jde překreslit (disabled tlačítka „Vyzvat"
   // při změně odchozí výzvy, přepnutí rozbalené sekce) bez čekání na nový snímek.
   let currentLobbies: LobbyView[] = [];
@@ -532,7 +532,7 @@ export function createLobby(options: LobbyOptions): Lobby {
         renderRoom(); // skeleton akordeonu; obsah rosterů dorovná onLobbies (přijde hned po)
       },
       onLobbies: (lobbies) => {
-        // All-roster snímek všech 4 lobby (fáze 104) – jediný zdroj obsazení pro akordeon.
+        // All-roster snímek všech 5 lobby (fáze 104) – jediný zdroj obsazení pro akordeon.
         // Přijde i jako PRVNÍ odpověď na connect (fáze 106): tehdy nejsem v žádném
         // rosteru → `selfLobby` undefined → `myVariant=null` (předsíň).
         // ZÁMĚRNĚ tu NEzavírám modal přezdívky: `submitNick` ho zavírá optimisticky už
@@ -760,7 +760,7 @@ export function createLobby(options: LobbyOptions): Lobby {
   }
 
   /**
-   * Vykreslí AKORDEON 4 varianta-lobby (fáze 104): nahoře přezdívka, pod ní sekce
+   * Vykreslí AKORDEON 5 varianta-lobby (fáze 104): nahoře přezdívka, pod ní sekce
    * z registru `VARIANT_IDS`. Každá sekce má hlavičku (název varianty + počet hráčů)
    * a po rozbalení tělo s rosterem té lobby. MOJE lobby nabízí u cizích hráčů „Vyzvat"
    * a mě označí „Jsi tady"; ostatní lobby jsou jen ke čtení + tlačítko „Vstoupit"

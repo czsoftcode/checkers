@@ -134,10 +134,11 @@ describe('Předsíň – connect / enter (fáze 105)', () => {
     const port = await start();
     const alice = await connect(port, 'Alice');
 
-    // Snímek nese všechny 4 lobby, VŠECHNY prázdné (Alice je ne-člen, nikde není).
+    // Snímek nese všech 5 lobby, VŠECHNY prázdné (Alice je ne-člen, nikde není).
     expect(alice.snapshot.lobbies.map((l) => l.variant).sort()).toEqual([
       'american',
       'czech',
+      'italian',
       'pool',
       'russian',
     ]);

@@ -52,16 +52,18 @@ describe('rulesetForVariant – každé id mapuje na správný ruleset', () => {
     });
   }
 
-  // Kontrakt „známé ⊋ nabízené": VARIANT_IDS je NABÍDKA lobby (přesně 4), NE
-  // seznam všech známých id. 'italian' je známé (viz níže), ale úmyslně mimo.
-  it('VARIANT_IDS = přesně 4 nabízené varianty a NEobsahuje italian', () => {
-    expect([...VARIANT_IDS].sort()).toEqual(['american', 'czech', 'pool', 'russian']);
-    expect(VARIANT_IDS).not.toContain('italian');
+  // Od fáze 116 je nabídka ÚPLNÁ – VARIANT_IDS kryje všech pět známých id
+  // (italská prošla perft bránou IT-5 a smí do lobby). Kontrakt „známé ⊇
+  // nabízené" drží dál (registr je na nabídce nezávislý), teď se ale shodují.
+  it('VARIANT_IDS = přesně 5 nabízených variant a OBSAHUJE italian', () => {
+    expect([...VARIANT_IDS].sort()).toEqual(['american', 'czech', 'italian', 'pool', 'russian']);
+    expect(VARIANT_IDS).toContain('italian');
   });
 
-  it('italian je ZNÁMÁ varianta (isVariantId), i když není v nabídce', () => {
+  it('italian je ZNÁMÁ varianta (isVariantId) a je v nabídce', () => {
     expect(isVariantId('italian')).toBe(true);
     expect(rulesetForVariant('italian')).toBe(ITALIAN_RULESET);
+    expect(VARIANT_IDS).toContain('italian');
   });
 });
 
