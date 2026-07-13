@@ -295,6 +295,15 @@ function extendJumps(
     if (overCell === null || overCell === undefined || overCell.color === piece.color) {
       continue;
     }
+    // Italské pravidlo „pedina non mangia la dama": muž NESMÍ přeskočit dámu.
+    // Prořez už při GENERACI (ne post-filtr), aby pozdější vrstva maxima (IT-3)
+    // počítala správnou délku braní. `piece` je v celé sekvenci konstantní
+    // (proměna muže sekvenci ukončí výše), takže guard platí i UPROSTŘED
+    // vícenásobného skoku – dáma je pro muže neprůchodný bloker. Flag-vázané:
+    // pro !manCannotCaptureKing (american/pool/czech) se větev nikdy nespustí.
+    if (ruleset.manCannotCaptureKing && piece.kind === 'man' && overCell.kind === 'king') {
+      continue;
+    }
     if (board[landing - 1] !== null) {
       continue;
     }

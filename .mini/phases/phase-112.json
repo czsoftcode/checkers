@@ -1,0 +1,29 @@
+{
+  "id": 112,
+  "title": "Italská: muž nebere dámu",
+  "goal": "V generátoru skoků (packages/rules/src/moves.ts, jumpMovesFrom/extendJumps) při zapnutém manCannotCaptureKing prořezat KAŽDÝ skokový segment, kde by muž přeskakoval soupeřovu dámu - už při GENERACI, ne post-filtrem. Muž se před dámou zastaví i s prázdným polem za ní; omezení platí i UPROSTŘED vícenásobného skoku (muž se v celé sekvenci nesmí dostat přes žádnou dámu), aby pozdější vrstva maxima počítala správnou délku braní. Aktivní JEN italským flagem (manCannotCaptureKing=true); dáma bere muže i dámy normálně, muž normálně bere muže. BEZ vrstvy maxima a priority (přijdou v IT-3/IT-4). Brána: nová fixture prokáže prořez (muž nepřeskočí dámu na prvním segmentu i v pokračování skoku); existující varianty (flag=false) beze změny včetně perft 1-6 american/pool/russian/czech; celá suita zelená; tsc čistý.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Guard v extendJumps: muž nepřeskočí dámu",
+      "status": "done",
+      "detail": "V packages/rules/src/moves.ts do extendJumps (po načtení overCell, vedle stávajících guardů vlastní kámen / obsazený dopad) přidat flag-vázanou větev: if (ruleset.manCannotCaptureKing && piece.kind === 'man' && overCell.kind === 'king') continue;. Krátký komentář (italské pravidlo pedina non mangia la dama, prořez při GENERACI, platí i uprostřed multi-skoku protože piece je konstantní, dáma je pro muže bloker). NIKAM jinam nesahat (extendFlyingKingJumps/extendRussianManJumps italská nepoužije). Výstup: guard na místě, tsc čistý."
+    },
+    {
+      "title": "Fixture: pět zubů muž vs dáma",
+      "status": "done",
+      "detail": "Nový behavior test (styl czech-king-priority.test.ts) v packages/rules/test/. Pět případů přes legalMoves/jumpMovesFrom s ITALIAN_RULESET: (a) muž s dámou po diagonále a prázdným polem za ní → žádný skok přes ni; (b) multi-skok muže se zastaví před dámou (skok přes muže OK, přes navazující dámu ne); (c) KONTROLA: stejná pozice jako (a) s AMERICAN_RULESET → muž dámu přeskočí (guard flag-vázaný, americká netknutá); (d) italská dáma bere dámu normálně; (e) italský muž bere muže normálně. Výstup: test zelený, (c) prokazatelně jiný výsledek než (a)."
+    },
+    {
+      "title": "Brána: perft + suita + tsc",
+      "status": "done",
+      "detail": "perft 1-6 american (7/49/302/1469/7361/36768)/pool/russian/czech BEZE ZMĚNY čísel; celá vitest suita (rules+web+server) zelená; tsc čistý. Potvrzuje, že guard nezasáhl ostatní varianty (flag=false → continue se nespustí)."
+    }
+  ],
+  "startedAt": "2026-07-13T06:54:51.573Z",
+  "completedAt": "2026-07-13T08:03:44.224Z",
+  "autoCommit": {
+    "preSha": "f5015db1d432b6712d4a5f95fc3eca14ec59c2a8",
+    "subject": "Phase 112: Italská: muž nebere dámu"
+  }
+}

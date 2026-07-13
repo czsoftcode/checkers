@@ -1,14 +1,13 @@
 /**
  * Ruleset – parametry varianty, které mění chování generátoru tahů.
  *
- * Většina polí reálně čte generátor / apply / legalMoves. VÝJIMKA (fáze 111):
- * `mustCaptureMaximum`, `capturePriority` a `manCannotCaptureKing` jsou tři
- * pole italské varianty, která zatím PŘEDBÍHAJÍ svého čtenáře – deklarují se
- * a plní defaulty do všech variant, ale `legalMoves` je ještě NEČTE. Italská
- * pravidla (generační omezení, maximum, FID priorita) dorazí ve fázích IT-2
- * až IT-5; do té doby jsou tato pole u italské SPÍCÍ (viz `ITALIAN_RULESET`
- * a jeho registrace mimo `VARIANT_IDS`). Ostatní varianty je mají na defaultu,
- * takže se jejich chování nemění.
+ * Většina polí reálně čte generátor / apply / legalMoves. ČÁSTEČNÁ VÝJIMKA
+ * (italská): `manCannotCaptureKing` už AKTIVNÍ JE – generátor skoků
+ * (`extendJumps` v moves.ts, fáze 112) podle něj prořezává braní muže přes dámu.
+ * Zbylá dvě pole `mustCaptureMaximum` a `capturePriority` zatím SPÍ – deklarují
+ * se a plní defaulty do všech variant, ale žádný čtenář je ještě nečte (maximum
+ * a FID priorita dorazí ve fázích IT-3/IT-4). Ostatní varianty mají všechna tři
+ * pole na defaultu, takže se jejich chování nemění.
  *
  * Varianta patří do GameState / metadat místnosti, NE do hashované Position
  * (Zobrist zůstává position-only) – Ruleset se proto protahuje parametrem,
@@ -60,8 +59,12 @@ export interface Ruleset {
   /**
    * Zákaz braní dámy MUŽEM (italská): muž NESMÍ přeskočit (brát) dámu –
    * takové braní je nelegální. `false` = muž bere dámu i kámen bez rozdílu
-   * (americká, pool, ruská, česká). Fáze 111 pole jen deklaruje; `legalMoves`
-   * ho zatím NEČTE (vynucení přijde v IT-2..IT-5).
+   * (americká, pool, ruská, česká). AKTIVNÍ (fáze 112): generátor skoků
+   * `extendJumps` prořezává už při GENERACI každý segment, kde by muž
+   * přeskakoval dámu (i uprostřed multi-skoku). Prořez žije JEN v `extendJumps`;
+   * varianty s letmým mužem (`promoteMidCapture: true` → `extendRussianManJumps`)
+   * ho zatím neřeší – žádný ruleset ale `manCannotCaptureKing` s letmým mužem
+   * nekombinuje, takže mezera je momentálně nedosažitelná.
    */
   readonly manCannotCaptureKing: boolean;
 }
@@ -148,11 +151,13 @@ export const CZECH_RULESET: Ruleset = {
  * plná FID priorita braní (`capturePriority: 'italianFull'`) a muž NESMÍ brát
  * dámu (`manCannotCaptureKing: true`).
  *
- * SPÍCÍ (fáze 111): tři nová pole `legalMoves` zatím NEČTE, takže tenhle
- * ruleset se chová jako „muž vpřed + krátká dáma", dokud nedorazí vynucení
- * v IT-2..IT-5. Registruje se mimo `VARIANT_IDS` (viz variant.ts) – je ZNÁMÝ
+ * ČÁSTEČNĚ AKTIVNÍ: `manCannotCaptureKing` už generátor skoků respektuje
+ * (fáze 112 – muž nepřeskočí dámu). `mustCaptureMaximum` a `capturePriority`
+ * zatím SPÍ (maximum a FID priorita dorazí v IT-3/IT-4). Ruleset se tedy chová
+ * jako „muž vpřed + krátká dáma + muž nebere dámu", ale bez maxima a priority.
+ * Registruje se mimo `VARIANT_IDS` (viz variant.ts) – je ZNÁMÝ
  * (`isVariantId('italian')=true`), ale NENÍ v nabídce lobby, takže k němu
- * nevede dosažitelná herní cesta a spící vlajky nemůžou tiše rozehrát partii.
+ * nevede dosažitelná herní cesta a nehotová legalita nemůže tiše rozehrát partii.
  */
 export const ITALIAN_RULESET: Ruleset = {
   manCaptureBackward: false,
