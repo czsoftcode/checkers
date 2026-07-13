@@ -587,6 +587,11 @@
       "id": 117,
       "title": "Italská: otočená deska a assety",
       "status": "done"
+    },
+    {
+      "id": 118,
+      "title": "Italská: UI multi-skok pod maximem",
+      "status": "done"
     }
   ]
 }

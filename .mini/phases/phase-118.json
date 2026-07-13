@@ -1,0 +1,34 @@
+{
+  "id": 118,
+  "title": "Italská: UI multi-skok pod maximem",
+  "goal": "Doklikávání sekvence dopadů (vícenásobný skok) ve webovém UI musí ctít, že legální jsou JEN tahy s maximem + FID prioritou (odvozeno z legalMoves, které to už vynucuje z IT-3/IT-4) - hráč NESMÍ zadat kratší braní ani braní mužem místo povinného braní dámou; každý mezikrok musí být PREFIX nějaké legální plné sekvence z legalMoves. K VYŘEŠENÍ V DISCUSS: jak dnešní UI odvozuje mezikroky multi-skoku - jestli z plných sekvencí legalMoves (pak fáze = hlavně OVĚŘENÍ + testy) nebo vlastní per-krok regenerací (pak = OPRAVA, ať nepustí prefix nelegální kratší/nepřednostní cesty). Brána: pokus zadat nelegální kratší/nepřednostní/mužem braní se v UI NEDÁ dokončit (ideálně ani začít, když nevede k legální plné cestě); povinná plná cesta se doklikat dá; ostatní varianty (american/pool/russian/czech) v UI netknuté; celá suita zelená; tsc čistý; rules/src beze změny (perft ostatních variant nedotčen).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Audit ruleset u všech volání selection.ts",
+      "status": "done",
+      "detail": "Projít controller.ts (AIvP) i pvp-controller.ts (PvP) a potvrdit, že KAŽDÉ volání funkcí selection.ts (nextTargets, resolveMove, targetsFor, endpointsFor, resolveChainTo, capturedOnHop, capturesForPrefix) dostává ruleset odvozený z varianty hry - VČETNĚ drag cest. Kde by chyběl (spadl by na default AMERICAN_RULESET) → doplnit. Výstup: doložený výčet call sites s potvrzením, že ruleset teče všude; případná drobná oprava."
+    },
+    {
+      "title": "Italské testy selection.ts",
+      "status": "done",
+      "detail": "Unit test s ITALIAN_RULESET: (a) muž s nepřednostním/kratším braním → targetsFor(muž) == [] (nejde začít); (b) povinná dámina max cesta - nextTargets provede skrz mezikroky, resolveMove na konci vrátí ten legální tah; (c) endpoint kratšího/mužova braní NENÍ v endpointsFor (drag ho nepustí); (d) regrese: american/pool nextTargets a endpointsFor beze změny. Výstup: test zelený, každý bod má zub."
+    },
+    {
+      "title": "Živá kontrola v prohlížeči",
+      "status": "done",
+      "detail": "Italská AIvP v běžící appce: pokus o kratší/nepřednostní/mužovo braní nejde ANI ZAČÍT; povinné maximální braní se doklikat (hop po hopu) i dotáhnout (drag na koncové pole) dá. Výstup: potvrzeno v prohlížeči (popis/screenshot), ne jen zelené testy."
+    },
+    {
+      "title": "Brána",
+      "status": "done",
+      "detail": "Celá vitest suita (rules+web+server) zelená; tsc čistý; rules/src beze změny (perft ostatních variant nedotčen); ostatní varianty (american/pool/russian/czech) v UI netknuté. Výstup: brána splněna."
+    }
+  ],
+  "startedAt": "2026-07-13T18:53:26.912Z",
+  "completedAt": "2026-07-13T19:26:21.025Z",
+  "autoCommit": {
+    "preSha": "c899d881e9a618c5e78304ba3532f612a0d38531",
+    "subject": "Phase 118: Italská: UI multi-skok pod maximem"
+  }
+}
