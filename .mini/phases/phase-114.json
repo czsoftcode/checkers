@@ -1,0 +1,29 @@
+{
+  "id": 114,
+  "title": "Italská: FID kvalitativní priorita",
+  "goal": "Nad MNOŽINOU maximálních braní (z IT-3, mustCaptureMaximum) při capturePriority='italianFull' aplikovat uspořádanou FID kaskádu tie-breaků a zúžit legalMoves na přeživší množinu: (1) táhnoucí figura je dáma (přednost braní dámou před mužem) → (2) nejvíc braných dam → (3) nejdřív braná dáma v sekvenci. Kaskáda je USPOŘÁDANÁ - další stupeň rozhoduje JEN při rovnosti předchozího (ne váhová směs). Konkrétní kód za enum hodnotou italianFull, ŽÁDNÝ obecný framework/komparátor pro budoucí varianty. Běží až ZA max-filtrem (pořadí v legalMoves: maximum → kvalita). Veličiny kaskády: kdo bere = kind figury na move.from (italská nemá proměnu uprostřed braní, druh je konstantní); kolik dam = počet polí v move.captures držících dámu (čteno z pozice před tahem); kdy vzal první dámu = index první dámy v move.captures (pořadí sekvence). Brána: samostatná fixture na KAŽDÝ stupeň kaskády (dáma>muž; víc dam; pořadí dámy); česká kingCapturePriority i ostatní varianty NETKNUTÉ; perft 1-6 american/pool/russian/czech beze změny čísel; celá suita zelená; tsc čistý.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "italianQualityFilter: 3-stupňová kaskáda",
+      "status": "done",
+      "detail": "V packages/rules/src/moves.ts přidat pojmenovanou funkci italianQualityFilter(maxSet, position) - uspořádaný filtr-řetěz: stupeň 2 existuje-li tah s position.board[from-1].kind==='king', nech jen ty (jinak vše); stupeň 3 z přeživších nech ty s MAX počtem braných dam (count kingů v move.captures čtený z position); stupeň 4 z nich nech ty s NEJMENŠÍM indexem první dámy v move.captures. Vrací MNOŽINU (všichni plně shodní, ne jeden). Zadrátovat do legalMoves v bloku if(mustCaptureMaximum): spočítat maxSet, a if(capturePriority==='italianFull') return italianQualityFilter(maxSet, position) jinak return maxSet. Komentář o couplingu (italianFull předpokládá, že max-blok běžel; nezavádět guard na nesmyslnou kombinaci - YAGNI). Výstup: funkce + zadrátování, tsc čistý."
+    },
+    {
+      "title": "Fixtury: čtyři zuby kaskády",
+      "status": "done",
+      "detail": "Nový behavior test (styl czech-king-priority.test.ts) v packages/rules/test/, přes legalMoves s ITALIAN_RULESET: (stupeň 2) stejný max počet, muž vs dáma → mužův tah zmizí, dámin zůstane; (stupeň 3) dva dámou-tahy stejného počtu, jeden bere víc dam → zůstane ten s víc dámami; (stupeň 4) dva dámou-tahy stejného počtu i počtu dam, liší se pořadí první dámy → zůstane ten s dřívější dámou (pozice kde ZÁLEŽÍ na pořadí braní - hlídá, že move.captures je v pořadí sekvence); (plná shoda) dva tahy shodné ve všem → OBA zůstanou (množina). Kontrola: stejná pozice jako stupeň 2 s AMERICAN_RULESET → kvalita se neuplatní (mužův tah přítomen). Výstup: test zelený."
+    },
+    {
+      "title": "Brána: perft + suita + tsc",
+      "status": "done",
+      "detail": "perft 1-6 american (7/49/302/1469/7361/36768)/pool/russian/czech BEZE ZMĚNY čísel; celá vitest suita (rules+web+server) zelená včetně czech-king-priority; tsc čistý. Potvrzuje, že kvalita vázaná na capturePriority='italianFull' nezasáhla ostatní varianty."
+    }
+  ],
+  "startedAt": "2026-07-13T09:11:24.472Z",
+  "completedAt": "2026-07-13T09:36:50.726Z",
+  "autoCommit": {
+    "preSha": "cc82b91e3b07e0a74e3b9e8a3e7a17a104fc79ad",
+    "subject": "Phase 114: Italská: FID kvalitativní priorita"
+  }
+}

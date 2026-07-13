@@ -392,6 +392,50 @@ function extendRussianManJumps(
 }
 
 /**
+ * KVALITATIVNÍ FID priorita (italská, `capturePriority === 'italianFull'`) –
+ * uspořádaná kaskáda tie-breaků NAD množinou maximálních braní (`maxSet` z
+ * IT-3). Zúží ji na množinu plně shodných přeživších; USPOŘÁDANÁ kaskáda –
+ * další stupeň rozhoduje JEN při rovnosti předchozího (ne váhová směs). Konkrétní
+ * kód za enum hodnotou `'italianFull'`, ŽÁDNÝ obecný komparátor pro budoucí
+ * varianty (YAGNI). Vrací MNOŽINU, ne jeden tah.
+ *
+ * COUPLING: předpokládá, že běžel max-blok (`mustCaptureMaximum`) a `maxSet`
+ * je jeho výstup. `italianFull` BEZ `mustCaptureMaximum` by se tiše nespustil
+ * vůbec (kvalita žije uvnitř max-bloku) – italská nastavuje OBA flagy, takže
+ * kombinace je nedosažitelná; guard na nesmyslnou kombinaci se NEzavádí (YAGNI).
+ *
+ * Metriky se čtou z `position` = STAV PŘED tahem (brané kameny ještě na desce).
+ * Italská nemá proměnu uprostřed braní, takže druh táhnoucí figury je po celou
+ * sekvenci konstantní a stačí `kind` na `move.from`.
+ *
+ * Stupně (FID pravidlo 7, body 2–4):
+ *  2. dáma > muž: bere-li v max-množině aspoň jedna DÁMA, vypustit všechny
+ *     mužovy tahy; jinak (žádná dáma nebere) nechat vše.
+ *  3. nejvíc braných dam: mezi přeživšími nechat ty s MAX počtem braných dam
+ *     (počet polí v `move.captures` držících dámu).
+ *  4. nejdřív braná dáma: mezi přeživšími nechat ty s NEJMENŠÍM indexem první
+ *     brané dámy v `move.captures`. `move.captures` je v pořadí sekvence braní
+ *     (viz `extendJumps`), takže index = kdy v sekvenci dáma padla.
+ */
+function italianQualityFilter(maxSet: Move[], position: Position): Move[] {
+  // Stupeň 2 – dáma > muž.
+  const kingMovers = maxSet.filter((move) => position.board[move.from - 1]?.kind === 'king');
+  const afterKind = kingMovers.length > 0 ? kingMovers : maxSet;
+  // Stupeň 3 – nejvíc braných dam.
+  const kingsCaptured = (move: Move): number =>
+    move.captures.filter((sq) => position.board[sq - 1]?.kind === 'king').length;
+  const maxKings = Math.max(...afterKind.map(kingsCaptured));
+  const afterCount = afterKind.filter((move) => kingsCaptured(move) === maxKings);
+  // Stupeň 4 – nejmenší index první brané dámy (Infinity = žádná dáma → nerozhoduje).
+  const firstKingIndex = (move: Move): number => {
+    const idx = move.captures.findIndex((sq) => position.board[sq - 1]?.kind === 'king');
+    return idx === -1 ? Infinity : idx;
+  };
+  const minFirst = Math.min(...afterCount.map(firstKingIndex));
+  return afterCount.filter((move) => firstKingIndex(move) === minFirst);
+}
+
+/**
  * Legální tahy strany na tahu – jediné veřejné API generátoru.
  *
  * Braní je povinné: existuje-li skok KTERÉKOLI figury strany na tahu,
@@ -431,7 +475,14 @@ export function legalMoves(position: Position, ruleset: Ruleset = AMERICAN_RULES
     // blok přeskočí → výstup je bajt-identický a perft se nehne.
     if (ruleset.mustCaptureMaximum) {
       const maxCaptures = Math.max(...jumps.map((move) => move.captures.length));
-      return jumps.filter((move) => move.captures.length === maxCaptures);
+      const maxSet = jumps.filter((move) => move.captures.length === maxCaptures);
+      // KVALITA běží AŽ ZA maximem (pořadí: maximum → kvalita). Jen italská
+      // (`italianFull`) prochází FID kaskádou; ostatní varianty s maximem
+      // (žádná v této vlně) by dostaly čistou max-množinu beze změny.
+      if (ruleset.capturePriority === 'italianFull') {
+        return italianQualityFilter(maxSet, position);
+      }
+      return maxSet;
     }
     return jumps;
   }
