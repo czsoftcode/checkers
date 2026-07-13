@@ -17,7 +17,10 @@
  * jen přepínáme třídu přes `classList`.
  */
 
+import type { VariantId } from '@checkers/rules';
+
 import boardUrl from './assets/game_board.webp?url';
+import italianBoardUrl from './assets/right_game_board.webp?url';
 import { preloadImages } from './image-preload.js';
 
 /** Třída na `.board`, pod kterou `styles.css` použije obrázkovou desku. */
@@ -27,9 +30,25 @@ export const BOARD_IMG_CLASS = 'board-img';
 export const boardImageUrl: string = boardUrl;
 
 /**
- * Fire-and-forget: zkusí načíst obrázek desky a při úspěchu přidá
- * {@link BOARD_IMG_CLASS} na `root` (`.board`). Při neúspěchu neudělá nic a deska
- * zůstane na barevných polích.
+ * URL desky ITALSKÉ varianty (`right_game_board.webp`). Jiná kresba dřeva, ale
+ * STEJNÁ parita hracích polí jako `game_board.webp` (tmavé vlevo nahoře i vpravo
+ * dole), takže lícuje se stejnou DOM mřížkou bez rotace. Musí odpovídat
+ * `url(...)` ve `styles.css` (`.board.variant-italian.board-img`).
+ */
+export const italianBoardImageUrl: string = italianBoardUrl;
+
+/** URL desky pro danou variantu: italská má vlastní obrázek, ostatní sdílejí americký. */
+function boardUrlFor(variant: VariantId): string {
+  return variant === 'italian' ? italianBoardImageUrl : boardImageUrl;
+}
+
+/**
+ * Fire-and-forget: zkusí načíst obrázek desky PRO DANOU VARIANTU a při úspěchu
+ * přidá {@link BOARD_IMG_CLASS} na `root` (`.board`). Při neúspěchu neudělá nic a
+ * deska zůstane na barevných polích. Výběr obrázku podle varianty (italská →
+ * `right_game_board.webp`, ostatní → `game_board.webp`); samotné přepnutí na
+ * správný obrázek řeší `styles.css` přes `.variant-italian`, tady jen přednačteme
+ * odpovídající URL, ať se třída přidá teprve po jistotě načtení.
  *
  * `createImage` se injektuje kvůli testu; ve hře je výchozí `() => new Image()`,
  * a `null` když v prostředí `Image` není (čistý Node) – pak funkce nic neudělá.
@@ -39,6 +58,7 @@ export const boardImageUrl: string = boardUrl;
  */
 export function enableBoardImage(
   root: HTMLElement,
+  variant: VariantId,
   createImage: (() => HTMLImageElement) | null = typeof Image === 'function'
     ? (): HTMLImageElement => new Image()
     : null,
@@ -46,7 +66,7 @@ export function enableBoardImage(
   if (createImage === null) {
     return;
   }
-  void preloadImages([boardImageUrl], createImage).then((ok) => {
+  void preloadImages([boardUrlFor(variant)], createImage).then((ok) => {
     if (ok) {
       root.classList.add(BOARD_IMG_CLASS);
     }

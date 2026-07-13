@@ -478,6 +478,28 @@ body {
   display: none;
 }
 
+/* ITALSKÁ varianta: vlastní pozadí desky a červené „black" kameny. Zapíná se
+   PŘIDÁNÍM třídy `.variant-italian` na `.board` (board-view.ts podle varianty
+   partie) NAD dnešní `.board-img`/`.pieces-img`; ostatní varianty tuhle třídu
+   nemají, takže je vzhled beze změny. Vyšší specificita (`.variant-italian`
+   navíc) přebije americké obrázky výše. `url(...)` Vite přepíše na hashovanou
+   cestu (žádný inline styl → CSP). Deska `right_game_board.webp` má STEJNOU
+   paritu hracích polí jako `game_board.webp` (viz board-image.ts), takže lícuje
+   se stejnou DOM mřížkou bez rotace. Kameny: vnitřní „black" = ČERVENÝ
+   (red.webp/red_queen.webp), „white" zůstává sdílený (dědí z `.pieces-img`
+   výše). */
+.board.variant-italian.board-img {
+  background: url('./assets/right_game_board.webp') center / 100% 100% no-repeat;
+}
+
+.board.variant-italian.pieces-img .piece.black {
+  background-image: url('./assets/red.webp');
+}
+
+.board.variant-italian.pieces-img .piece.black.king {
+  background-image: url('./assets/red_queen.webp');
+}
+
 /* Indikátor strany na tahu: SAMOTNÝ kámen na boku desky (bez prstence, stejně jako
    v PvP – fáze 80). Kámen té strany, která je na tahu. Vpravo od desky (na <768 px se
    v @media přesune pod desku). Barvu a viditelnost řídí app-shell přes třídy

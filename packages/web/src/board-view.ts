@@ -12,7 +12,7 @@
  */
 
 import { BOARD_SIZE, coordsToSquare, isDarkSquare } from '@checkers/rules';
-import type { Cell, Color, Position, Square } from '@checkers/rules';
+import type { Cell, Color, Position, Square, VariantId } from '@checkers/rules';
 
 import { enableBoardImage } from './board-image.js';
 import { diffMove } from './move-diff.js';
@@ -116,6 +116,17 @@ export interface BoardView {
    */
   settle(state: RenderState): void;
   /**
+   * Nastaví herní variantu, podle které se vybírají obrázkové assety (pozadí desky
+   * a kameny). Pro italskou přidá na `.board` třídu `variant-italian` a přednačte
+   * italské URL (`right_game_board.webp`, `red`/`white` kameny); ostatní varianty
+   * použijí dnešní americké assety. Idempotentní: opakované volání se stejnou
+   * variantou nic nedělá. Slouží PvP cestě, kde se varianta dozví AŽ z prvního
+   * autoritativního stavu (`dto.variant`) po vytvoření desky; AIvP ji zná hned a
+   * předá ji přes konstruktor. NEsahá na paritu polí, číslování ani validaci –
+   * čistě vizuální výběr assetů (grid se neotáčí).
+   */
+  setVariant(variant: VariantId): void;
+  /**
    * Ukončí případnou běžící animaci (zruší WAAPI i časovače). Volá controller
    * při `dispose()` / „Nová hra", ať doběhlá animace nemutuje zahozenou desku a
    * nezůstanou viset časovače – bez spoléhání na to, že volající desku odpojí.
@@ -140,13 +151,17 @@ interface RunningAnimation {
  * (no-op bez `Audio`). `drag` (volitelné) zapne tažení kamenů (drag & drop);
  * bez něj deska funguje jen na ťuknutí jako dřív (a testy bez drag callbacků projdou).
  * `humanColor` (výchozí `'black'`) orientuje desku tak, aby kameny člověka ležely
- * dole; ovlivní jen pořadí buněk v DOM, ne číslování polí ani klikání.
+ * dole; ovlivní jen pořadí buněk v DOM, ne číslování polí ani klikání. `variant`
+ * (výchozí `'american'`) vybírá obrázkové assety – jen italská dostane vlastní
+ * pozadí a červené kameny (viz {@link BoardView.setVariant}); PvP variantu neznámou
+ * v čase vytvoření dorovná `setVariant` z prvního stavu.
  */
 export function createBoardView(
   onSquareClick: (square: Square | null) => void,
   player: SoundPlayer = createSoundPlayer(),
   drag?: DragCallbacks,
   humanColor: Color = 'black',
+  variant: VariantId = 'american',
 ): BoardView {
   const element = document.createElement('div');
   element.className = 'board';
@@ -159,9 +174,18 @@ export function createBoardView(
   // třídy .dark/.light se dál počítají z reálných souřadnic (row, col), takže
   // číslování polí, klikání i validace tahů zůstávají netknuté v OBOU orientacích.
   const reversed = humanColor === 'black';
-  const seq = Array.from({ length: BOARD_SIZE }, (_, i) => (reversed ? BOARD_SIZE - 1 - i : i));
-  for (const row of seq) {
-    for (const col of seq) {
+  const rowSeq = Array.from({ length: BOARD_SIZE }, (_, i) => (reversed ? BOARD_SIZE - 1 - i : i));
+  // ITALSKÁ ORIENTACE (FID): deska má tmavé pole VPRAVO DOLE a kameny stojí na TMAVÝCH
+  // polích. Engine ale klade hrací pole na LICHOU paritu (`isDarkSquare`), která u
+  // italského obrázku (`right_game_board`, tmavá pole na SUDÉ paritě) padne na SVĚTLÉ
+  // dřevo. Proto pro italskou ZRCADLÍME pořadí SLOUPCŮ – tím se hrací pole posunou na
+  // sudou vizuální paritu = tmavé dřevo, a roh vpravo dole vyjde tmavý a obsazený
+  // (přesně FID/damiera). Řádky (orientace podle barvy hráče) zůstávají. Je to ČISTĚ
+  // vizuální posun pořadí appendu: `data-square`, parita polí, klik i validace se dál
+  // počítají z reálných (row, col), takže engine, číslování ani Zobrist se nemění.
+  const colSeq = variant === 'italian' ? [...rowSeq].reverse() : rowSeq;
+  for (const row of rowSeq) {
+    for (const col of colSeq) {
       const cell = document.createElement('div');
       const dark = isDarkSquare(row, col);
       cell.className = dark ? 'square dark' : 'square light';
@@ -194,8 +218,22 @@ export function createBoardView(
   // Obrázková deska (webp) a obrázkové kameny (webp): asynchronně ověří načtení a
   // při úspěchu přepnou vzhled (třída na `.board`). Nezávislé – když se načte jen
   // jedno, druhé zůstane na CSS fallbacku. Neúspěch/jsdom → CSS fallback obou.
-  enableBoardImage(element);
-  enablePieceImages(element);
+  // Výběr assetů podle varianty (viz `setVariant`); AIvP zná variantu hned, PvP ji
+  // dorovná `setVariant` z prvního stavu.
+  let appliedVariant: VariantId | null = null;
+  function setVariant(next: VariantId): void {
+    if (next === appliedVariant) {
+      return; // stejná varianta → assety už zapojené, nepřednačítej znovu
+    }
+    appliedVariant = next;
+    // `variant-italian` je čistě vizuální marker pro `styles.css`; přidá se hned
+    // (nezávisle na načtení obrázků), samotné přepnutí na italské assety pak drží
+    // až `board-img`/`pieces-img` po ověřeném přednačtení italských URL.
+    element.classList.toggle('variant-italian', next === 'italian');
+    enableBoardImage(element, next);
+    enablePieceImages(element, next);
+  }
+  setVariant(variant);
 
   // Tažení kamene (drag & drop). Jen když volající předal `drag` callbacky.
   if (drag !== undefined) {
@@ -708,7 +746,7 @@ export function createBoardView(
     }
   }
 
-  return { element, update, setHighlights, settle, dispose };
+  return { element, update, setHighlights, settle, setVariant, dispose };
 }
 
 /** Číslo hracího pole pod prvkem (nejbližší `.square` s `data-square`), nebo `null`. */

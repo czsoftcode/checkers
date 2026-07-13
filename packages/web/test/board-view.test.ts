@@ -195,6 +195,109 @@ describe('render desky', () => {
   });
 });
 
+describe('výběr assetů podle varianty (variant-italian)', () => {
+  it('italská přidá třídu variant-italian na .board', () => {
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'italian');
+    expect(view.element.classList.contains('variant-italian')).toBe(true);
+  });
+
+  it('americká NEMÁ variant-italian (ostatní varianty vizuálně netknuté)', () => {
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'american');
+    expect(view.element.classList.contains('variant-italian')).toBe(false);
+  });
+
+  it('výchozí varianta (bez parametru) je americká – žádné variant-italian', () => {
+    const view = createBoardView(() => undefined, silentPlayer);
+    expect(view.element.classList.contains('variant-italian')).toBe(false);
+  });
+
+  it('regrese: ostatní varianty (russian/czech/pool) nedostanou variant-italian', () => {
+    for (const v of ['russian', 'czech', 'pool'] as const) {
+      const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', v);
+      expect(view.element.classList.contains('variant-italian')).toBe(false);
+    }
+  });
+
+  it('setVariant dorovná variantu po vytvoření (PvP cesta): american → italian', () => {
+    const view = createBoardView(() => undefined, silentPlayer);
+    expect(view.element.classList.contains('variant-italian')).toBe(false);
+    view.setVariant('italian');
+    expect(view.element.classList.contains('variant-italian')).toBe(true);
+  });
+
+  it('setVariant zpět na neitalskou variantu třídu odebere', () => {
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'italian');
+    expect(view.element.classList.contains('variant-italian')).toBe(true);
+    view.setVariant('american');
+    expect(view.element.classList.contains('variant-italian')).toBe(false);
+  });
+});
+
+describe('italská orientace desky (FID – kameny na tmavých polích)', () => {
+  // Vizuální pozice buňky = její index mezi 64 dětmi (.board plní grid v pořadí appendu):
+  // vr = řádek (idx/8), vc = sloupec (idx%8). Hrací pole nese `data-square`.
+  const playingCells = (
+    view: ReturnType<typeof createBoardView>,
+  ): { vr: number; vc: number; playing: boolean }[] => {
+    const cells = [...view.element.querySelectorAll<HTMLElement>('.square')];
+    expect(cells).toHaveLength(64);
+    return cells.map((c, idx) => ({
+      vr: Math.floor(idx / 8),
+      vc: idx % 8,
+      playing: c.dataset.square !== undefined,
+    }));
+  };
+
+  it('italská: KAŽDÉ hrací pole leží na SUDÉ vizuální paritě (= tmavé dřevo right_game_board)', () => {
+    // Kdyby se zrcadlení sloupců ztratilo, hrací pole spadnou na lichou paritu (světlé
+    // dřevo) a tenhle test padne – přesně chyba, kterou hlásil uživatel.
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'italian');
+    for (const { vr, vc, playing } of playingCells(view)) {
+      if (playing) {
+        expect((vr + vc) % 2).toBe(0);
+      }
+    }
+  });
+
+  it('americká: KAŽDÉ hrací pole leží na LICHÉ vizuální paritě (regrese – beze změny)', () => {
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'american');
+    for (const { vr, vc, playing } of playingCells(view)) {
+      if (playing) {
+        expect((vr + vc) % 2).toBe(1);
+      }
+    }
+  });
+
+  it('italská: roh VPRAVO DOLE je HRACÍ (tmavé) pole – FID „ultima casella in basso a destra nera"', () => {
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'italian');
+    const cells = [...view.element.querySelectorAll<HTMLElement>('.square')];
+    expect(cells[63]?.dataset.square).toBeDefined();
+  });
+
+  it('americká: roh vpravo dole je NEHRACÍ (světlé) pole – beze změny', () => {
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'american');
+    const cells = [...view.element.querySelectorAll<HTMLElement>('.square')];
+    expect(cells[63]?.dataset.square).toBeUndefined();
+  });
+
+  it('italská zrcadlí i pro člověk=bílý (parita se přehodí nezávisle na orientaci řádků)', () => {
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'white', 'italian');
+    for (const { vr, vc, playing } of playingCells(view)) {
+      if (playing) {
+        expect((vr + vc) % 2).toBe(0);
+      }
+    }
+  });
+
+  it('italská NEMĚNÍ číslování polí: data-square je pořád úplná sada 1–32', () => {
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'italian');
+    const numbers = [...view.element.querySelectorAll<HTMLElement>('[data-square]')]
+      .map((el) => Number(el.dataset.square))
+      .sort((a, b) => a - b);
+    expect(numbers).toEqual(Array.from({ length: 32 }, (_, i) => i + 1));
+  });
+});
+
 describe('zvýraznění nápovědy (Výuka)', () => {
   it('hint zvýrazní výchozí pole (hint-from) a cíl (hint-to), každé právě jednou', () => {
     const view = createBoardView(() => undefined, silentPlayer);

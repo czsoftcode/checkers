@@ -485,7 +485,12 @@ export function createPvpController(options: PvpControllerOptions): PvpControlle
     // Varianta partie ze serveru (autorita). Chybějící/neplatná (starší stav, drift
     // odchycený guardem výš) → 'american' = dnešní chování. Nastav PŘED renderem, ať
     // `nextTargets` v `renderState` počítá tahy správné varianty.
-    ruleset = rulesetForVariant(dto.variant ?? 'american');
+    const variant = dto.variant ?? 'american';
+    ruleset = rulesetForVariant(variant);
+    // Vizuální assety desky podle varianty (italská → otočená kresba + červené
+    // kameny). Variantu PvP zná AŽ tady (z autoritativního stavu), proto ji deska
+    // dostává přes `setVariant` (idempotentní – po prvním stavu je to no-op).
+    view.setVariant(variant);
     result = dto.result;
     // Důvod konce (fáze 78): normalizuj na hranici – neznámé/chybějící `reason`
     // (starší server, rozbitý stav) drž jako `null`, skořápka pak spadne na text

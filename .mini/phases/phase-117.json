@@ -1,0 +1,34 @@
+{
+  "id": 117,
+  "title": "Italská: otočená deska a assety",
+  "goal": "Ve webovém renderu použít right_game_board.webp a red/white(_queen).webp JEN pro italskou variantu; ostatní varianty (american/pool/russian/czech) vizuálně NETKNUTÉ (svoje pozadí + black/white kameny). Otočení italské desky (černé pole vpravo dole, FID pravidlo 1) řešit POUZE vizuální rotací renderu v board-view.ts (a výběr assetů podle varianty v board-image.ts/piece-images.ts), BEZ jakéhokoli zásahu do parity polí, číslování nebo Zobristu v board.ts - hra zůstává na stejném souřadném systému jako americká (izomorfní zrcadlově otočené desce). KLÍČOVÉ k vyřešení v discuss/plan: jak se FIXNÍ italské otočení skládá se STÁVAJÍCÍM otočením podle barvy hráče (humanColor==='black' obrací pořadí append v board-view.ts ř.155-162) - ať se orientace nezkombinují špatně. Brána: italská se vykreslí otočená s red/white kameny a right_game_board pozadím; ostatní varianty vizuálně beze změny; klik na pole i zvýraznění legálních tahů fungují správně v otočené orientaci (data-square/parita/validace netknuté); celá suita zelená; tsc čistý; perft ostatních variant beze změny (do rules/src se nesahá).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Protáhnout variantu do renderu + výběr URL",
+      "status": "done",
+      "detail": "createBoardView (packages/web/src/board-view.ts) dostane variantu; předá ji do enableBoardImage/enablePieceImages, které pro italskou přednačtou italské URL (right_game_board.webp; red.webp/red_queen.webp + white.webp/white_queen.webp), jinak dnešní (game_board.webp; black/white). Přidat na .board variantní třídu variant-italian jen pro italskou. Volající controller.ts (AIvP) a pvp-controller.ts (PvP) předají variantu (obě ji znají). Výstup: tsc čistý; do preloadu jdou správné URL podle varianty; ostatní varianty beze změny."
+    },
+    {
+      "title": "CSS pravidla pro italskou (CSP-safe)",
+      "status": "done",
+      "detail": "Ve styles.css variantně-scoped pravidla: .board.variant-italian.board-img → background-image right_game_board; .board.variant-italian.pieces-img → red/white kameny (vnitřní black→red.webp/red_queen.webp, white→white.webp/white_queen.webp). Vše přes url() (Vite hash), ŽÁDNÝ inline styl (CSP). Ostatní varianty (bez variant-italian) beze změny. Výstup: italská používá italské assety, ostatní dnešní."
+    },
+    {
+      "title": "Testy: výběr assetů podle varianty",
+      "status": "done",
+      "detail": "Unit test (jsdom, injektovaný createImage / kontrola tříd a předaných URL do preloadu): italská → třída variant-italian + italské URL; ostatní varianty → dnešní URL bez variant-italian. Regrese: american nepoužije red ani right_game_board. jsdom vzor jako stávající board-view/piece-images testy (Image se nenačte → ověřovat zapojení, ne reálné načtení). Výstup: test zelený."
+    },
+    {
+      "title": "Tvrdé vizuální ověření + brána",
+      "status": "done",
+      "detail": "Spustit web, vybrat italskou v AIvP, screenshot: red/white kameny SEDÍ NA TMAVÉM dřevě, tmavé pole VPRAVO DOLE, klik na pole + zvýraznění legálních tahů fungují; ostatní varianty vizuálně beze změny. Pokud kameny na SVĚTLÉM dřevě → obrázek je opačné parity → ZRCADLIT asset (paritu enginu/board.ts NESAHAT) a znovu ověřit; nahlásit, ne potichu. Celá vitest suita zelená, tsc čistý, perft ostatních variant beze změny (do rules/src se nesahá). Výstup: screenshot potvrzuje zarovnání; brána splněna."
+    }
+  ],
+  "startedAt": "2026-07-13T17:32:16.064Z",
+  "completedAt": "2026-07-13T18:40:41.242Z",
+  "autoCommit": {
+    "preSha": "4797d03c98837ec38bff59c13261e57cfbacea8b",
+    "subject": "Phase 117: Italská: otočená deska a assety"
+  }
+}

@@ -16,8 +16,12 @@
  * přepínáme třídu přes `classList`, což CSP neřeší.
  */
 
+import type { VariantId } from '@checkers/rules';
+
 import blackUrl from './assets/black.webp?url';
 import blackQueenUrl from './assets/black_queen.webp?url';
+import redUrl from './assets/red.webp?url';
+import redQueenUrl from './assets/red_queen.webp?url';
 import whiteUrl from './assets/white.webp?url';
 import whiteQueenUrl from './assets/white_queen.webp?url';
 import { preloadImages } from './image-preload.js';
@@ -31,6 +35,18 @@ export const PIECES_IMG_CLASS = 'pieces-img';
  * načtením, to CSS opravdu použije.
  */
 export const pieceImageUrls: readonly string[] = [blackUrl, whiteUrl, blackQueenUrl, whiteQueenUrl];
+
+/**
+ * URL kamenů ITALSKÉ varianty: vnitřní „black" nahrazuje ČERVENÝ kámen
+ * (`red.webp`/`red_queen.webp`), „white" zůstává sdílený. Musí odpovídat
+ * `url(...)` ve `styles.css` (`.board.variant-italian.pieces-img .piece.black`).
+ */
+export const italianPieceImageUrls: readonly string[] = [redUrl, whiteUrl, redQueenUrl, whiteQueenUrl];
+
+/** Sada URL kamenů pro variantu: italská má červené „black", ostatní sdílejí černé. */
+function pieceUrlsFor(variant: VariantId): readonly string[] {
+  return variant === 'italian' ? italianPieceImageUrls : pieceImageUrls;
+}
 
 /**
  * Fire-and-forget: zkusí načíst webp kameny a při úspěchu přidá
@@ -47,6 +63,7 @@ export const pieceImageUrls: readonly string[] = [blackUrl, whiteUrl, blackQueen
  */
 export function enablePieceImages(
   root: HTMLElement,
+  variant: VariantId,
   createImage: (() => HTMLImageElement) | null = typeof Image === 'function'
     ? (): HTMLImageElement => new Image()
     : null,
@@ -54,7 +71,7 @@ export function enablePieceImages(
   if (createImage === null) {
     return;
   }
-  void preloadImages(pieceImageUrls, createImage).then((ok) => {
+  void preloadImages(pieceUrlsFor(variant), createImage).then((ok) => {
     if (ok) {
       root.classList.add(PIECES_IMG_CLASS);
     }

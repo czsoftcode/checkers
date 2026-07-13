@@ -7,13 +7,20 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.81.0] - 2026-07-13
+
 ### Added
 
 - **Italská dáma v nabídce variant.** Do výběru přibyla pátá varianta „Italská dáma"
   („Italian checkers") – je volitelná v hře proti počítači i v přehledu místností pro
   hru proti člověku. Pravidla (povinné maximum braní, přednost braní dámou, krátká
-  dáma, muž nebere dámu) jsou ověřená; vzhled desky, síla počítače a hra proti člověku
-  se ještě dolaďují.
+  dáma, muž nebere dámu) jsou ověřená; síla počítače a hra proti člověku se ještě
+  dolaďují.
+
+- **Vlastní vzhled italské desky.** Italská varianta má vlastní dřevěnou desku a
+  červené kameny (proti bílým soupeře) – ostatní varianty zůstávají beze změny. Deska
+  je postavená podle italských pravidel (FID): tmavé pole je vpravo dole a kameny stojí
+  na tmavých polích.
 
 ## [0.80.0] - 2026-07-12
 

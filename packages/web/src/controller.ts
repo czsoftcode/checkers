@@ -258,6 +258,7 @@ export function createBoardController(
       onDrop,
     },
     humanColor,
+    game.variant ?? 'american',
   );
   const timer = setInterval(() => {
     void tickLoop();
