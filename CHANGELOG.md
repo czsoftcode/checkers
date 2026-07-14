@@ -14,6 +14,13 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
   a hraje se proti počítači i bez herního serveru (offline) – uzavírá se tím italský oblouk:
   hratelná od zahájení do konce v hře proti počítači i proti člověku.
 
+### Fixed
+
+- **Ukazatel „kdo je na tahu" u italské svítil černým kamenem místo červeného.** Kámen na
+  boku desky, který ukazuje stranu na tahu, ignoroval variantu a bral vždy černý kámen –
+  u italské tak byl v rozporu s červenými kameny na desce. Opraveno v obou režimech (proti
+  počítači i proti člověku); ostatní varianty zůstávají beze změny (černý kámen).
+
 ## [0.82.0] - 2026-07-14
 
 ### Added

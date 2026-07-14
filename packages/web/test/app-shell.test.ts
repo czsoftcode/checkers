@@ -14,8 +14,28 @@ import type {
 } from '../src/controller.js';
 import type { GameDto, GameLevel, ServerClient } from '../src/server-client.js';
 import type { SoundPlayer } from '../src/sound.js';
+import blackStoneUrl from '../src/assets/black.webp?url';
+import redStoneUrl from '../src/assets/red.webp?url';
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+/**
+ * Fake `Image`, který ZAZNAMENÁ každou nastavenou `src` do `loaded` a pak vyvolá
+ * onload. Slouží k ověření, KTERÉ URL se reálně přednačetly (red/black podle varianty).
+ */
+function recordingImageFactory(loaded: string[]): () => HTMLImageElement {
+  return () => {
+    const img = {
+      onload: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+      set src(value: string) {
+        loaded.push(value);
+        void Promise.resolve().then(() => this.onload?.());
+      },
+    };
+    return img as unknown as HTMLImageElement;
+  };
+}
 
 /** Fake `Image`, který u zadaných URL vyvolá onerror, jinak onload (ověření webp kamene). */
 function fakeImageFactory(failUrls: ReadonlySet<string> = new Set()): () => HTMLImageElement {
@@ -942,6 +962,45 @@ describe('app-shell – indikátor strany na tahu', () => {
     await tick();
     await tick();
     expect(q(shell.element, '.turn-indicator').classList.contains('turn-indicator--img')).toBe(false);
+  });
+
+  // Výběr assetu podle varianty (fáze 122): italská „černá" strana indikátoru je
+  // ČERVENÝ kámen (red.webp) + marker `variant-italian`; ostatní varianty black.webp
+  // bez markeru. Zub: recording factory zaznamená REÁLNĚ přednačtené URL a porovná je
+  // proti týmž `?url` konstantám, co importuje kód (kontrakt mezi moduly, ne kopie).
+  it('italská: indikátor dostane variant-italian a přednačte red kámen (ne black)', async () => {
+    const loaded: string[] = [];
+    const { factory } = fakeFactory();
+    const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
+      createController: factory,
+      createStoneImage: recordingImageFactory(loaded),
+      variant: 'italian',
+    });
+    document.body.append(shell.element);
+    await tick();
+    await tick();
+    const ind = q(shell.element, '.turn-indicator');
+    expect(ind.classList.contains('variant-italian')).toBe(true);
+    expect(ind.classList.contains('turn-indicator--img')).toBe(true);
+    expect(loaded).toContain(redStoneUrl);
+    expect(loaded).not.toContain(blackStoneUrl);
+  });
+
+  it('ne-italská: indikátor bez variant-italian a přednačte black kámen (ne red)', async () => {
+    const loaded: string[] = [];
+    const { factory } = fakeFactory();
+    const shell = createAppShell(fakeClient(gameDto(initialPosition())), {
+      createController: factory,
+      createStoneImage: recordingImageFactory(loaded),
+      variant: 'american',
+    });
+    document.body.append(shell.element);
+    await tick();
+    await tick();
+    const ind = q(shell.element, '.turn-indicator');
+    expect(ind.classList.contains('variant-italian')).toBe(false);
+    expect(loaded).toContain(blackStoneUrl);
+    expect(loaded).not.toContain(redStoneUrl);
   });
 });
 

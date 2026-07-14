@@ -1,0 +1,34 @@
+{
+  "id": 122,
+  "title": "Italská: kámen na tahu červený",
+  "goal": "Indikátor strany na tahu používá pro černou stranu natvrdo black.webp bez ohledu na variantu → u italské zobrazuje ČERNÝ kámen místo červeného (viz screenshot uživatele). Reálný defekt z IT-7 (fáze 117 swapla assety jen kamenů NA DESCE přes .variant-italian, tenhle samostatný indikátor minula). Opravit v OBOU režimech (rozhodnuto uživatelem): (1) AIvP - app-shell.ts turnPiece (import blackStoneUrl z './assets/black.webp?url' + classList.toggle('black', turn==='black'), fáze 39); (2) PvP - najít analogický indikátor (game-screen.ts/pvp-controller.ts) a opravit stejně. Pro italskou 'černá' strana indikátoru bere red.webp (stejně jako kameny na desce z IT-7 - variantně-scoped url() v CSS, ŽÁDNÝ inline styl kvůli CSP). Ostatní varianty (american/pool/russian/czech) indikátor NETKNUTÝ (black.webp). Brána: italský indikátor strany na tahu je ČERVENÝ v AIvP i PvP; ostatní varianty beze změny; test na výběr assetu podle varianty + živá kontrola v prohlížeči (screenshot); celá suita zelená; tsc čistý; do rules/src se nesahá.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit úplnost + opravit AIvP indikátor",
+      "status": "done",
+      "detail": "Grepem potvrdit, že mimo desku jsou jen DVA indikátory s natvrdo black.webp (app-shell + game-screen), žádné třetí místo. Opravit AIvP (packages/web/src/app-shell.ts): protáhnout variantu na .turn-indicator jako třídu (variant-italian jen pro italskou), pro italskou přednačíst red.webp do preloadImages místo black, CSS .turn-indicator--img.variant-italian .piece.black { url(red stone) } (přes styles.css url(), žádný inline styl). Výstup: doloženo, že jsou jen 2 místa; AIvP italský indikátor červený; tsc čistý; ostatní varianty black."
+    },
+    {
+      "title": "Opravit PvP indikátor",
+      "status": "done",
+      "detail": "packages/web/src/game-screen.ts .pvp-turn-stone: stejný fix - variantní třída na indikátoru (variant-italian), per-varianta preload (red pro italskou), CSS url(red stone) pro italskou 'black' stranu. Výstup: PvP italský indikátor červený; ostatní varianty black."
+    },
+    {
+      "title": "Testy výběru assetu podle varianty",
+      "status": "done",
+      "detail": "Unit (jsdom, vzorem stávajících - injektovat createStoneImage / ověřit zapojení třídy+URL, ne reálné načtení): pro italskou jde do preloadu red a indikátor dostane třídu variant-italian; pro ostatní varianty black bez té třídy - pro OBA indikátory (AIvP i PvP). Výstup: test zelený, zub na výběru assetu podle varianty."
+    },
+    {
+      "title": "Živá kontrola + brána",
+      "status": "done",
+      "detail": "Prohlížeč: italský indikátor strany na tahu je ČERVENÝ v AIvP i PvP (screenshot); ostatní varianty (black) beze změny. Celá vitest suita (web + zbytek) zelená; tsc čistý; do rules/src se nesahá (perft nedotčen). Výstup: potvrzeno v prohlížeči (screenshot) + brána splněna."
+    }
+  ],
+  "startedAt": "2026-07-14T13:15:03.919Z",
+  "completedAt": "2026-07-14T14:01:46.165Z",
+  "autoCommit": {
+    "preSha": "dd98a86de2cf04863713b1672ec51734f0d1e9d0",
+    "subject": "Phase 122: Italská: kámen na tahu červený"
+  }
+}

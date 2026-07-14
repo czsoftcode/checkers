@@ -9,6 +9,8 @@ import type { GameWebSocket } from '../src/game-socket.js';
 import type { GameLink } from '../src/lobby.js';
 import type { ChallengeAcceptedInfo } from '../src/room-client.js';
 import type { PvpGameDto } from '../src/server-client.js';
+import blackStoneUrl from '../src/assets/black.webp?url';
+import redStoneUrl from '../src/assets/red.webp?url';
 
 /** Ovladatelný fake WS partie (bez `send` – čtecí kanál). Test spouští push/close. */
 class FakeSocket implements GameWebSocket {
@@ -57,6 +59,25 @@ function fakeImageFactory(failUrls: ReadonlySet<string> = new Set()): () => HTML
             this.onload?.();
           }
         });
+      },
+    };
+    return img as unknown as HTMLImageElement;
+  };
+}
+
+/**
+ * Fake `Image`, který ZAZNAMENÁ každou nastavenou `src` do `loaded` a pak (jako
+ * `fakeImageFactory`) vyvolá `onload`. Slouží k ověření, KTERÉ URL se reálně
+ * přednačetly (výběr red/black podle varianty), ne jen že se webp zapnul.
+ */
+function recordingImageFactory(loaded: string[]): () => HTMLImageElement {
+  return () => {
+    const img = {
+      onload: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+      set src(value: string) {
+        loaded.push(value);
+        void Promise.resolve().then(() => this.onload?.());
       },
     };
     return img as unknown as HTMLImageElement;
@@ -357,6 +378,9 @@ describe('createGameScreen – indikátor na tahu', () => {
 describe('createGameScreen – kámen webp / fallback', () => {
   it('při ověřeném načtení obou kamenů zapne webp (.pvp-turn--img)', async () => {
     const m = mount({ createStoneImage: fakeImageFactory() });
+    // Přednačtení kamenů startuje AŽ s prvním stavem se ZNÁMOU variantou (odtud se
+    // vybírá red/black set) – bez pushnutého stavu s variantou by se nespustilo.
+    m.socket.message({ type: 'game-state', game: { ...pvpGame('black'), variant: 'american' } });
     await flush();
     expect(m.element.querySelector('.pvp-turn')!.classList.contains('pvp-turn--img')).toBe(true);
   });
@@ -376,8 +400,56 @@ describe('createGameScreen – kámen webp / fallback', () => {
         return img as unknown as HTMLImageElement;
       },
     });
+    m.socket.message({ type: 'game-state', game: { ...pvpGame('black'), variant: 'american' } });
     await flush();
     expect(m.element.querySelector('.pvp-turn')!.classList.contains('pvp-turn--img')).toBe(false);
+  });
+
+  // Výběr assetu podle varianty (fáze 122): italská „černá" strana indikátoru je
+  // ČERVENÝ kámen (red.webp) + marker `variant-italian`; ostatní varianty black.webp
+  // bez markeru. Zub: recording factory zaznamená REÁLNĚ přednačtené URL a porovná je
+  // proti týmž `?url` konstantám, co importuje kód (kontrakt mezi moduly, ne kopie).
+  it('italská: indikátor dostane variant-italian a přednačte red kámen (ne black)', async () => {
+    const loaded: string[] = [];
+    const m = mount({ createStoneImage: recordingImageFactory(loaded) });
+    m.socket.message({ type: 'game-state', game: { ...pvpGame('black'), variant: 'italian' } });
+    await flush();
+    const ind = m.element.querySelector('.pvp-turn')!;
+    expect(ind.classList.contains('variant-italian')).toBe(true);
+    expect(ind.classList.contains('pvp-turn--img')).toBe(true);
+    expect(loaded).toContain(redStoneUrl);
+    expect(loaded).not.toContain(blackStoneUrl);
+  });
+
+  it('ne-italská: indikátor bez variant-italian a přednačte black kámen (ne red)', async () => {
+    const loaded: string[] = [];
+    const m = mount({ createStoneImage: recordingImageFactory(loaded) });
+    m.socket.message({ type: 'game-state', game: { ...pvpGame('black'), variant: 'russian' } });
+    await flush();
+    const ind = m.element.querySelector('.pvp-turn')!;
+    expect(ind.classList.contains('variant-italian')).toBe(false);
+    expect(loaded).toContain(blackStoneUrl);
+    expect(loaded).not.toContain(redStoneUrl);
+  });
+
+  // Unhappy path (self-review fáze 122): první stav BEZ varianty (undefined) NESMÍ zamknout
+  // špatný set – rozhodnutí se odloží, dokud nedorazí definovaná varianta. Jinak by
+  // pořadí undefined→italian nechalo indikátor navždy černý. Před odloženým stavem se
+  // preload vůbec nespustí (žádné načtené URL); s italským stavem naskočí red + marker.
+  it('undefined varianta v prvním stavu odloží preload; italská v druhém dá červený kámen', async () => {
+    const loaded: string[] = [];
+    const m = mount({ createStoneImage: recordingImageFactory(loaded) });
+    m.socket.message({ type: 'game-state', game: pvpGame('black') }); // bez variant → odložit
+    await flush();
+    expect(loaded).toHaveLength(0); // nic se ještě nepřednačetlo
+    expect(m.element.querySelector('.pvp-turn')!.classList.contains('variant-italian')).toBe(false);
+    m.socket.message({ type: 'game-state', game: { ...pvpGame('black'), variant: 'italian' } });
+    await flush();
+    const ind = m.element.querySelector('.pvp-turn')!;
+    expect(ind.classList.contains('variant-italian')).toBe(true);
+    expect(ind.classList.contains('pvp-turn--img')).toBe(true);
+    expect(loaded).toContain(redStoneUrl);
+    expect(loaded).not.toContain(blackStoneUrl);
   });
 });
 

@@ -47,6 +47,7 @@ import { createPvpController } from './pvp-controller.js';
 import type { PvpStatus } from './pvp-controller.js';
 import blackStoneUrl from './assets/black.webp?url';
 import whiteStoneUrl from './assets/white.webp?url';
+import redStoneUrl from './assets/red.webp?url';
 import type { GameLink } from './lobby.js';
 import type { ChallengeAcceptedInfo } from './room-client.js';
 
@@ -288,15 +289,44 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
   element.append(panel, boardRow, statusBar, modal);
   setStatus(t('game.connecting'));
 
-  // Zapnutí webp kamene indikátoru AŽ po ověřeném načtení obou obrázků (jako u
-  // desky – `piece-images.ts`): jistota, že se `url(...)` ve `styles.css` opravdu
-  // vykreslí, jinak zůstat na CSS kolečku. V jsdom se `onload`/`onerror` nevyvolá →
-  // promise visí → fallback drží (test si `createStoneImage` injektuje). `null`
-  // (prostředí bez `Image`) ověření přeskočí.
+  // Továrna na `Image` pro ověření webp kamenů indikátoru (jako u desky). `null`
+  // (prostředí bez `Image`) ověření přeskočí a indikátor zůstane na CSS kolečku.
   const createStoneImage =
     options.createStoneImage ?? (typeof Image === 'function' ? (): HTMLImageElement => new Image() : null);
-  if (createStoneImage !== null) {
-    void preloadImages([blackStoneUrl, whiteStoneUrl], createStoneImage).then((ok) => {
+  // `true`, jakmile se přednačtení kamenů jednou spustí – běží AŽ s prvním ZNÁMÝM
+  // `game.variant` (viz `initTurnStones`), ne při stavbě obrazovky, protože varianta
+  // (a tím výběr červený/černý set) je známá teprve z autoritativního stavu partie.
+  let stonePreloadStarted = false;
+
+  /**
+   * Zapne webp kámen indikátoru (`pvp-turn--img`) AŽ po ověřeném načtení obou kamenů –
+   * jistota, že se `url(...)` ve `styles.css` opravdu vykreslí, jinak zůstat na CSS
+   * kolečku. Set podle varianty: ITALSKÁ přednačte red.webp (za „černou" stranu) a
+   * dostane marker `variant-italian` (CSS pak vykreslí červený kámen – stejné mapování
+   * jako kameny na desce z IT-7); ostatní varianty black.webp bez markeru. Spouští se
+   * JEDNOU, ale AŽ s DEFINOVANOU variantou: dokud `game.variant` chybí (`undefined` –
+   * starší/nekompletní stav), rozhodnutí ODLOŽÍ (nezamkne špatný set). To sjednocuje
+   * chování s deskou (`pvp-controller` přepíná kameny každým stavem) i labelem varianty
+   * (skrytý, dokud varianta nedorazí) – jinak by pořadí stavů undefined→italian nechalo
+   * indikátor navždy černý (přesně vada, kterou fáze opravuje). Když variantu server
+   * nikdy nepošle, indikátor zůstane na CSS kolečku (degradace shodná s labelem).
+   * V jsdom se `onload`/`onerror` nevyvolá → promise visí → fallback drží (test si
+   * `createStoneImage` injektuje).
+   */
+  function initTurnStones(variant: VariantId | undefined): void {
+    if (stonePreloadStarted || variant === undefined) {
+      return;
+    }
+    stonePreloadStarted = true;
+    const isItalian = variant === 'italian';
+    if (isItalian) {
+      turnIndicator.classList.add('variant-italian');
+    }
+    if (createStoneImage === null) {
+      return;
+    }
+    const stoneUrls = isItalian ? [redStoneUrl, whiteStoneUrl] : [blackStoneUrl, whiteStoneUrl];
+    void preloadImages(stoneUrls, createStoneImage).then((ok) => {
       if (ok && !disposed) {
         turnIndicator.classList.add('pvp-turn--img');
       }
@@ -486,6 +516,9 @@ export function createGameScreen(info: ChallengeAcceptedInfo, options: GameScree
     {
       onState: (game) => {
         setVariantLabel(game.variant);
+        // Přednačtení kamenů indikátoru podle varianty – JEDNOU, s prvním známým
+        // stavem (varianta chodí až tady). Do té doby drží CSS kolečko (fallback).
+        initTurnStones(game.variant);
         controller.applyState(game);
       },
       onClosed: () => {

@@ -27,6 +27,7 @@ import { createSoundPlayer } from './sound.js';
 import type { SoundPlayer } from './sound.js';
 import blackStoneUrl from './assets/black.webp?url';
 import whiteStoneUrl from './assets/white.webp?url';
+import redStoneUrl from './assets/red.webp?url';
 
 /**
  * Popisky úrovní pro UI přes i18n KLÍČE (ne hotový text): `t()` je přeloží podle
@@ -322,6 +323,15 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // serveru. Startuje skrytý (`hidden`), zobrazí se až s prvním stavem partie.
   const turnIndicator = document.createElement('div');
   turnIndicator.className = 'turn-indicator hidden';
+  // Italská varianta: „černá" strana indikátoru je ČERVENÝ kámen (stejné mapování
+  // jako kameny na desce z IT-7 – fáze 117). Marker `variant-italian` na indikátoru
+  // přepne CSS `url()` na red.webp; ostatní varianty ho nemají → zůstávají na black.webp.
+  // Varianta je známá hned při stavbě skořápky (z lobby přes `options.variant`), takže
+  // se třída i výběr přednačteného setu dají nastavit staticky (na rozdíl od PvP).
+  const isItalian = variant === 'italian';
+  if (isItalian) {
+    turnIndicator.classList.add('variant-italian');
+  }
   const turnPiece = document.createElement('div');
   turnPiece.className = 'piece';
   turnIndicator.append(turnPiece);
@@ -330,10 +340,14 @@ export function createAppShell(client: ServerClient, options: AppShellOptions = 
   // indikátor): jistota, že se `url(...)` v CSS opravdu vykreslí, jinak zůstat na CSS
   // gradientu. V jsdom se `onload`/`onerror` nevyvolá → promise visí → fallback drží
   // (test si `createStoneImage` injektuje). `null` (prostředí bez `Image`) přeskočí.
+  // Set podle varianty: italská přednačte red.webp (za „černou" stranu), ostatní black.webp –
+  // all-or-nothing gate `--img` tak platí i pro červený set (jinak by se ověřoval jiný
+  // obrázek, než pak CSS vykreslí).
+  const turnStoneUrls = isItalian ? [redStoneUrl, whiteStoneUrl] : [blackStoneUrl, whiteStoneUrl];
   const createStoneImage =
     options.createStoneImage ?? (typeof Image === 'function' ? (): HTMLImageElement => new Image() : null);
   if (createStoneImage !== null) {
-    void preloadImages([blackStoneUrl, whiteStoneUrl], createStoneImage).then((ok) => {
+    void preloadImages(turnStoneUrls, createStoneImage).then((ok) => {
       if (ok && !disposed) {
         turnIndicator.classList.add('turn-indicator--img');
       }

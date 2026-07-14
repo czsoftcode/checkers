@@ -544,6 +544,15 @@ body {
   background-image: url('./assets/white.webp');
 }
 
+/* ITALSKÁ varianta: „černá" strana indikátoru je ČERVENÝ kámen (red.webp) – stejné
+   mapování jako kameny na desce z IT-7 (.board.variant-italian.pieces-img .piece.black).
+   Marker `variant-italian` přidá app-shell podle varianty partie; ostatní varianty ho
+   nemají, takže vzhled beze změny (černý kámen výše). Vyšší specificita (2 třídy na
+   indikátoru) přebije obecné .piece.black. „white" zůstává sdílený (dědí z pravidla výše). */
+.turn-indicator--img.variant-italian .piece.black {
+  background-image: url('./assets/red.webp');
+}
+
 /* --- Malý mobil ---------------------------------------------------------
    Sloupec panel-nad-deskou má stejnou skořápku jako desktop (panel v toku, na
    šířku desky) – mobil tu jen dolaďuje, co se na úzké/nízké obrazovce liší:
@@ -1088,6 +1097,15 @@ button.lobby-nick-line:hover {
 
 .pvp-turn--img .pvp-turn-stone.white {
   background-image: url('./assets/white.webp');
+}
+
+/* ITALSKÁ varianta: „černá" strana indikátoru je ČERVENÝ kámen (red.webp) – stejné
+   mapování jako kameny na desce z IT-7. Marker `variant-italian` přidá game-screen
+   podle `game.variant` z autoritativního stavu; ostatní varianty ho nemají → černý
+   kámen výše. Vyšší specificita (2 třídy na indikátoru) přebije .pvp-turn-stone.black.
+   „white" zůstává sdílený (dědí z pravidla výše). */
+.pvp-turn--img.variant-italian .pvp-turn-stone.black {
+  background-image: url('./assets/red.webp');
 }
 
 /* Chyba odmítnutého tahu ve stavovém pruhu (červená). Skrytá, dokud nic nepřijde
