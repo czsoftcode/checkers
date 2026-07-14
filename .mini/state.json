@@ -602,6 +602,11 @@
       "id": 120,
       "title": "Italská: PvP autorita a test",
       "status": "done"
+    },
+    {
+      "id": 121,
+      "title": "Italská: E2E a statický build",
+      "status": "done"
     }
   ]
 }

@@ -7,6 +7,13 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+
+- **Italská dáma je součástí publikovatelného statického buildu.** Vedle ostatních variant
+  se teď italská (včetně otočené desky a červených kamenů) zabalí do statického buildu
+  a hraje se proti počítači i bez herního serveru (offline) – uzavírá se tím italský oblouk:
+  hratelná od zahájení do konce v hře proti počítači i proti člověku.
+
 ## [0.82.0] - 2026-07-14
 
 ### Added

@@ -1,0 +1,39 @@
+{
+  "id": 121,
+  "title": "Italská: E2E a statický build",
+  "goal": "Uzavírací brána italského oblouku (IT-11): prokázat italskou od zahájení do konce v obou režimech a v publikovatelném buildu. (1) Kompletní AIvP partie proti AI CELÁ v prohlížeči BEZ herního serveru (LocalClient + Web Worker), od zahájení do konce. (2) Kompletní PvP partie dvou lidí (server autorita, IT-10 hotové). (3) Italská v statickém buildu (Vite dist) VČETNĚ assetů (right_game_board.webp, red/white kameny) - hraje z distu OFFLINE (bez herního serveru), jako ostatní varianty (fáze 89). (4) Ověřit pro italskou GENERICKOU behaviorku: přepnutí na/z italské zahodí rozehranou partii a začne novou; volba varianty se pamatuje v LocalStorage (default american). K OVĚŘENÍ V DISCUSS: co je reálně NOVÉ (statický build + přepnutí/LocalStorage) vs jen skládání už zeleného z IT-6..IT-10; jestli je přepnutí/LocalStorage generické (fáze 102, jen verify) nebo tam číhá italsky-specifický háček (assety/deska); a co je automatizovaný E2E vs živá kontrola v prohlížeči (browser automation dvou PvP klientů je flaky - viz fáze 120). Brána: AIvP i PvP odehrané od zahájení do konce; statický build obsahuje italskou a hraje z něj offline; přepnutí zahodí partii + volba přežije restart; regrese - perft a testy ostatních variant zelené; tsc čistý.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "AIvP kompletní partie: integrační test",
+      "status": "done",
+      "detail": "Deterministický integrační test přes LocalClient: italská partie od zahájení DO TERMINÁLNÍHO výsledku (výhra/remíza), každý tah vždy legální italský (max+priorita, ctí ITALIAN_RULESET). Výstup: test zelený, partie doběhne s výsledkem (žádné zamrznutí/nelegální tah)."
+    },
+    {
+      "title": "Přepnutí varianty + LocalStorage (italská)",
+      "status": "done",
+      "detail": "Unit test: přepnutí NA/Z italské zahodí rozehranou partii (přes výměnu LocalClient v main.ts) a začne novou; volba varianty v localStorage (checkers.variant) přežije restart; default american. Ověřit, že je to generické (fáze 102), jen doplnit italskou hodnotu. Výstup: test zelený."
+    },
+    {
+      "title": "Statický build + assety v dist",
+      "status": "done",
+      "detail": "pnpm build (Vite dist) PROJDE; ověřit, že dist reálně obsahuje italské assety (hashované right_game_board/red/red_queen - že se ?url import neztratil při tree-shakingu). Výstup: build zelený, italské assety v dist doloženy (výpis nalezených souborů)."
+    },
+    {
+      "title": "Živá kontrola z naservírovaného dist (offline)",
+      "status": "done",
+      "detail": "Naservírovat dist a zahrát italskou AIvP OFFLINE (bez herního serveru): otočená deska + red kameny + tah přes vynucené braní + terminální modal; potvrdit paritu (kameny na TMAVÉM dřevě, tmavé pole vpravo dole) i z buildu; + lehká PvP sanity ve dvou oknech. PvP full protokol už pokryla IT-10 - tady jen vizuální sanity. Výstup: potvrzeno v prohlížeči (popis/screenshot)."
+    },
+    {
+      "title": "Uzavírací brána",
+      "status": "done",
+      "detail": "Celá vitest suita (všechny balíčky) zelená; perft a testy VŠECH ostatních variant (american/pool/russian/czech) BEZE ZMĚNY čísel; tsc čistý; do rules/src se nesahá. Výstup: brána splněna - italská hotová napříč AIvP, PvP i publikovatelným buildem."
+    }
+  ],
+  "startedAt": "2026-07-14T12:25:12.023Z",
+  "completedAt": "2026-07-14T13:01:44.365Z",
+  "autoCommit": {
+    "preSha": "22a5f9e30f040e19f4d4804d3865762d09c58e88",
+    "subject": "Phase 121: Italská: E2E a statický build"
+  }
+}
