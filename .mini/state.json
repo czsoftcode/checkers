@@ -592,6 +592,11 @@
       "id": 118,
       "title": "Italská: UI multi-skok pod maximem",
       "status": "done"
+    },
+    {
+      "id": 119,
+      "title": "Italská: AI váhy a sanity",
+      "status": "done"
     }
   ]
 }

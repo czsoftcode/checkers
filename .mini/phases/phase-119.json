@@ -1,0 +1,34 @@
+{
+  "id": 119,
+  "title": "Italská: AI váhy a sanity",
+  "goal": "Per-varianta hodnocení pro italskou v packages/engine/src/evaluate.ts: krátká dáma jako americká (KING_VALUE, plyne z ruleset.king='short'), zvážit pravidlo 'muž nebere dámu' (dáma je proti mužům nesebratelná → případně mírně vyšší cena dámy). NE turnajová síla, cíl je jen SELF-PLAY SANITY. K VYŘEŠENÍ V DISCUSS: kolik ladit - potřebuje italská vlastní váhy, nebo jí stačí americké short-king váhy zadarmo? Kloním se k minimu (americké váhy + sanity); rozhodnout, jestli 'muž nebere dámu' zaslouží úpravu ceny dámy nebo je to YAGNI ladění, které se teď stejně neověří. Ověřit, že 'AI vybírá jen legální italské tahy' je jen VERIFY plumbingu ruleset→search z fáze 100, ne nová práce. Brána: self-play sanity (italská vs italská netahá zjevné blbosti, partie terminují); AI-vybraný tah je VŽDY v legalMoves(ITALIAN_RULESET) (ctí maximum+prioritu); ostatní varianty (evaluace flying i short) beze změny; celá suita zelená; tsc čistý; perft ostatních variant nedotčen.",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Potvrdit aktivní evaluaci + eval-test italské",
+      "status": "done",
+      "detail": "Zjistit, kterou evaluaci production search reálně používá (v1 evaluate vs v2 evaluateV2) - doložit v reportu. Test cílený na TU aktivní: evaluate(pozice s dámou, ITALIAN_RULESET) cení dámu 130 (short), NE 300 - potvrdí short-king cestu a že se italská omylem nedostane na flying. Výstup: doloženo která eval je aktivní; test zelený. BEZ změny konstant/vah."
+    },
+    {
+      "title": "Legalita-test: AI vybírá jen legální italské tahy",
+      "status": "done",
+      "detail": "Na pozici s VYNUCENÝM maximem/prioritou je AI-vybraný tah (searchRoot/bestMove s ITALIAN_RULESET) VŽDY prvkem legalMoves(position, ITALIAN_RULESET) - ctí maximum+prioritu (ověření plumbingu ruleset→search z fáze 100). Výstup: test zelený, zub na tom, že AI nevybere osekané/nelegální/mužem-přes-dámu braní."
+    },
+    {
+      "title": "selfplay-italian sanity",
+      "status": "done",
+      "detail": "Nový test á la selfplay-flying-king.test.ts přes packages/engine/src/selfplay.ts: italská vs italská - partie TERMINUJÍ (žádné zamrznutí/nekonečno), žádný nelegální tah, žádná zjevná blbost (stejná metrika/přístup jako flying-king). Výstup: test zelený."
+    },
+    {
+      "title": "Brána",
+      "status": "done",
+      "detail": "Celá vitest suita (rules+engine+ai+web+server) zelená; tsc čistý; evaluace ostatních variant (flying i short) BEZE ZMĚNY; perft nedotčen (do rules se nesahá); konstanty MAN_VALUE/KING_VALUE/KING_VALUE_FLYING NEZMĚNĚNY (italská je jen konzumuje přes ruleset.king). Výstup: brána splněna."
+    }
+  ],
+  "startedAt": "2026-07-14T09:59:55.497Z",
+  "completedAt": "2026-07-14T10:20:46.399Z",
+  "autoCommit": {
+    "preSha": "b0ce9d6588eb2b3db9d3577b0962c7ebe2777c33",
+    "subject": "Phase 119: Italská: AI váhy a sanity"
+  }
+}
