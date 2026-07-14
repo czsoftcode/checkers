@@ -7,6 +7,23 @@ verzování se řídí [SemVer](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+## [0.82.0] - 2026-07-14
+
+### Added
+
+- **Italská dáma proti člověku (multiplayer) je ověřená.** Dva hráči teď v italské
+  místnosti odehrají kompletní partii od výzvy po výsledek a server je autorita nad
+  italskými pravidly: odmítne nelegální tah, který nebere maximum, nectí přednost braní
+  dámou nebo bere mužem dámu. Uzavírá se tím dovětek „hra proti člověku se ještě dolaďuje"
+  z minulého vydání.
+
+### Fixed
+
+- **Italská deska proti člověku měla kameny na světlých polích.** V partii proti člověku
+  (na rozdíl od hry proti počítači) se otočení italské desky nedorovnalo, takže kameny
+  seděly na světlém dřevě místo na tmavém. Opraveno – italská deska teď vypadá stejně
+  správně v obou režimech.
+
 ## [0.81.0] - 2026-07-13
 
 ### Added

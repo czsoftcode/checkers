@@ -1,0 +1,42 @@
+{
+  "id": 120,
+  "title": "Italská: PvP autorita a test",
+  "goal": "Ověřit + prokázat, že PvP italská je pod serverovou autoritou nad italskými pravidly. Lobby už existuje z IT-6 (VARIANT_IDS řídí server presence, místnost na variantu). Server validuje KAŽDÝ tah přes findLegalMove → legalMoves(rulesetForVariant(state.variant)) (fáze 70/103/116) - tohle je VERIFY + adversariální test, ne nová validační vrstva. JEDINÉ místo možného tichého bugu (ověřit jako první v do): vznik PvP partie (přijetí výzvy → hra) opravdu razí variant='italian' do GameState, aby server validoval ITALIAN_RULESET a ne tiše defaultní americkou. JÁDRO = adversariální SERVEROVÝ test: server odmítne (409 illegal_move + legalMoves) tah od nedůvěryhodného klienta, který (a) nebere maximum (kratší braní když existuje delší), (b) nectí prioritu (mužem místo povinné dámy), (c) bere mužem dámu. Plus dvouklientské E2E: dva hráči odehrají kompletní italskou PvP partii od zahájení do konce. Brána: server prokazatelně odmítne nelegální italský tah; dva klienti odehrají partii; ostatní varianty (PvP i validace) netknuté; celá suita zelená; tsc čistý; perft nedotčen (do rules se nesahá).",
+  "status": "done",
+  "steps": [
+    {
+      "title": "Ověřit wiring variant→GameState",
+      "status": "done",
+      "detail": "Přečíst app.ts handleAccept + store.ts createPvp/initialGameState a DOLOŽIT, že přijetí výzvy v italské lobby razí variant='italian' do GameState (ne default american), takže server validuje ITALIAN_RULESET (rulesetForVariant(state.variant) → findLegalMove). Výstup: doloženo v reportu, bez přepisu (jen potvrzení, že plumbing z fáze 103/105 platí i pro italskou)."
+    },
+    {
+      "title": "Unit adversariál: findLegalMove(ITALIAN_RULESET)",
+      "status": "done",
+      "detail": "Test nad findLegalMove(position, from, path, ITALIAN_RULESET) v packages/server/src/dto.ts: tři crafted pozice → null (odmítnuto): (a) nemaximální braní (kratší když existuje delší), (b) braní mužem místo povinné dámy (priorita), (c) muž bere dámu (manCannotCaptureKing); legální max tah → non-null. Výstup: test zelený, každý případ má zub."
+    },
+    {
+      "title": "Serverový integrační test (jádro)",
+      "status": "done",
+      "detail": "WS harness (styl variant-lobby-ws.test.ts): v ITALSKÉ PvP partii pošle nedůvěryhodný klient tah, který by AMERICKÁ pustila ale ITALSKÁ odmítá → server odmítne (409 illegal_move + legalMoves) a GameState se NEZMĚNÍ (tentýž hráč na tahu). Crafted pozici zajistit minimálním store seamem nebo sehráním legálních tahů (preferovat existující seam, ne nový produkční kód jen pro test). Výstup: test zelený - dokazuje VÝBĚR rulesetu podle varianty místnosti, ne generickou nelegalitu (tu řeší fáze 70)."
+    },
+    {
+      "title": "E2E integrační WS: partie dvou klientů",
+      "status": "done",
+      "detail": "Dvě spojení odehrají KOMPLETNÍ italskou PvP partii od zahájení do konce, ideálně přes vynucené MAXIMÁLNÍ braní (ať se protne max+priorita v reálné hře). Výstup: test zelený, partie doběhne s výsledkem."
+    },
+    {
+      "title": "Živá kontrola v prohlížeči + brána",
+      "status": "done",
+      "detail": "Dvě okna/klienti: reálné odehrání italské PvP partie (výzva → hra → tah přes vynucené braní). Celá vitest suita (rules+server+web) zelená; tsc čistý; ostatní varianty (PvP i validace) netknuté; perft nedotčen (do rules/src se nesahá). Výstup: potvrzeno v prohlížeči (popis/screenshot) + brána splněna."
+    }
+  ],
+  "startedAt": "2026-07-14T10:44:12.328Z",
+  "resolvedVerify": [
+    "Re-kontrola opravy italské PvP desky ve dvou oknech prohlížeče"
+  ],
+  "completedAt": "2026-07-14T11:54:40.928Z",
+  "autoCommit": {
+    "preSha": "b57ba992a1e03f8053dfd21ece43d0a46b9bc7c1",
+    "subject": "Phase 120: Italská: PvP autorita a test"
+  }
+}

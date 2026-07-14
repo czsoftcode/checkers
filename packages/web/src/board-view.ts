@@ -175,17 +175,16 @@ export function createBoardView(
   // číslování polí, klikání i validace tahů zůstávají netknuté v OBOU orientacích.
   const reversed = humanColor === 'black';
   const rowSeq = Array.from({ length: BOARD_SIZE }, (_, i) => (reversed ? BOARD_SIZE - 1 - i : i));
-  // ITALSKÁ ORIENTACE (FID): deska má tmavé pole VPRAVO DOLE a kameny stojí na TMAVÝCH
-  // polích. Engine ale klade hrací pole na LICHOU paritu (`isDarkSquare`), která u
-  // italského obrázku (`right_game_board`, tmavá pole na SUDÉ paritě) padne na SVĚTLÉ
-  // dřevo. Proto pro italskou ZRCADLÍME pořadí SLOUPCŮ – tím se hrací pole posunou na
-  // sudou vizuální paritu = tmavé dřevo, a roh vpravo dole vyjde tmavý a obsazený
-  // (přesně FID/damiera). Řádky (orientace podle barvy hráče) zůstávají. Je to ČISTĚ
-  // vizuální posun pořadí appendu: `data-square`, parita polí, klik i validace se dál
-  // počítají z reálných (row, col), takže engine, číslování ani Zobrist se nemění.
-  const colSeq = variant === 'italian' ? [...rowSeq].reverse() : rowSeq;
-  for (const row of rowSeq) {
-    for (const col of colSeq) {
+  // Buňky se vytvoří v REÁLNÉM pořadí (row, col) a uloží do mřížky; do DOM (a jeho
+  // pořadí) je vloží až `applyLayout`. Oddělení „vytvoření buňky" od „pořadí v DOM"
+  // je nutné pro PvP: tam se varianta zná až z PRVNÍHO stavu partie, takže italské
+  // zrcadlení sloupců (níž) musí umět doběhnout POZDĚJI přes `setVariant`, ne jen
+  // při vytvoření. Bez toho měla italská PvP deska správné assety, ale hrací pole
+  // (a tím kameny) na SVĚTLÉ paritě = „kameny na bílých polích".
+  const cellGrid: HTMLElement[][] = [];
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    const cols: HTMLElement[] = [];
+    for (let col = 0; col < BOARD_SIZE; col++) {
       const cell = document.createElement('div');
       const dark = isDarkSquare(row, col);
       cell.className = dark ? 'square dark' : 'square light';
@@ -194,7 +193,36 @@ export function createBoardView(
         cell.dataset.square = String(square);
         squareEls.set(square, cell);
       }
-      element.append(cell);
+      cols.push(cell);
+    }
+    cellGrid.push(cols);
+  }
+
+  // ITALSKÁ ORIENTACE (FID): deska má tmavé pole VPRAVO DOLE a kameny stojí na TMAVÝCH
+  // polích. Engine ale klade hrací pole na LICHOU paritu (`isDarkSquare`), která u
+  // italského obrázku (`right_game_board`, tmavá pole na SUDÉ paritě) padne na SVĚTLÉ
+  // dřevo. Proto pro italskou ZRCADLÍME pořadí SLOUPCŮ – tím se hrací pole posunou na
+  // sudou vizuální paritu = tmavé dřevo, a roh vpravo dole vyjde tmavý a obsazený
+  // (přesně FID/damiera). Řádky (orientace podle barvy hráče) zůstávají. Je to ČISTĚ
+  // vizuální posun pořadí appendu: `data-square`, parita polí, klik i validace se dál
+  // počítají z reálných (row, col), takže engine, číslování ani Zobrist se nemění.
+  //
+  // `applyLayout` je idempotentní (guard `laidOutItalian`): opakované volání se
+  // stejnou orientací nic nedělá, takže případná probíhající animace tahu se
+  // nepřeruší. `element.append` existující buňku jen PŘESUNE (nezkopíruje) → přerovná
+  // pořadí v gridu; kameny jsou její děti, jdou s ní, a `squareEls` i listenery
+  // zůstávají platné.
+  let laidOutItalian: boolean | null = null;
+  function applyLayout(isItalian: boolean): void {
+    if (isItalian === laidOutItalian) {
+      return;
+    }
+    laidOutItalian = isItalian;
+    const colSeq = isItalian ? [...rowSeq].reverse() : rowSeq;
+    for (const row of rowSeq) {
+      for (const col of colSeq) {
+        element.append(cellGrid[row]![col]!);
+      }
     }
   }
 
@@ -226,6 +254,10 @@ export function createBoardView(
       return; // stejná varianta → assety už zapojené, nepřednačítej znovu
     }
     appliedVariant = next;
+    // Geometrie desky (italské zrcadlení sloupců) MUSÍ doběhnout i tady, ne jen při
+    // vytvoření: v PvP se varianta zná až z prvního stavu, kdy se sem dorovná. Bez
+    // toho by italská PvP deska měla správné assety, ale kameny na SVĚTLÉ paritě.
+    applyLayout(next === 'italian');
     // `variant-italian` je čistě vizuální marker pro `styles.css`; přidá se hned
     // (nezávisle na načtení obrázků), samotné přepnutí na italské assety pak drží
     // až `board-img`/`pieces-img` po ověřeném přednačtení italských URL.

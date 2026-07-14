@@ -296,6 +296,48 @@ describe('italská orientace desky (FID – kameny na tmavých polích)', () => 
       .sort((a, b) => a - b);
     expect(numbers).toEqual(Array.from({ length: 32 }, (_, i) => i + 1));
   });
+
+  it('PvP cesta: setVariant(italian) PO vytvoření dorovná geometrii – hrací pole na SUDÉ paritě', () => {
+    // V PvP se deska vytvoří BEZ znalosti varianty (american default) a italská se
+    // dorovná až `setVariant` z prvního stavu partie. Kdyby setVariant přepnul jen
+    // assety a NE geometrii (zrcadlení sloupců), hrací pole zůstanou na LICHÉ paritě
+    // (světlé dřevo) → kameny na bílých polích. Přesně to uživatel hlásil u PvP.
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'american');
+    view.setVariant('italian');
+    for (const { vr, vc, playing } of playingCells(view)) {
+      if (playing) {
+        expect((vr + vc) % 2).toBe(0);
+      }
+    }
+  });
+
+  it('PvP cesta: setVariant zpět na neitalskou vrátí geometrii na LICHOU paritu', () => {
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'italian');
+    view.setVariant('american');
+    for (const { vr, vc, playing } of playingCells(view)) {
+      if (playing) {
+        expect((vr + vc) % 2).toBe(1);
+      }
+    }
+  });
+
+  it('PvP cesta: kámen položený PŘED setVariant(italian) skončí na TMAVÉM poli', () => {
+    // Vykreslí se kámen (PvP: první stav dorazí, deska ještě „american"), pak dorovná
+    // italská varianta. Kámen je dítě buňky, takže s přerovnáním jde na tmavé dřevo.
+    const view = createBoardView(() => undefined, silentPlayer, undefined, 'black', 'american');
+    void view.update({
+      position: position('black', { 9: blackMan }),
+      selected: null,
+      path: [],
+      targets: [],
+    });
+    view.setVariant('italian');
+    const cells = [...view.element.querySelectorAll<HTMLElement>('.square')];
+    const idx = cells.findIndex((c) => c.querySelector('.piece') !== null);
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(cells[idx]?.dataset.square).toBe('9'); // číslování netknuté
+    expect(((Math.floor(idx / 8) + (idx % 8)) % 2)).toBe(0); // sudá parita = tmavé dřevo
+  });
 });
 
 describe('zvýraznění nápovědy (Výuka)', () => {
